@@ -1,7 +1,18 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray, desc, sql } from "drizzle-orm";
-import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports, usageDaily, JOB_ROLES } from "@reportlens/db";
+import { eq, and, inArray, desc, sql, getTableColumns } from "drizzle-orm";
+import {
+  lenses,
+  userLenses,
+  industries,
+  userIndustries,
+  entries,
+  entryNumbers,
+  reports,
+  reportIndustries,
+  usageDaily,
+  JOB_ROLES,
+} from "@reportlens/db";
 import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
@@ -180,15 +191,51 @@ meRoute.get("/entries/recent", async (c) => {
 
 // ---- 리포트 업로드 ----
 
-// GET /api/me/reports?industryId= - 내 업로드 리포트(산업 필터 옵션)
+// 리포트 행에 산업 태그(멀티) 부착
+async function attachIndustries<T extends { id: string }>(rows: T[]) {
+  if (rows.length === 0) return rows.map((r) => ({ ...r, industries: [] as { id: string; name: string }[] }));
+  const ids = rows.map((r) => r.id);
+  const tags = await db
+    .select({ reportId: reportIndustries.reportId, id: industries.id, name: industries.name })
+    .from(reportIndustries)
+    .innerJoin(industries, eq(industries.id, reportIndustries.industryId))
+    .where(inArray(reportIndustries.reportId, ids));
+  const by = new Map<string, { id: string; name: string }[]>();
+  for (const t of tags) {
+    const arr = by.get(t.reportId) ?? [];
+    arr.push({ id: t.id, name: t.name });
+    by.set(t.reportId, arr);
+  }
+  return rows.map((r) => ({ ...r, industries: by.get(r.id) ?? [] }));
+}
+
+// GET /api/me/reports?industryId=&docType= - 내 리포트(산업 태그·문서타입 필터, 산업은 멀티 조인)
 meRoute.get("/reports", async (c) => {
   const user = c.get("user");
   const industryId = c.req.query("industryId");
-  const where = industryId
-    ? and(eq(reports.userId, user.id), eq(reports.industryId, industryId))
-    : eq(reports.userId, user.id);
-  const rows = await db.select().from(reports).where(where).orderBy(desc(reports.createdAt)).limit(50);
-  return c.json({ reports: rows });
+  const docType = c.req.query("docType");
+  const conds = [eq(reports.userId, user.id)];
+  if (docType === "industry" || docType === "company" || docType === "news") conds.push(eq(reports.docType, docType));
+
+  const rows = industryId
+    ? await db
+        .select(getTableColumns(reports))
+        .from(reports)
+        .innerJoin(
+          reportIndustries,
+          and(eq(reportIndustries.reportId, reports.id), eq(reportIndustries.industryId, industryId)),
+        )
+        .where(and(...conds))
+        .orderBy(desc(reports.createdAt))
+        .limit(50)
+    : await db
+        .select()
+        .from(reports)
+        .where(and(...conds))
+        .orderBy(desc(reports.createdAt))
+        .limit(50);
+
+  return c.json({ reports: await attachIndustries(rows) });
 });
 
 // POST /api/me/reports - 업로드(multipart). PDF 파일 또는 텍스트 입력. report 생성(parse_status=pending).
@@ -292,11 +339,15 @@ meRoute.put("/reports/:id/industry", async (c) => {
     const [ind] = await db.select().from(industries).where(eq(industries.id, industryId)).limit(1);
     if (!ind) return c.json({ error: "산업 없음" }, 404);
     if (ind.userId !== null && ind.userId !== user.id) return c.json({ error: "접근 불가" }, 403);
-    await db.insert(userIndustries).values({ userId: user.id, industryId }).onConflictDoNothing();
+    await db.insert(userIndustries).values({ userId: user.id, industryId }).onConflictDoNothing(); // 확인 시 핀
   }
 
   await db.update(reports).set({ industryId, industryConfirmed: true }).where(eq(reports.id, id));
-  // 이미 만들어진 엔트리의 산업도 함께 갱신
+  // 멀티 태그를 사용자가 고른 산업으로 확정(없으면 비움)
+  await db.delete(reportIndustries).where(eq(reportIndustries.reportId, id));
+  if (industryId) {
+    await db.insert(reportIndustries).values({ reportId: id, industryId }).onConflictDoNothing();
+  }
   await db.update(entries).set({ industryId }).where(eq(entries.reportId, id));
   return c.json({ ok: true, industryId });
 });
@@ -310,7 +361,7 @@ meRoute.get("/reports/:id", async (c) => {
     .where(and(eq(reports.id, c.req.param("id")), eq(reports.userId, user.id)))
     .limit(1);
   if (!report) return c.json({ error: "리포트 없음" }, 404);
-  return c.json({ report });
+  return c.json({ report: (await attachIndustries([report]))[0] });
 });
 
 // POST /api/me/reports/:id/extract - 추출 재요청(AI 요약 생성 요청). parse_status=pending 으로 큐잉.
@@ -373,7 +424,7 @@ meRoute.get("/reports/:id/entries", async (c) => {
     byEntry.set(n.entryId, arr);
   }
   return c.json({
-    report,
+    report: (await attachIndustries([report]))[0],
     entries: entryRows.map((e) => ({ ...e, numbers: byEntry.get(e.id) ?? [] })),
   });
 });

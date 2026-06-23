@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Provider, ExtractedEntry, ExtractedNumber, Classification, ExtractCtx, DocType } from "./types.js";
-import { FRAME_DESC, GUARDRAIL, lensPersona, docTypeHint, buildClassifyPrompt } from "../prompts.js";
+import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType } from "./types.js";
+import { FRAME_DESC, GUARDRAIL, lensPersona, docTypeHint, buildAnalyzePrompt } from "../prompts.js";
 
 // 기본 프로바이더. MVP 는 단일 Flash 호출(JSON 출력).
 // TODO(캐스케이드): Flash 초벌 추출 → Pro 로 핵심요약/검증 재호출(비용·품질 균형).
@@ -14,20 +14,29 @@ export class GeminiProvider implements Provider {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async classify(document: string, industries: string[]): Promise<Classification> {
+  async analyze(document: string, industries: string[]): Promise<DocMeta> {
     const res = await this.ai.models.generateContent({
       model: this.model,
-      contents: [{ role: "user", parts: [{ text: buildClassifyPrompt(document, industries) }] }],
-      config: { responseMimeType: "application/json", maxOutputTokens: 200 },
+      contents: [{ role: "user", parts: [{ text: buildAnalyzePrompt(document, industries) }] }],
+      config: { responseMimeType: "application/json", maxOutputTokens: 400 },
     });
     try {
       const o = JSON.parse(res.text ?? "{}") as Record<string, unknown>;
-      const industry = typeof o.industry === "string" && industries.includes(o.industry) ? o.industry : null;
       const dt = o.doc_type;
       const docType: DocType = dt === "company" || dt === "news" ? dt : "industry";
-      return { industry, docType };
+      const list = Array.isArray(o.industries)
+        ? o.industries.filter((x): x is string => typeof x === "string" && industries.includes(x)).slice(0, 3)
+        : [];
+      const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+      return {
+        title: str(o.title),
+        pubDate: str(o.pub_date),
+        summary: str(o.summary),
+        docType,
+        industries: list,
+      };
     } catch {
-      return { industry: null, docType: "industry" };
+      return { title: null, pubDate: null, summary: null, docType: "industry", industries: [] };
     }
   }
 

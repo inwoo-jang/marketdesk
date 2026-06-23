@@ -53,8 +53,13 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (industryId?: string) =>
-    get<{ reports: Report[] }>(`/api/me/reports${industryId ? `?industryId=${industryId}` : ""}`),
+  myReports: (params?: { industryId?: string; docType?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.industryId) q.set("industryId", params.industryId);
+    if (params?.docType) q.set("docType", params.docType);
+    const qs = q.toString();
+    return get<{ reports: Report[] }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
+  },
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
   reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
   reExtract: (id: string) => post<{ ok: true; parseStatus: string }>(`/api/me/reports/${id}/extract`),
@@ -97,14 +102,17 @@ export type Entry = {
 export type Report = {
   id: string;
   title: string | null;
+  summary: string | null;
   industryId: string | null;
   industryConfirmed?: boolean;
   docType: "industry" | "company" | "news" | null;
+  pubDate: string | null;
   fileSize: number | null;
   pageCount: number | null;
   requestedLenses: string[] | null;
   parseStatus: "pending" | "parsing" | "parsed" | "failed";
   createdAt: string;
+  industries?: { id: string; name: string }[]; // 멀티 산업 태그
 };
 export type EntryFrame = {
   new_biz?: string;

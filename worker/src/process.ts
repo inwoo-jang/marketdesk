@@ -1,5 +1,5 @@
 import { eq, and, isNull } from "drizzle-orm";
-import { reports, reportPages, entries, entryNumbers, industries, userIndustries, userLenses } from "@reportlens/db";
+import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
@@ -35,20 +35,34 @@ export async function processReport(report: Report): Promise<void> {
     const document = buildDocument(pages);
     const provider = getProvider();
 
-    // 산업·문서타입 AI 분류 → 카탈로그 매칭. 사용자가 확인한 산업(industryConfirmed)은 덮지 않음.
+    // AI 메타 추출(제목·발간일·요약·타입·멀티산업) + 카탈로그 매칭. 확인된 산업은 덮지 않음.
     const catalog = await db
       .select({ id: industries.id, name: industries.name })
       .from(industries)
       .where(isNull(industries.userId));
-    const classification = await provider.classify(document, catalog.map((c) => c.name));
-    const matched = classification.industry ? catalog.find((c) => c.name === classification.industry) : undefined;
+    const meta = await provider.analyze(document, catalog.map((c) => c.name));
+    const matchedRows = catalog.filter((c) => meta.industries.includes(c.name));
+    const primaryId = report.industryConfirmed ? report.industryId : (matchedRows[0]?.id ?? report.industryId);
+
     await db
       .update(reports)
       .set({
-        docType: classification.docType,
-        ...(report.industryConfirmed || !matched ? {} : { industryId: matched.id }),
+        docType: meta.docType,
+        summary: meta.summary,
+        title: meta.title ?? report.title,
+        ...(meta.pubDate ? { pubDate: meta.pubDate } : {}),
+        ...(report.industryConfirmed ? {} : { industryId: primaryId }),
       })
       .where(eq(reports.id, report.id));
+
+    // 멀티 산업 태그(확인 전엔 AI 결과로 교체). 자동 팔로우는 하지 않음(사용자가 직접 핀).
+    if (!report.industryConfirmed && matchedRows.length > 0) {
+      await db.delete(reportIndustries).where(eq(reportIndustries.reportId, report.id));
+      await db
+        .insert(reportIndustries)
+        .values(matchedRows.map((r) => ({ reportId: report.id, industryId: r.id })))
+        .onConflictDoNothing();
+    }
 
     // 취업 렌즈용 직무(user_lenses.config.jobRole)
     const [jobLens] = await db
@@ -59,18 +73,13 @@ export async function processReport(report: Report): Promise<void> {
     const jobRole = jobLens?.config?.jobRole;
 
     const lensKeys = report.requestedLenses ?? [];
-    const entryDate = report.pubDate ?? new Date().toISOString().slice(0, 10);
-    const industryId = report.industryConfirmed ? report.industryId : (matched?.id ?? report.industryId);
-
-    // 매칭된 산업을 자동 팔로우 → 홈 "내 산업"·산업별 대시보드에 노출
-    if (industryId) {
-      await db.insert(userIndustries).values({ userId: report.userId, industryId }).onConflictDoNothing();
-    }
+    const entryDate = meta.pubDate ?? report.pubDate ?? new Date().toISOString().slice(0, 10);
+    const industryId = primaryId;
 
     for (const lensKey of lensKeys) {
       const extracted = await provider.extract(document, lensKey, {
         jobRole: lensKey === "job" ? jobRole : undefined,
-        docType: classification.docType,
+        docType: meta.docType,
       });
       const numbers = verifyNumbers(extracted.numbers, pages);
 
@@ -118,7 +127,7 @@ export async function processReport(report: Report): Promise<void> {
 
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));
     console.log(
-      `처리 완료 ${report.id} (페이지 ${pageCount}, 산업 ${classification.industry ?? "미매칭"}, 타입 ${classification.docType}, 렌즈 ${lensKeys.join(",")})`,
+      `처리 완료 ${report.id} (페이지 ${pageCount}, 산업 ${meta.industries.join("/") || "미매칭"}, 타입 ${meta.docType}, 렌즈 ${lensKeys.join(",")})`,
     );
   } catch (e) {
     console.error(`처리 실패 ${report.id}:`, e);

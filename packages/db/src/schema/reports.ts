@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, boolean, date, timestamp, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, boolean, date, timestamp, unique, index, primaryKey } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { industries } from "./industries";
 import { sourceType, parseStatus, docType, inputFormat } from "./enums";
@@ -13,10 +13,11 @@ export const reports = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     industryId: uuid("industry_id").references(() => industries.id), // AI 매칭(확인 전 추정)
     industryConfirmed: boolean("industry_confirmed").default(false).notNull(),
-    title: text("title"),
+    title: text("title"), // AI 추출 제목(없으면 파일명 폴백)
+    summary: text("summary"), // AI 한줄요약(피드 미리보기)
     broker: text("broker"), // 증권사(해당 시)
     analyst: text("analyst"),
-    pubDate: date("pub_date"),
+    pubDate: date("pub_date"), // AI 추출 발간일
     sourceType: sourceType("source_type"), // 'broker'(수동) | 'public'(Phase2)
     docType: docType("doc_type"), // industry|company|news (AI 분류)
     inputFormat: inputFormat("input_format").default("pdf").notNull(), // pdf|text|image
@@ -43,4 +44,18 @@ export const reportPages = pgTable(
     text: text("text"),
   },
   (t) => [unique("report_pages_report_page_uq").on(t.reportId, t.pageNo)],
+);
+
+// report_industries: 리포트 ↔ 산업 멀티(N:N). AI 가 여러 산업으로 태깅 가능.
+export const reportIndustries = pgTable(
+  "report_industries",
+  {
+    reportId: uuid("report_id")
+      .notNull()
+      .references(() => reports.id, { onDelete: "cascade" }),
+    industryId: uuid("industry_id")
+      .notNull()
+      .references(() => industries.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.reportId, t.industryId] })],
 );

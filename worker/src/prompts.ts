@@ -55,13 +55,16 @@ export function docTypeHint(docType?: string): string {
   return "이 문서는 산업 리포트다.";
 }
 
-// 분류 프롬프트(산업 + 문서타입). industries = 카탈로그 후보군.
-export function buildClassifyPrompt(document: string, industries: string[]): string {
+// 메타 추출 프롬프트(제목·발간일·요약·타입·멀티산업). industries = 카탈로그 후보군.
+export function buildAnalyzePrompt(document: string, industries: string[]): string {
   return (
-    `아래 문서를 분류하라. JSON 으로만 답한다.\n` +
-    `1) industry: 다음 후보 중 가장 가까운 하나의 정확한 이름. [${industries.join(", ")}]\n` +
-    `2) doc_type: 'industry'(산업 리포트) | 'company'(특정 기업 리포트) | 'news'(경제뉴스) 중 하나.\n` +
-    `출력 형태: {"industry":"<후보 중 하나>","doc_type":"industry|company|news"}\n\n` +
-    `--- 문서(일부) ---\n${document.slice(0, 4000)}`
+    `아래 문서의 메타데이터를 추출하라. JSON 으로만 답한다.\n` +
+    `1) title: 문서의 핵심을 담은 제목(한 줄). 문서에 제목이 있으면 그대로, 없으면 핵심 요지로.\n` +
+    `2) pub_date: 발간/작성 일자 YYYY-MM-DD. 없으면 null.\n` +
+    `3) summary: 한 줄 요약(40자 내외, 피드에서 훑어볼 용도).\n` +
+    `4) doc_type: 'industry'(산업 리포트) | 'company'(특정 기업 리포트) | 'news'(경제뉴스).\n` +
+    `5) industries: 다음 후보 중 해당하는 것 모두(1~3개), 정확한 이름 배열. [${industries.join(", ")}]\n` +
+    `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."]}\n\n` +
+    `--- 문서(일부) ---\n${document.slice(0, 6000)}`
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Usage } from "@/lib/api";
-import { AuthBar } from "@/components/auth-bar";
+import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole } from "@/lib/api";
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -15,17 +14,16 @@ export default function Home() {
   const [myJobRole, setMyJobRole] = useState<string | undefined>();
   const [myIndustries, setMyIndustries] = useState<MyIndustry[]>([]);
   const [catalog, setCatalog] = useState<Industry[]>([]);
-  const [usage, setUsage] = useState<Usage | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, usage] = await Promise.all([
+    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }] = await Promise.all([
       api.lenses(),
       api.myLenses(),
       api.jobRoles(),
       api.myIndustries(),
       api.industries(),
-      api.usage(),
     ]);
     setLenses(lenses);
     setJobRoles(jobRoles);
@@ -33,7 +31,6 @@ export default function Home() {
     setMyJobRole(jobRole);
     setMyIndustries(mi.industries);
     setCatalog(industries);
-    setUsage(usage);
   }, []);
 
   useEffect(() => {
@@ -58,12 +55,12 @@ export default function Home() {
   }
 
   const followedIds = new Set(myIndustries.map((i) => i.id));
-  const addable = catalog.filter((c) => !followedIds.has(c.id));
   const lensLabel = (k: string) => lenses.find((l) => l.key === k)?.label ?? k;
   const jobRoleLabel = jobRoles.find((r) => r.key === myJobRole)?.label;
 
-  async function follow(id: string) {
-    await api.followIndustry(id);
+  async function togglePin(id: string, pinned: boolean) {
+    if (pinned) await api.unfollowIndustry(id);
+    else await api.followIndustry(id);
     await loadData();
   }
   async function createIndustry() {
@@ -76,35 +73,23 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">🔍 리포트렌즈</h1>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {myLensKeys.map((k) => (
-              <span key={k} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                {lensLabel(k)}
-                {k === "job" && jobRoleLabel ? ` · ${jobRoleLabel}` : ""}
-              </span>
-            ))}
-            <a href="/onboarding" className="rounded-full border border-line px-3 py-1 text-xs text-ink-sub hover:bg-bg-deep">
-              렌즈 변경
-            </a>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <AuthBar />
-          {usage && (
-            <span className="text-xs text-ink-muted">
-              {usage.limit === null
-                ? "Pro · 무제한 분석"
-                : `오늘 무료 분석 ${usage.remaining ?? 0}/${usage.limit}회 남음`}
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {myLensKeys.map((k) => (
+            <span key={k} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              {lensLabel(k)}
+              {k === "job" && jobRoleLabel ? ` · ${jobRoleLabel}` : ""}
             </span>
-          )}
+          ))}
+          <a href="/settings" className="rounded-full border border-line px-3 py-1 text-xs text-ink-sub hover:bg-bg-deep">
+            렌즈 변경
+          </a>
         </div>
       </header>
 
-      {/* 내 산업 = 산업별 대시보드 진입 */}
-      <section className="mb-10">
+      {/* 내 산업(핀) = 펼치기 전 보이는 산업 */}
+      <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink-muted">내 산업 ({myIndustries.length})</h2>
           <a href="/upload" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white">
@@ -114,56 +99,81 @@ export default function Home() {
 
         {myIndustries.length === 0 ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            아직 팔로우한 산업이 없어요. 아래에서 추가하면 산업별 대시보드가 생깁니다.
+            관심 산업을 아직 안 골랐어요. 아래 &quot;전체 산업&quot;에서 ★ 로 고르면 여기에 모여요. (안 골라도 전체에서 다 볼 수 있어요)
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {myIndustries.map((ind) => (
-              <a
-                key={ind.id}
-                href={`/industry/${ind.id}`}
-                className="rounded-card bg-card p-5 shadow-card transition hover:ring-1 hover:ring-primary/30"
-              >
-                <div
-                  className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ backgroundColor: ind.iconColor ?? "#8A93A8" }}
+              <div key={ind.id} className="group relative rounded-card bg-card p-5 shadow-card hover:ring-1 hover:ring-primary/30">
+                <a href={`/industry/${ind.id}`} className="block">
+                  <div
+                    className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                    style={{ backgroundColor: ind.iconColor ?? "#8A93A8" }}
+                  >
+                    {ind.name.slice(0, 1)}
+                  </div>
+                  <div className="font-semibold">{ind.name}</div>
+                  {ind.isCustom && <span className="text-xs text-ink-muted">커스텀</span>}
+                </a>
+                <button
+                  onClick={() => togglePin(ind.id, true)}
+                  className="absolute right-3 top-3 text-primary"
+                  title="관심 해제"
                 >
-                  {ind.name.slice(0, 1)}
-                </div>
-                <div className="font-semibold">{ind.name}</div>
-                {ind.isCustom && <span className="text-xs text-ink-muted">커스텀</span>}
-              </a>
+                  ★
+                </button>
+              </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* 산업 추가 */}
+      {/* 전체 산업: 다 볼 수 있고, ★ 로 핀 선택 */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-ink-muted">산업 추가</h2>
-        <div className="flex flex-wrap gap-2">
-          {addable.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => follow(c.id)}
-              className="rounded-full border border-line bg-card px-3 py-1.5 text-sm hover:border-primary hover:text-primary"
-            >
-              + {c.name}
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={newIndustry}
-            onChange={(e) => setNewIndustry(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && createIndustry()}
-            placeholder="직접 추가 (예: 우주항공)"
-            className="w-56 rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <button onClick={createIndustry} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white">
-            추가
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mb-3 text-sm font-semibold text-ink-muted hover:text-ink"
+        >
+          전체 산업 {showAll ? "▴ 접기" : "▾ 펼치기"} ({catalog.length})
+        </button>
+        {showAll && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {catalog.map((c) => {
+                const isPinned = followedIds.has(c.id);
+                return (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-line bg-card py-1 pl-3 pr-1 text-sm"
+                  >
+                    <a href={`/industry/${c.id}`} className="hover:text-primary">
+                      {c.name}
+                    </a>
+                    <button
+                      onClick={() => togglePin(c.id, isPinned)}
+                      className={`rounded-full px-1.5 ${isPinned ? "text-primary" : "text-ink-muted hover:text-primary"}`}
+                      title={isPinned ? "관심 해제" : "관심 추가"}
+                    >
+                      {isPinned ? "★" : "☆"}
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={newIndustry}
+                onChange={(e) => setNewIndustry(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createIndustry()}
+                placeholder="직접 추가 (예: 우주항공)"
+                className="w-56 rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              <button onClick={createIndustry} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white">
+                추가
+              </button>
+            </div>
+          </>
+        )}
       </section>
     </main>
   );

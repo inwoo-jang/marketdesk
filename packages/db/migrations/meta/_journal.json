@@ -22,6 +22,13 @@
       "when": 1782192417590,
       "tag": "0002_rework_doctype_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782196621427,
+      "tag": "0003_multi_industry_summary",
+      "breakpoints": true
     }
   ]
 }
