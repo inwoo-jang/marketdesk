@@ -53,17 +53,26 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: () => get<{ reports: Report[] }>("/api/me/reports"),
+  myReports: (industryId?: string) =>
+    get<{ reports: Report[] }>(`/api/me/reports${industryId ? `?industryId=${industryId}` : ""}`),
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
   reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
   reExtract: (id: string) => post<{ ok: true; parseStatus: string }>(`/api/me/reports/${id}/extract`),
   saveEntry: (id: string, input: { frame?: Partial<EntryFrame>; status?: "draft" | "saved" }) =>
     put<{ entry: EntryFull }>(`/api/me/entries/${id}`, input),
-  uploadReport: async (file: File, opts: { industryId?: string; lensKeys?: string[] }) => {
+  uploadReport: async (input: {
+    file?: File;
+    text?: string;
+    title?: string;
+    industryId?: string;
+    lensKeys?: string[];
+  }) => {
     const fd = new FormData();
-    fd.append("file", file);
-    if (opts.industryId) fd.append("industryId", opts.industryId);
-    if (opts.lensKeys) fd.append("lensKeys", JSON.stringify(opts.lensKeys));
+    if (input.file) fd.append("file", input.file);
+    if (input.text) fd.append("text", input.text);
+    if (input.title) fd.append("title", input.title);
+    if (input.industryId) fd.append("industryId", input.industryId);
+    if (input.lensKeys) fd.append("lensKeys", JSON.stringify(input.lensKeys));
     const res = await fetch(`${API_URL}/api/me/reports`, { method: "POST", credentials: "include", body: fd });
     if (!res.ok) {
       const msg = await res.json().catch(() => ({ error: `업로드 실패: ${res.status}` }));
@@ -71,7 +80,12 @@ export const api = {
     }
     return res.json() as Promise<{ report: Report }>;
   },
+  setReportIndustry: (reportId: string, industryId: string | null) =>
+    put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
+  usage: () => get<Usage>("/api/me/usage"),
 };
+
+export type Usage = { plan: "free" | "pro"; used: number; limit: number | null; remaining: number | null };
 
 export type MyIndustry = { id: string; name: string; slug: string; iconColor: string | null; isCustom: boolean };
 export type Entry = {
@@ -84,6 +98,8 @@ export type Report = {
   id: string;
   title: string | null;
   industryId: string | null;
+  industryConfirmed?: boolean;
+  docType: "industry" | "company" | "news" | null;
   fileSize: number | null;
   pageCount: number | null;
   requestedLenses: string[] | null;

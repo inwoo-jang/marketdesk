@@ -1,11 +1,42 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray, desc } from "drizzle-orm";
-import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports, JOB_ROLES } from "@reportlens/db";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports, usageDaily, JOB_ROLES } from "@reportlens/db";
 import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
-import { requireUser, type AppEnv } from "../auth.js";
+import { requireUser, type AppEnv, type AppUser } from "../auth.js";
+
+// 무료 한도: 하루 3회 분석. pro 는 무제한. (BYO Claude 키도 Pro 기능)
+const FREE_DAILY_LIMIT = 3;
+const seoulDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+
+async function bumpUsage(userId: string, day: string) {
+  await db
+    .insert(usageDaily)
+    .values({ userId, day, count: 1 })
+    .onConflictDoUpdate({ target: [usageDaily.userId, usageDaily.day], set: { count: sql`${usageDaily.count} + 1` } });
+}
+
+// 분석 1건 소비(게이팅). ok=false 면 한도 초과.
+async function consumeAnalysis(user: AppUser): Promise<{ ok: boolean; used: number; limit: number | null }> {
+  const day = seoulDay();
+  if (user.plan === "pro") {
+    await bumpUsage(user.id, day);
+    return { ok: true, used: 0, limit: null };
+  }
+  const [row] = await db
+    .select({ count: usageDaily.count })
+    .from(usageDaily)
+    .where(and(eq(usageDaily.userId, user.id), eq(usageDaily.day, day)))
+    .limit(1);
+  const used = row?.count ?? 0;
+  if (used >= FREE_DAILY_LIMIT) return { ok: false, used, limit: FREE_DAILY_LIMIT };
+  await bumpUsage(user.id, day);
+  return { ok: true, used: used + 1, limit: FREE_DAILY_LIMIT };
+}
+
+const QUOTA_MSG = "무료 한도(하루 3회 분석)를 다 썼어요. Pro 로 업그레이드하거나 본인 API 키를 등록하면 계속할 수 있어요.";
 
 // /api/me/* : 로그인 사용자 스코핑(requireUser). 모든 쿼리에 user.id 강제.
 export const meRoute = new Hono<AppEnv>();
@@ -149,32 +180,47 @@ meRoute.get("/entries/recent", async (c) => {
 
 // ---- 리포트 업로드 ----
 
-// GET /api/me/reports - 내 업로드 리포트 목록
+// GET /api/me/reports?industryId= - 내 업로드 리포트(산업 필터 옵션)
 meRoute.get("/reports", async (c) => {
   const user = c.get("user");
-  const rows = await db
-    .select()
-    .from(reports)
-    .where(eq(reports.userId, user.id))
-    .orderBy(desc(reports.createdAt))
-    .limit(30);
+  const industryId = c.req.query("industryId");
+  const where = industryId
+    ? and(eq(reports.userId, user.id), eq(reports.industryId, industryId))
+    : eq(reports.userId, user.id);
+  const rows = await db.select().from(reports).where(where).orderBy(desc(reports.createdAt)).limit(50);
   return c.json({ reports: rows });
 });
 
-// POST /api/me/reports - PDF 업로드(multipart). 파일 저장 + report 생성(parse_status=pending).
-// 실제 파싱/추출은 Sprint2 워커가 큐로 처리.
+// POST /api/me/reports - 업로드(multipart). PDF 파일 또는 텍스트 입력. report 생성(parse_status=pending).
+// 산업은 선택(미지정 시 워커가 AI 매칭). 실제 파싱/추출은 워커가 큐로 처리.
 meRoute.post("/reports", async (c) => {
   const user = c.get("user");
   const body = await c.req.parseBody();
   const file = body["file"];
-  if (!(file instanceof File)) return c.json({ error: "file 필드(PDF)가 필요합니다" }, 400);
+  const text = typeof body["text"] === "string" ? body["text"].trim() : "";
 
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  if (!isPdf) return c.json({ error: "PDF 파일만 업로드할 수 있습니다" }, 400);
-  if (file.size > env.maxUploadMb * 1024 * 1024)
-    return c.json({ error: `파일이 너무 큽니다(최대 ${env.maxUploadMb}MB)` }, 400);
+  // 입력: PDF 파일 또는 텍스트
+  let inputFormat: "pdf" | "text";
+  let bytes: Uint8Array;
+  let baseName: string;
+  if (file instanceof File) {
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) return c.json({ error: "PDF 파일만 업로드할 수 있습니다" }, 400);
+    if (file.size > env.maxUploadMb * 1024 * 1024)
+      return c.json({ error: `파일이 너무 큽니다(최대 ${env.maxUploadMb}MB)` }, 400);
+    inputFormat = "pdf";
+    bytes = new Uint8Array(await file.arrayBuffer());
+    baseName = file.name.replace(/\.pdf$/i, "");
+  } else if (text.length > 0) {
+    inputFormat = "text";
+    bytes = new TextEncoder().encode(text);
+    const titleField = typeof body["title"] === "string" ? body["title"].trim() : "";
+    baseName = titleField || text.split("\n")[0].slice(0, 40) || "텍스트 노트";
+  } else {
+    return c.json({ error: "PDF 파일 또는 텍스트를 입력하세요" }, 400);
+  }
 
-  // 산업: 선택 시 글로벌이거나 본인 소유만 허용
+  // 산업(선택): 글로벌이거나 본인 소유만. 미지정이면 워커 AI 매칭.
   const industryId = typeof body["industryId"] === "string" && body["industryId"] ? body["industryId"] : null;
   if (industryId) {
     const [ind] = await db.select().from(industries).where(eq(industries.id, industryId)).limit(1);
@@ -200,15 +246,21 @@ meRoute.post("/reports", async (c) => {
   }
   if (requested.length === 0) return c.json({ error: "추출할 렌즈가 없습니다. 먼저 렌즈를 켜세요." }, 400);
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const { fileKey, size } = await storage.save(user.id, file.name, bytes);
+  // 무료 한도 게이팅(업로드=분석 1건)
+  const quota = await consumeAnalysis(user);
+  if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
+
+  const filename = inputFormat === "pdf" ? baseName + ".pdf" : baseName + ".txt";
+  const { fileKey, size } = await storage.save(user.id, filename, bytes);
 
   const [report] = await db
     .insert(reports)
     .values({
       userId: user.id,
       industryId,
-      title: file.name.replace(/\.pdf$/i, ""),
+      industryConfirmed: industryId !== null, // 수동 지정이면 확인된 것으로
+      title: baseName,
+      inputFormat,
       fileKey,
       fileSize: size,
       requestedLenses: requested,
@@ -217,6 +269,36 @@ meRoute.post("/reports", async (c) => {
     .returning();
 
   return c.json({ report });
+});
+
+const setIndustrySchema = z.object({ industryId: z.string().uuid().nullable() });
+
+// PUT /api/me/reports/:id/industry - AI 매칭 산업 확인/수정. 확인 시 자동 팔로우.
+meRoute.put("/reports/:id/industry", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const parsed = setIndustrySchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+
+  const industryId = parsed.data.industryId;
+  if (industryId) {
+    const [ind] = await db.select().from(industries).where(eq(industries.id, industryId)).limit(1);
+    if (!ind) return c.json({ error: "산업 없음" }, 404);
+    if (ind.userId !== null && ind.userId !== user.id) return c.json({ error: "접근 불가" }, 403);
+    await db.insert(userIndustries).values({ userId: user.id, industryId }).onConflictDoNothing();
+  }
+
+  await db.update(reports).set({ industryId, industryConfirmed: true }).where(eq(reports.id, id));
+  // 이미 만들어진 엔트리의 산업도 함께 갱신
+  await db.update(entries).set({ industryId }).where(eq(entries.reportId, id));
+  return c.json({ ok: true, industryId });
 });
 
 // GET /api/me/reports/:id - 리포트 1건 + 추출 작업 상태(AI 요약 작업 상태 조회)
@@ -246,8 +328,26 @@ meRoute.post("/reports/:id/extract", async (c) => {
   if (!report.requestedLenses || report.requestedLenses.length === 0)
     return c.json({ error: "추출할 렌즈가 없습니다" }, 400);
 
+  // 재추출도 분석 1건으로 게이팅
+  const quota = await consumeAnalysis(user);
+  if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
+
   await db.update(reports).set({ parseStatus: "pending" }).where(eq(reports.id, id));
   return c.json({ ok: true, parseStatus: "pending" });
+});
+
+// GET /api/me/usage - 오늘 분석 사용량/한도(UI 표시용)
+meRoute.get("/usage", async (c) => {
+  const user = c.get("user");
+  const day = seoulDay();
+  const [row] = await db
+    .select({ count: usageDaily.count })
+    .from(usageDaily)
+    .where(and(eq(usageDaily.userId, user.id), eq(usageDaily.day, day)))
+    .limit(1);
+  const used = row?.count ?? 0;
+  const limit = user.plan === "pro" ? null : FREE_DAILY_LIMIT;
+  return c.json({ plan: user.plan, used, limit, remaining: limit === null ? null : Math.max(0, limit - used) });
 });
 
 // GET /api/me/reports/:id/entries - 리포트의 렌즈별 엔트리 + 핵심숫자(검토 화면용)

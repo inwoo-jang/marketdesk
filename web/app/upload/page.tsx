@@ -1,19 +1,25 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, type MyIndustry, type Lens } from "@/lib/api";
 
-// 리포트 업로드: 드롭존 + 산업 + 렌즈 선택. 로그인 필요.
+// 업로드: PDF 또는 텍스트 + 산업(선택, 비우면 AI 매칭) + 렌즈. 로그인 필요.
 export default function UploadPage() {
   const router = useRouter();
+  const search = useSearchParams();
+  const presetIndustry = search.get("industryId") ?? "";
   const fileInput = useRef<HTMLInputElement>(null);
+
   const [industries, setIndustries] = useState<MyIndustry[]>([]);
   const [lenses, setLenses] = useState<Lens[]>([]);
   const [enabledKeys, setEnabledKeys] = useState<string[]>([]);
 
+  const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [file, setFile] = useState<File | null>(null);
-  const [industryId, setIndustryId] = useState<string>("");
+  const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
+  const [industryId, setIndustryId] = useState<string>(presetIndustry);
   const [lensKeys, setLensKeys] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,7 +37,7 @@ export default function UploadPage() {
       setIndustries(mi.industries);
       setLenses(all.lenses);
       setEnabledKeys(mine.enabled);
-      setLensKeys(new Set(mine.enabled)); // 기본: 켠 렌즈 전체
+      setLensKeys(new Set(mine.enabled));
       setLoaded(true);
     })();
   }, [router]);
@@ -54,19 +60,20 @@ export default function UploadPage() {
   }
 
   async function submit() {
-    if (!file) {
-      setError("PDF 파일을 선택하세요.");
-      return;
-    }
-    if (lensKeys.size === 0) {
-      setError("렌즈를 1개 이상 선택하세요.");
-      return;
-    }
+    if (mode === "pdf" && !file) return setError("PDF 파일을 선택하세요.");
+    if (mode === "text" && !text.trim()) return setError("텍스트를 입력하세요.");
+    if (lensKeys.size === 0) return setError("렌즈를 1개 이상 선택하세요.");
     setBusy(true);
     setError(null);
     try {
-      await api.uploadReport(file, { industryId: industryId || undefined, lensKeys: [...lensKeys] });
-      router.push("/");
+      const { report } = await api.uploadReport({
+        file: mode === "pdf" ? (file ?? undefined) : undefined,
+        text: mode === "text" ? text : undefined,
+        title: mode === "text" ? title || undefined : undefined,
+        industryId: industryId || undefined,
+        lensKeys: [...lensKeys],
+      });
+      router.push(`/reports/${report.id}`); // 검토 화면에서 처리상태 폴링
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "업로드 실패");
@@ -82,40 +89,72 @@ export default function UploadPage() {
     <main className="mx-auto max-w-lg px-6 py-12">
       <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
       <h1 className="mt-4 text-2xl font-bold">리포트 업로드</h1>
-      <p className="mt-2 text-sm text-ink-sub">증권사 PDF를 올리면 선택한 렌즈로 정리됩니다.</p>
+      <p className="mt-2 text-sm text-ink-sub">산업·기업 리포트나 경제뉴스를 올리면 선택한 렌즈로 정리됩니다.</p>
 
-      {/* 드롭존 */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          pickFile(e.dataTransfer.files?.[0] ?? null);
-        }}
-        onClick={() => fileInput.current?.click()}
-        className={`mt-6 cursor-pointer rounded-card border-2 border-dashed p-10 text-center transition ${
-          dragging ? "border-primary bg-primary/5" : "border-line bg-card"
-        }`}
-      >
-        <input
-          ref={fileInput}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-        />
-        {file ? (
-          <div className="font-medium text-ink">📄 {file.name}</div>
-        ) : (
-          <div className="text-ink-sub">여기로 PDF를 끌어다 놓거나 클릭해서 선택</div>
-        )}
+      {/* 입력 모드 */}
+      <div className="mt-6 flex gap-2">
+        {(["pdf", "text"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+              mode === m ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"
+            }`}
+          >
+            {m === "pdf" ? "PDF 파일" : "텍스트 붙여넣기"}
+          </button>
+        ))}
       </div>
 
-      {/* 산업 */}
+      {mode === "pdf" ? (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            pickFile(e.dataTransfer.files?.[0] ?? null);
+          }}
+          onClick={() => fileInput.current?.click()}
+          className={`mt-4 cursor-pointer rounded-card border-2 border-dashed p-10 text-center transition ${
+            dragging ? "border-primary bg-primary/5" : "border-line bg-card"
+          }`}
+        >
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+          />
+          {file ? (
+            <div className="font-medium text-ink">📄 {file.name}</div>
+          ) : (
+            <div className="text-ink-sub">여기로 PDF를 끌어다 놓거나 클릭해서 선택</div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="제목 (선택)"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+            placeholder="리포트·뉴스 본문을 붙여넣으세요."
+            className="w-full resize-y rounded-card border border-line bg-card px-3 py-3 text-sm outline-none focus:border-primary"
+          />
+        </div>
+      )}
+
+      {/* 산업 (선택) */}
       <div className="mt-6">
         <label className="mb-2 block text-sm font-semibold text-ink-muted">산업</label>
         <select
@@ -123,16 +162,14 @@ export default function UploadPage() {
           onChange={(e) => setIndustryId(e.target.value)}
           className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-primary"
         >
-          <option value="">선택 안 함</option>
+          <option value="">자동 (AI가 분류)</option>
           {industries.map((i) => (
             <option key={i.id} value={i.id}>
               {i.name}
             </option>
           ))}
         </select>
-        {industries.length === 0 && (
-          <p className="mt-1 text-xs text-ink-muted">팔로우한 산업이 없어요. 대시보드에서 추가할 수 있어요.</p>
-        )}
+        <p className="mt-1 text-xs text-ink-muted">비워두면 업로드 후 AI가 산업을 매칭합니다. 검토 화면에서 수정할 수 있어요.</p>
       </div>
 
       {/* 렌즈 */}

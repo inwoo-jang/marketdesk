@@ -1,5 +1,5 @@
 import { eq, and, isNull } from "drizzle-orm";
-import { reports, reportPages, entries, entryNumbers, industries, userLenses } from "@reportlens/db";
+import { reports, reportPages, entries, entryNumbers, industries, userIndustries, userLenses } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
@@ -61,6 +61,11 @@ export async function processReport(report: Report): Promise<void> {
     const lensKeys = report.requestedLenses ?? [];
     const entryDate = report.pubDate ?? new Date().toISOString().slice(0, 10);
     const industryId = report.industryConfirmed ? report.industryId : (matched?.id ?? report.industryId);
+
+    // 매칭된 산업을 자동 팔로우 → 홈 "내 산업"·산업별 대시보드에 노출
+    if (industryId) {
+      await db.insert(userIndustries).values({ userId: report.userId, industryId }).onConflictDoNothing();
+    }
 
     for (const lensKey of lensKeys) {
       const extracted = await provider.extract(document, lensKey, {
