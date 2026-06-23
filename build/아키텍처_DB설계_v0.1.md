@@ -1,4 +1,4 @@
-# 리포트렌즈 — 아키텍처 & DB 설계 (Phase 0, 갱신 2026-06-23)
+# 마켓데스크 — 아키텍처 & DB 설계 (Phase 0, 갱신 2026-06-23)
 
 > 빌드 워크플로우 Phase 0(스펙 확정). 목표: 프로토타입이 아니라 **상용화 가능한 탄탄한 구조**.
 > 호스팅: AWS (Supabase 미사용). DB는 처음부터 상용화 수준으로, 컴퓨팅은 작게 시작.
@@ -220,7 +220,7 @@ created_at timestamptz DEFAULT now()
 설계 포인트:
 - **프로바이더 추상화(LLM 라우터)**: `extract(document, lens) -> 구조화결과` 인터페이스. 구현체 = GeminiProvider(기본, Flash 초벌 + Pro 핵심요약 캐스케이드), ClaudeProvider(BYO 키), McpExtractor(사용자 Claude가 호출).
 - **공유 코어**: 파싱(PyMuPDF/kordoc) + 틀 스키마 + 가드레일(출처 룰매칭)은 프로바이더 무관 공통. LLM만 갈아끼움.
-- **MCP 서버**: 리포트렌즈가 `extract_report`, `rollup` 같은 툴을 노출 → 사용자의 Claude Desktop/Code가 호출해 자기 구독으로 추출. (핵심 로직 재사용, LLM 비용 0)
+- **MCP 서버**: 마켓데스크가 `extract_report`, `rollup` 같은 툴을 노출 → 사용자의 Claude Desktop/Code가 호출해 자기 구독으로 추출. (핵심 로직 재사용, LLM 비용 0)
 - **BYO Claude 키**: 사용자별 키를 **KMS로 암호화 저장**, 절대 로깅 금지. 키 있으면 라우터가 Claude로 스위치.
 - **모델 ID는 구현 시 확정**(Gemini Flash/Pro 최신 ID, Claude는 claude-sonnet/opus 계열). 엔트리에 생성 프로바이더·모델 기록(투명성·eval).
 - 시퀀싱: **T1(웹 기본 Gemini)부터** 만들고, T2(BYO 키) → T0(MCP 서버) 순. MCP는 코어가 굳은 뒤 별도 스프린트.
@@ -229,5 +229,5 @@ created_at timestamptz DEFAULT now()
 
 ## 4. 다음 (Phase 1)
 
-스펙 확정 후 → 노션 리포트렌즈 페이지(Sprints/Tasks DB) 생성 → 스프린트 분해.
+스펙 확정 후 → 노션 마켓데스크 페이지(Sprints/Tasks DB) 생성 → 스프린트 분해.
 예상 스프린트 골격: S0 인프라 / S1 인증·산업·업로드 / S2 파싱·렌즈추출·검토저장 / S3 시간뷰·월별롤업 / S4 PDF·QA·배포.

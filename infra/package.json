@@ -2,7 +2,7 @@
   "name": "@reportlens/infra",
   "version": "0.0.0",
   "private": true,
-  "description": "리포트렌즈 IaC (AWS CDK) - 네트워크/데이터/인증/컴퓨팅 스택",
+  "description": "마켓데스크 IaC (AWS CDK) - 네트워크/데이터/인증/컴퓨팅 스택",
   "bin": {
     "reportlens-infra": "bin/app.ts"
   },

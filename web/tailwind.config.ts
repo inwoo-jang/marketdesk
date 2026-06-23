@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-// 디자인방향_리포트렌즈.md 의 토큰(Falcon 톤).
+// 디자인방향_마켓데스크.md 의 토큰(Falcon 톤).
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {

@@ -4,6 +4,11 @@ export const GUARDRAIL =
   "리포트에 없는 숫자·전망을 절대 지어내지 마라. 불확실하면 '명시 없음'이라 쓴다. " +
   "핵심숫자에는 반드시 출처 페이지(page_no)를 단다. 한국어, em dash 사용 금지.";
 
+// 모든 추출 응답에 강제하는 엄격 JSON 규칙(특히 CLI 프로바이더 파싱 안정화).
+export const STRICT_JSON =
+  "\n\n반드시 유효한 JSON 객체 하나만 출력하라. 코드펜스(```)·설명·머리말 금지. " +
+  "문자열 값 안에 실제 줄바꿈을 넣지 말 것(필요하면 마침표로 끊어라).";
+
 // 취업 렌즈 직무별 관점.
 export const JOB_ROLE_PERSONA: Record<string, string> = {
   pm: "산업 구조·비즈니스 모델·문제정의·기회",
@@ -32,8 +37,9 @@ export function buildAnalyzePrompt(document: string, industries: string[]): stri
     `3) summary: 한 줄 요약(40자 내외).\n` +
     `4) doc_type: 'industry'(산업 리포트) | 'company'(기업 리포트) | 'news'(경제뉴스).\n` +
     `5) industries: 다음 후보 중 해당하는 것 모두(1~3개) 정확한 이름 배열. [${industries.join(", ")}]\n` +
-    `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."]}\n\n` +
-    `--- 문서(일부) ---\n${document.slice(0, 6000)}`
+    `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."]}` +
+    STRICT_JSON +
+    `\n\n--- 문서(일부) ---\n${document.slice(0, 6000)}`
   );
 }
 
@@ -79,6 +85,6 @@ export function buildExtractPrompt(document: string, ctx: { docType: string; len
     `- sources: [{item, source, date}] 배열.\n` +
     `- numbers: 핵심 수치 5~10개 [{label, value, page_no}] (page_no = '=== p.N ===' 의 N).\n\n` +
     `출력 JSON: {"summary":"","facts":{"what":"","numbers":"","sourceDate":""},"drivers":[],"risks":[],"perspectives":{${perspJson}},"sources":[],"numbers":[]}\n\n` +
-    `${GUARDRAIL}\n\n--- 문서 ---\n${document}`
+    `${GUARDRAIL}${STRICT_JSON}\n\n--- 문서 ---\n${document}`
   );
 }

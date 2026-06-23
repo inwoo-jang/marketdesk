@@ -1,5 +1,22 @@
 import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType } from "./types.js";
 
+// 제목·요약에서 연락처·작성자·SNS·날짜 등 군더더기 제거
+function cleanNoise(s: string): string {
+  return s
+    .replace(/\[[^\]]*\]/g, " ") // [태그]
+    .replace(/\S+@\S+\.\S+/g, " ") // 이메일
+    .replace(/\d{2,4}[-)]\s?\d{3,4}-\d{4}/g, " ") // 전화번호
+    .replace(/https?:\/\/\S+/g, " ") // URL
+    .replace(/[가-힣]{2,4}\s?(선임연구원|책임연구원|수석연구원|연구위원|연구원|애널리스트|기자)/g, " ") // 이름+직함
+    .replace(/(기자명|선임연구원|책임연구원|수석연구원|연구위원|연구원|애널리스트|기자)/g, " ")
+    .replace(/입력\s*20\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}(\s?\d{1,2}:\d{2})?/g, " ")
+    .replace(/댓글\s*\d+/g, " ")
+    .replace(/(SNS\s*기사보내기|기사보내기|SNS\s*기사|SNS)/g, " ")
+    .replace(/[▪•·∙ㆍ|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const INDUSTRY_HINTS: Record<string, string[]> = {
   반도체: ["반도체", "HBM", "D램", "파운드리", "메모리"],
   AI: ["인공지능", "AI", "LLM", "생성형", "GPU"],
@@ -36,25 +53,11 @@ export class MockProvider implements Provider {
       : null;
     const docType: DocType = /뉴스|속보|기자/.test(oneLine) ? "news" : "industry";
 
-    // 제목 정리: [태그]·날짜·기자명·입력 등 군더더기 제거
-    const cleanTitle = firstLine
-      .replace(/\[[^\]]*\]/g, "")
-      .replace(/20\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}.*$/, "")
-      .replace(/기자명.*$/, "")
-      .replace(/입력.*$/, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const cleanTitle = cleanNoise(firstLine);
     return {
       title: (cleanTitle || firstLine).slice(0, 50) || null,
       pubDate,
-      summary:
-        oneLine
-          .replace(/\[[^\]]*\]/g, "")
-          .replace(/기자명[^,.]*기자/g, "")
-          .replace(/입력\s*20\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}/g, "")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 80) || null,
+      summary: cleanNoise(oneLine).slice(0, 80) || null,
       docType,
       industries: list,
     };
@@ -76,7 +79,7 @@ export class MockProvider implements Provider {
     // 환각 예시(어느 페이지에도 없음) → 가드레일이 verified=false 로 걸러야 함
     numbers.push({ label: "환각 테스트", value: "999999억", pageNo: 1 });
 
-    const oneLine = document.replace(/=== p\.\d+ ===/g, "").replace(/\s+/g, " ").trim();
+    const oneLine = cleanNoise(document.replace(/=== p\.\d+ ===/g, " "));
     const dt = ctx.docType === "company" ? "기업" : ctx.docType === "news" ? "뉴스" : "산업";
     const frame: ExtractedEntry["frame"] = {
       summary: `(mock·${dt}) ${oneLine.slice(0, 60)}`,

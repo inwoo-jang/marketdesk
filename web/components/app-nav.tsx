@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type User, type Usage } from "@/lib/api";
+import { Logo } from "@/components/logo";
 
 const NAV = [
   { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
@@ -41,7 +42,9 @@ export function AppNav() {
   return (
     <nav className="sticky top-0 z-10 border-b border-line bg-card/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-1 px-6 py-3">
-        <a href="/" className="mr-3 font-bold">🔍 리포트렌즈</a>
+        <a href="/" className="mr-3">
+          <Logo size={24} />
+        </a>
         <div className="flex flex-1 gap-1">
           {NAV.map((n) => {
             const active = n.match(pathname);

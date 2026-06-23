@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "리포트렌즈 공유 DB 스키마 + 마이그레이션 (Drizzle, source of truth)",
+  "description": "마켓데스크 공유 DB 스키마 + 마이그레이션 (Drizzle, source of truth)",
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",

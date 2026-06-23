@@ -1,6 +1,6 @@
 # 배포 런북 (Sprint 0 인프라)
 
-리포트렌즈 AWS 인프라를 실제로 올리는 절차. CDK 코드(`infra/`)는 `cdk synth` 까지 검증됨. 여기서부터는 **장인우 AWS 계정·크리덴셜이 필요**하므로 단계별로 확인하며 진행한다.
+마켓데스크 AWS 인프라를 실제로 올리는 절차. CDK 코드(`infra/`)는 `cdk synth` 까지 검증됨. 여기서부터는 **장인우 AWS 계정·크리덴셜이 필요**하므로 단계별로 확인하며 진행한다.
 
 > 스택 의존성: network -> data -> auth -> compute. `--all` 로 배포하면 CDK 가 순서를 자동 정렬한다.
 > region: `ap-northeast-2`(서울). env: `dev` | `prod`.

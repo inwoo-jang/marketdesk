@@ -1,6 +1,6 @@
 # @reportlens/db — 공유 DB 스키마 (Drizzle)
 
-리포트렌즈의 DB **원천(source of truth)**. api/mcp 가 import 해 재사용. worker(Python)는 같은 DB를 자체 클라이언트로 읽되, 스키마는 여기 마이그레이션을 따른다.
+마켓데스크의 DB **원천(source of truth)**. api/worker/mcp 가 import 해 재사용.
 
 ## 구조
 ```

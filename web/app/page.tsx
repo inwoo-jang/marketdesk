@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
+import { Logo } from "@/components/logo";
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -59,7 +60,7 @@ export default function Home() {
   if (!user) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-        <h1 className="text-3xl font-bold">🔍 리포트렌즈</h1>
+        <Logo size={40} className="text-3xl" />
         <p className="text-ink-sub">산업·기업 리포트와 경제뉴스를 내 관점(취업·투자)으로 정리합니다.</p>
         <a href="/login" className="rounded-full bg-primary px-6 py-3 font-medium text-white">시작하기</a>
       </main>

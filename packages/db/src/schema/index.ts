@@ -1,4 +1,4 @@
-// 리포트렌즈 DB 스키마 단일 진입점(drizzle.config.ts 가 참조).
+// 마켓데스크 DB 스키마 단일 진입점(drizzle.config.ts 가 참조).
 export * from "./enums";
 export * from "./users";
 export * from "./industries";

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "리포트렌즈 백엔드 API (Hono, ECS Fargate)",
+  "description": "마켓데스크 백엔드 API (Hono, ECS Fargate)",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

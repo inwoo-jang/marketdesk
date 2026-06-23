@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "리포트렌즈 추출 워커 (Node/TS): PDF 파싱 + 렌즈별 LLM 추출 + 가드레일",
+  "description": "마켓데스크 추출 워커 (Node/TS): PDF 파싱 + 렌즈별 LLM 추출 + 가드레일",
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",

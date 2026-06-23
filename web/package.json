@@ -2,7 +2,7 @@
   "name": "@reportlens/web",
   "version": "0.0.0",
   "private": true,
-  "description": "리포트렌즈 프론트엔드 (Next.js, Vercel)",
+  "description": "마켓데스크 프론트엔드 (Next.js, Vercel)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

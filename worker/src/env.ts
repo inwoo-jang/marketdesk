@@ -17,7 +17,8 @@ export const env = {
   databaseUrl: required("DATABASE_URL"),
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
   uploadDir: process.env.UPLOAD_DIR ?? fileURLToPath(new URL("../../api/.uploads", import.meta.url)),
-  llmProvider: process.env.LLM_PROVIDER ?? "mock",
+  llmProvider: process.env.LLM_PROVIDER ?? "mock", // mock | claude(CLI) | gemini
+  claudeModel: process.env.CLAUDE_MODEL ?? "", // 비우면 claude CLI 기본 모델
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.0-flash-001",
   pollInterval: Number(process.env.POLL_INTERVAL ?? 3),

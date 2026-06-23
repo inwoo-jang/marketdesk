@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { Logo } from "@/components/logo";
 
 // 로컬: dev 로그인 모드. 운영에서는 구글/카카오 = Cognito Hosted UI 로 교체.
 export default function LoginPage() {
@@ -31,8 +32,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm rounded-card bg-card p-8 shadow-card">
-        <h1 className="text-2xl font-bold">🔍 리포트렌즈</h1>
-        <p className="mt-2 text-sm text-ink-sub">내 관점으로 산업리포트를 정리하세요.</p>
+        <Logo size={32} className="text-2xl" />
+        <p className="mt-2 text-sm text-ink-sub">내 관점으로 산업·기업 리포트와 뉴스를 정리하세요.</p>
 
         {/* 실제 로그인(운영) 자리 */}
         <div className="mt-8 space-y-3">
