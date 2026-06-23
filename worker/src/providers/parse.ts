@@ -1,5 +1,5 @@
 import type { EntryFrame } from "@reportlens/db";
-import type { DocMeta, DocType, ExtractCtx, ExtractedNumber } from "./types.js";
+import type { DocMeta, DocType, ExtractCtx, ExtractedNumber, RollupResult, RollupFact } from "./types.js";
 
 // LLM JSON 응답 공용 파서(Gemini·Claude 공유).
 
@@ -73,6 +73,16 @@ export function parseFrame(o: Record<string, unknown>, ctx: ExtractCtx): EntryFr
     };
   }
   return frame;
+}
+
+export function parseRollup(o: Record<string, unknown>): RollupResult {
+  const facts: RollupFact[] = Array.isArray(o.facts)
+    ? o.facts
+        .map((f) => (f ?? {}) as Record<string, unknown>)
+        .map((f) => ({ type: f.type === "conflict" ? ("conflict" as const) : ("common" as const), content: str(f.content) ?? "" }))
+        .filter((f) => f.content)
+    : [];
+  return { oneLiner: str(o.one_liner) ?? str(o.oneLiner) ?? "", facts };
 }
 
 export function parseNumbers(v: unknown): ExtractedNumber[] {

@@ -25,7 +25,11 @@ export type DocMeta = {
   industries: string[]; // 후보 카탈로그 이름 중 매칭(복수 가능)
 };
 
-// LLM 라우터 추상화. 구현체: MockProvider(로컬), GeminiProvider(기본), (이후 ClaudeProvider BYO).
+// 월별 롤업(요약의 요약): 한 달 엔트리 → 흐름 한 줄 + 공통/엇갈림.
+export type RollupFact = { type: "common" | "conflict"; content: string };
+export type RollupResult = { oneLiner: string; facts: RollupFact[] };
+
+// LLM 라우터 추상화. 구현체: MockProvider(로컬), GeminiProvider(기본), ClaudeCliProvider.
 export interface Provider {
   // entries.provider 에 기록할 값(enum: gemini|claude|mcp). mock 은 null.
   providerKey: "gemini" | "claude" | "mcp" | null;
@@ -34,4 +38,6 @@ export interface Provider {
   analyze(document: string, industries: string[]): Promise<DocMeta>;
   // 구조화 분석(리포트당 1회): 공통 틀 + 관점 레이어(켠 렌즈만). 가드레일용 numbers 동반.
   extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry>;
+  // 월별 롤업: digest(한 달 엔트리 요약 모음) → 흐름 한 줄 + 공통/엇갈림. 하위 엔트리만 근거.
+  rollup(industryName: string, period: string, digest: string): Promise<RollupResult>;
 }

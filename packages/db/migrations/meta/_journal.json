@@ -36,6 +36,13 @@
       "when": 1782199029848,
       "tag": "0004_analysis_frame",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782203883678,
+      "tag": "0005_rollup_status",
+      "breakpoints": true
     }
   ]
 }

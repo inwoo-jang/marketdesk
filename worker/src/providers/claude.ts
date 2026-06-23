@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import type { Provider, ExtractedEntry, DocMeta, ExtractCtx } from "./types.js";
-import { buildAnalyzePrompt, buildExtractPrompt } from "../prompts.js";
-import { extractJson, parseMeta, parseFrame, parseNumbers } from "./parse.js";
+import type { Provider, ExtractedEntry, DocMeta, ExtractCtx, RollupResult } from "./types.js";
+import { buildAnalyzePrompt, buildExtractPrompt, buildRollupPrompt } from "../prompts.js";
+import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
 
 // 터미널의 `claude` CLI 를 직접 호출하는 프로바이더(API 키 불필요, 사용자 Claude 구독 사용).
 // 프롬프트는 stdin 으로 전달(긴 문서 대응), 응답 텍스트(JSON) 를 받아 파싱.
@@ -52,5 +52,10 @@ export class ClaudeCliProvider implements Provider {
     const text = await runClaude(buildExtractPrompt(document, ctx), this.cliModel);
     const o = extractJson(text);
     return { frame: parseFrame(o, ctx), numbers: parseNumbers(o.numbers) };
+  }
+
+  async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
+    const text = await runClaude(buildRollupPrompt(industryName, period, digest), this.cliModel);
+    return parseRollup(extractJson(text));
   }
 }

@@ -10,6 +10,8 @@ import {
   entryNumbers,
   reports,
   reportIndustries,
+  rollups,
+  rollupFacts,
   usageDaily,
   JOB_ROLES,
   type EntryFrame,
@@ -188,6 +190,64 @@ meRoute.get("/entries/recent", async (c) => {
     .orderBy(desc(entries.createdAt))
     .limit(10);
   return c.json({ entries: rows });
+});
+
+// ---- 월별 롤업 ----
+
+// GET /api/me/industries/:id/rollups - 그 산업의 월별 롤업 목록(+공통/엇갈림)
+meRoute.get("/industries/:id/rollups", async (c) => {
+  const user = c.get("user");
+  const industryId = c.req.param("id");
+  const rows = await db
+    .select()
+    .from(rollups)
+    .where(and(eq(rollups.userId, user.id), eq(rollups.industryId, industryId), eq(rollups.periodType, "month")))
+    .orderBy(desc(rollups.periodKey));
+  const ids = rows.map((r) => r.id);
+  const facts = ids.length ? await db.select().from(rollupFacts).where(inArray(rollupFacts.rollupId, ids)) : [];
+  const byRollup = new Map<string, typeof facts>();
+  for (const f of facts) {
+    const arr = byRollup.get(f.rollupId) ?? [];
+    arr.push(f);
+    byRollup.set(f.rollupId, arr);
+  }
+  return c.json({ rollups: rows.map((r) => ({ ...r, facts: byRollup.get(r.id) ?? [] })) });
+});
+
+const createRollupSchema = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "YYYY-MM 형식") });
+
+// POST /api/me/industries/:id/rollups - 월별 롤업 생성 요청(워커가 LLM 으로 처리). period=YYYY-MM
+meRoute.post("/industries/:id/rollups", async (c) => {
+  const user = c.get("user");
+  const industryId = c.req.param("id");
+  const parsed = createRollupSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body", detail: parsed.error.flatten() }, 400);
+
+  const [ind] = await db.select().from(industries).where(eq(industries.id, industryId)).limit(1);
+  if (!ind) return c.json({ error: "산업 없음" }, 404);
+  if (ind.userId !== null && ind.userId !== user.id) return c.json({ error: "접근 불가" }, 403);
+
+  // 롤업도 LLM 호출 → 무료 한도 게이팅
+  const quota = await consumeAnalysis(user);
+  if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
+
+  const period = parsed.data.period;
+  // 같은 (산업, 월) 롤업 재생성: 기존 삭제(facts/sources cascade) 후 pending 생성
+  await db
+    .delete(rollups)
+    .where(
+      and(
+        eq(rollups.userId, user.id),
+        eq(rollups.industryId, industryId),
+        eq(rollups.periodType, "month"),
+        eq(rollups.periodKey, period),
+      ),
+    );
+  const [rollup] = await db
+    .insert(rollups)
+    .values({ userId: user.id, industryId, periodType: "month", periodKey: period, status: "pending" })
+    .returning();
+  return c.json({ rollup });
 });
 
 // ---- 리포트 업로드 ----

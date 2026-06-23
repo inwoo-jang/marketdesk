@@ -2,15 +2,21 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, type MyIndustry, type Industry, type Report } from "@/lib/api";
+import { api, type MyIndustry, type Industry, type Report, type Rollup } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 
-// 산업별 대시보드: 그 산업으로 태깅된 내 리포트 피드. 핀(관심) 토글 가능.
+const monthKey = (r: Report) => (r.pubDate ?? r.createdAt).slice(0, 7);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+
+// 산업별 대시보드: 월별 흐름(롤업) + 시간뷰(월 그룹 리포트 피드). 핀 토글.
 export default function IndustryDashboard() {
   const { id } = useParams<{ id: string }>();
   const [industry, setIndustry] = useState<{ name: string; iconColor: string | null } | null>(null);
   const [pinned, setPinned] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
+  const [rollups, setRollups] = useState<Rollup[]>([]);
+  const [period, setPeriod] = useState(thisMonth());
+  const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -19,16 +25,17 @@ export default function IndustryDashboard() {
       window.location.href = "/login";
       return;
     }
-    const [mi, { industries: catalog }, { reports }] = await Promise.all([
+    const [mi, { industries: catalog }, { reports }, { rollups }] = await Promise.all([
       api.myIndustries(),
       api.industries(),
       api.myReports({ industryId: id }),
+      api.rollups(id),
     ]);
-    const mine = mi.industries.find((i: MyIndustry) => i.id === id);
-    const cat = catalog.find((i: Industry) => i.id === id);
-    setIndustry(mine ?? cat ?? null);
-    setPinned(!!mine);
+    setIndustry(mi.industries.find((i: MyIndustry) => i.id === id) ?? catalog.find((i: Industry) => i.id === id) ?? null);
+    setPinned(mi.industries.some((i) => i.id === id));
     setReports(reports);
+    setRollups(rollups);
+    if (reports[0]) setPeriod(monthKey(reports[0]));
     setLoaded(true);
   }, [id]);
 
@@ -36,20 +43,45 @@ export default function IndustryDashboard() {
     load().catch(() => setLoaded(true));
   }, [load]);
 
+  // 분석중 리포트 또는 생성중 롤업 있으면 폴링
   useEffect(() => {
-    if (reports.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
+    const busy =
+      reports.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing") ||
+      rollups.some((r) => r.status === "pending");
+    if (busy) {
       const t = setInterval(() => load().catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [reports, load]);
+  }, [reports, rollups, load]);
 
   async function togglePin() {
     if (pinned) await api.unfollowIndustry(id);
     else await api.followIndustry(id);
     setPinned(!pinned);
   }
+  async function genRollup() {
+    setBusy(true);
+    try {
+      await api.createRollup(id, period);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "롤업 생성 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
+
+  // 시간뷰: 월별 그룹
+  const byMonth = new Map<string, Report[]>();
+  for (const r of reports) {
+    const k = monthKey(r);
+    const arr = byMonth.get(k) ?? [];
+    arr.push(r);
+    byMonth.set(k, arr);
+  }
+  const months = [...byMonth.keys()].sort().reverse();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -82,25 +114,92 @@ export default function IndustryDashboard() {
         </div>
       </div>
 
-      <h2 className="mb-3 mt-8 text-sm font-semibold text-ink-muted">리포트 ({reports.length})</h2>
-      <div className="space-y-2">
+      {/* 월별 흐름(롤업) */}
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-muted">월별 흐름</h2>
+          <input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="rounded-lg border border-line bg-card px-2 py-1 text-sm outline-none focus:border-primary"
+          />
+          <button
+            onClick={genRollup}
+            disabled={busy}
+            className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {busy ? "..." : "이 달 흐름 생성"}
+          </button>
+        </div>
+        {rollups.length === 0 ? (
+          <p className="rounded-card bg-card p-5 text-sm text-ink-sub shadow-card">
+            아직 월별 흐름이 없어요. 월을 고르고 &quot;이 달 흐름 생성&quot;을 누르면 그 달 리포트들을 묶어 요약합니다.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {rollups.map((ru) => (
+              <div key={ru.id} className="rounded-card bg-card p-5 shadow-card">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-bold">{ru.periodKey}</span>
+                  {ru.status !== "done" && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      {ru.status === "pending" ? "생성중..." : "실패"}
+                    </span>
+                  )}
+                </div>
+                {ru.oneLiner && <p className="text-sm text-ink">{ru.oneLiner}</p>}
+                {ru.facts.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {ru.facts.map((f) => (
+                      <div key={f.id} className="flex gap-2 text-sm">
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                            f.factType === "common" ? "bg-success-bg text-success-text" : "bg-amber-50 text-amber-600"
+                          }`}
+                        >
+                          {f.factType === "common" ? "공통" : "엇갈림"}
+                        </span>
+                        <span className="text-ink">{f.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 시간뷰: 월별 그룹 리포트 */}
+      <section className="mt-10">
+        <h2 className="mb-3 text-sm font-semibold text-ink-muted">리포트 ({reports.length})</h2>
         {reports.length === 0 ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
             이 산업으로 분류된 리포트가 아직 없어요. 업로드하면 AI 가 이 산업으로 매칭합니다.
           </p>
         ) : (
-          reports.map((r) => (
-            <ReportCard
-              key={r.id}
-              report={r}
-              onDelete={async (rid) => {
-                await api.deleteReport(rid);
-                load();
-              }}
-            />
-          ))
+          <div className="space-y-6">
+            {months.map((m) => (
+              <div key={m}>
+                <div className="mb-2 text-xs font-semibold text-ink-muted">{m}</div>
+                <div className="space-y-2">
+                  {byMonth.get(m)!.map((r) => (
+                    <ReportCard
+                      key={r.id}
+                      report={r}
+                      onDelete={async (rid) => {
+                        await api.deleteReport(rid);
+                        load();
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </main>
   );
 }

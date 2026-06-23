@@ -1,4 +1,4 @@
-import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType } from "./types.js";
+import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType, RollupResult } from "./types.js";
 
 // 제목·요약에서 연락처·작성자·SNS·날짜 등 군더더기 제거
 function cleanNoise(s: string): string {
@@ -115,6 +115,18 @@ export class MockProvider implements Provider {
       };
     }
     return { frame, numbers };
+  }
+
+  async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
+    const lines = digest.split("\n").map((l) => l.trim()).filter(Boolean);
+    const count = lines.filter((l) => l.startsWith("-")).length || lines.length;
+    return {
+      oneLiner: `(mock) ${industryName} ${period}: 엔트리 ${count}건 기반 흐름 요약`,
+      facts: [
+        { type: "common", content: `(mock) ${industryName} 공통 팩트 요약` },
+        { type: "conflict", content: `(mock) 리포트 간 엇갈리는 지점 요약` },
+      ],
+    };
   }
 }
 

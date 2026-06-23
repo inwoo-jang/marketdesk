@@ -89,6 +89,18 @@ export const api = {
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
   deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
   usage: () => get<Usage>("/api/me/usage"),
+  rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
+  createRollup: (industryId: string, period: string) =>
+    post<{ rollup: Rollup }>(`/api/me/industries/${industryId}/rollups`, { period }),
+};
+
+export type RollupFact = { id: string; factType: "common" | "conflict"; content: string | null; sort: number | null };
+export type Rollup = {
+  id: string;
+  periodKey: string;
+  oneLiner: string | null;
+  status: "pending" | "done" | "failed";
+  facts: RollupFact[];
 };
 
 export type Usage = { plan: "free" | "pro"; used: number; limit: number | null; remaining: number | null };
