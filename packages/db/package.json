@@ -1,0 +1,24 @@
+{
+  "name": "@reportlens/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "리포트렌즈 공유 DB 스키마 + 마이그레이션 (Drizzle, source of truth)",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "push": "drizzle-kit push",
+    "studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.3",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}

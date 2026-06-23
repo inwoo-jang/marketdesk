@@ -1,0 +1,17 @@
+{
+  "name": "reportlens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "리포트렌즈 - 산업리포트를 목적별 렌즈로 구조화 요약·누적하는 도구 (모노레포)",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "pnpm --filter @reportlens/db typecheck && pnpm --filter @reportlens/infra typecheck",
+    "db:generate": "pnpm --filter @reportlens/db generate",
+    "db:migrate": "pnpm --filter @reportlens/db migrate",
+    "db:push": "pnpm --filter @reportlens/db push",
+    "db:studio": "pnpm --filter @reportlens/db studio"
+  }
+}

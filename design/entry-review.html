@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리포트렌즈 · 요약 엔트리 검토</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{
+ colors:{brand:'#2D5BFF',brandlite:'#5B8DEF',ink:'#1D2333',sub:'#5A6377',mut:'#8A93A8',line:'#E4E8F2',pagebg:'#EEF1F8'},
+ fontFamily:{sans:['Pretendard','sans-serif']},
+ boxShadow:{soft:'0 10px 30px rgba(20,30,60,0.06)',soft2:'0 4px 14px rgba(20,30,60,0.05)'}
+}}}
+</script>
+<style>body{word-break:keep-all}.fade{animation:f .4s ease}@keyframes f{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.cite{font-feature-settings:"tnum"}</style>
+</head>
+<body class="bg-pagebg font-sans text-ink min-h-[100dvh]">
+<div class="flex min-h-[100dvh]">
+  <!-- Sidebar -->
+  <aside class="hidden lg:flex w-60 shrink-0 flex-col gap-1 px-4 py-6 border-r border-line bg-white/60">
+    <div class="flex items-center gap-2 px-2 mb-6">
+      <div class="w-9 h-9 rounded-xl bg-brand grid place-items-center text-white"><iconify-icon icon="solar:document-text-bold" class="text-lg"></iconify-icon></div>
+      <span class="font-bold text-lg tracking-tight">리포트렌즈</span>
+    </div>
+    <p class="px-3 text-xs font-semibold text-mut mb-1">산업</p>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#EAF0FF] text-brand grid place-items-center text-xs font-bold">반</span>반도체</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#E8FBF1] text-[#16A34A] grid place-items-center text-xs font-bold">2</span>2차전지</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#EAF0FF] text-brand font-semibold"><span class="w-7 h-7 rounded-lg bg-brand text-white grid place-items-center text-xs font-bold">에</span>에너지/화학</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FFF1E8] text-[#E8893B] grid place-items-center text-xs font-bold">자</span>자동차</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FDEAF1] text-[#DB4F97] grid place-items-center text-xs font-bold">방</span>방산</a>
+  </aside>
+
+  <main class="flex-1 min-w-0">
+    <header class="sticky top-0 z-30 backdrop-blur-xl bg-pagebg/80 border-b border-line">
+      <div class="flex items-center justify-between gap-3 px-5 lg:px-8 h-16">
+        <div class="flex items-center gap-3 min-w-0">
+          <button class="w-9 h-9 rounded-full bg-white border border-line grid place-items-center text-sub shadow-soft2 shrink-0"><iconify-icon icon="solar:alt-arrow-left-linear"></iconify-icon></button>
+          <div class="min-w-0">
+            <h1 class="font-bold truncate">호르무즈 개방은 매수의 근거</h1>
+            <p class="text-xs text-mut truncate">하나증권 · 윤재성 · 2026.06.15 · 에너지/화학</p>
+          </div>
+        </div>
+        <button class="flex items-center gap-2 px-4 py-2.5 bg-white text-sub font-semibold rounded-2xl border border-line hover:bg-white/70 transition shrink-0">
+          <iconify-icon icon="solar:file-download-bold" class="text-brand"></iconify-icon><span class="hidden sm:inline">PDF 내보내기</span></button>
+      </div>
+    </header>
+
+    <div class="px-5 lg:px-8 py-6 max-w-4xl mx-auto fade">
+      <!-- Lens tabs -->
+      <div class="flex items-center gap-2 mb-5">
+        <button onclick="showLens('job')" id="tab-job" class="lenstab px-4 py-2 rounded-full text-sm font-semibold bg-[#EAF0FF] text-brand">
+          <iconify-icon icon="solar:case-round-bold" class="align-middle"></iconify-icon> 취업</button>
+        <button onclick="showLens('inv')" id="tab-inv" class="lenstab px-4 py-2 rounded-full text-sm font-semibold text-sub hover:bg-white">
+          <iconify-icon icon="solar:chart-2-bold" class="align-middle"></iconify-icon> 주식투자</button>
+      </div>
+
+      <!-- JOB LENS -->
+      <section id="lens-job" class="space-y-4">
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2 text-brand"><iconify-icon icon="solar:rocket-2-bold"></iconify-icon><h3 class="font-bold text-ink">신사업</h3></div>
+            <button class="text-mut hover:text-brand text-sm flex items-center gap-1"><iconify-icon icon="solar:pen-2-linear"></iconify-icon>수정</button>
+          </div>
+          <p class="text-sub leading-relaxed">본업 Weekly 리포트라 신사업 비중 약함. 구조 변화 신호로는 비중동산 원유 공급 다변화, CATL의 성장축이 전기차에서 ESS로 이동.</p>
+        </article>
+
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-brand mb-3"><iconify-icon icon="solar:buildings-2-bold"></iconify-icon><h3 class="font-bold text-ink">기존사업</h3></div>
+          <div class="space-y-2 text-sub leading-relaxed">
+            <p><span class="inline-block text-xs font-semibold text-brand bg-[#EAF0FF] px-2 py-0.5 rounded-md mr-1">구조적</span>중동 종전 시 원유 공급처 다변화 정착, WTI-Dubai 역전 종료 전망, 한국 정유사 원가 우위. 2026 하반기~2028 Up-Cycle 진입.</p>
+            <p><span class="inline-block text-xs font-semibold text-[#E8893B] bg-[#FFF1E8] px-2 py-0.5 rounded-md mr-1">단기</span>석유화학 제품가 전반 약세, 정제마진은 2주 상승, 태양광 전 제품 하락.</p>
+          </div>
+        </article>
+
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-brand mb-3"><iconify-icon icon="solar:global-bold"></iconify-icon><h3 class="font-bold text-ink">해외상황</h3></div>
+          <p class="text-sub leading-relaxed">미·이란 MOU 서명 임박이 유가 하락 견인. 캐나다 TMX 첫 Full 가동. 미국 Shale Boom 2027~30년 종료 가능성. 미국 IRS Notice 무효화로 태양광 '5% Safe Harbor' 복원.</p>
+        </article>
+
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-brand mb-3"><iconify-icon icon="solar:chart-square-bold"></iconify-icon><h3 class="font-bold text-ink">핵심 숫자</h3></div>
+          <ul class="grid sm:grid-cols-2 gap-2.5">
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">WTI</span><span class="font-semibold cite">84.9$ <span class="text-[#16A34A]">-6%</span> <a class="text-[11px] text-mut bg-white border border-line px-1.5 py-0.5 rounded-md ml-1">p.1</a></span></li>
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">복합정제마진</span><span class="font-semibold cite">29.3$ <span class="text-[#16A34A]">+3.2$</span> <a class="text-[11px] text-mut bg-white border border-line px-1.5 py-0.5 rounded-md ml-1">p.5</a></span></li>
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">한국 5월 원유수입</span><span class="font-semibold cite">+11% <a class="text-[11px] text-mut bg-white border border-line px-1.5 py-0.5 rounded-md ml-1">p.2</a></span></li>
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">파운드리 점유율</span><span class="text-mut text-sm italic">명시 없음</span></li>
+          </ul>
+          <p class="text-[11px] text-mut mt-3 flex items-center gap-1"><iconify-icon icon="solar:shield-check-bold" class="text-[#16A34A]"></iconify-icon>리포트에 없는 수치는 생성하지 않고 '명시 없음'으로 표시합니다.</p>
+        </article>
+
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-brand mb-3"><iconify-icon icon="solar:lightbulb-bold"></iconify-icon><h3 class="font-bold text-ink">PM 인사이트</h3></div>
+          <p class="text-sub leading-relaxed">"전쟁→종전" 외부 이벤트가 산업 사이클과 밸류체인 원가구조를 바꾸는 경로의 사례. 거시→산업구조→기업실적 연결 논리로 면접 활용.</p>
+        </article>
+      </section>
+
+      <!-- INVEST LENS -->
+      <section id="lens-inv" class="space-y-4 hidden">
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-[#16A34A] mb-3"><iconify-icon icon="solar:chart-2-bold"></iconify-icon><h3 class="font-bold text-ink">수혜/리스크 · 모멘텀</h3></div>
+          <p class="text-sub leading-relaxed">호르무즈 개방 = 매수 근거. Top Picks: OCI홀딩스·금호석유화학·효성티앤씨·대한유화·S-Oil·한화솔루션. 주가가 전쟁 직전보다 낮아 리스크 선반영. 정제마진 2주 연속 상승.</p>
+        </article>
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-[#16A34A] mb-3"><iconify-icon icon="solar:scale-bold"></iconify-icon><h3 class="font-bold text-ink">가정 · 반대 시나리오</h3></div>
+          <div class="space-y-2 text-sub leading-relaxed">
+            <p><span class="inline-block text-xs font-semibold text-[#16A34A] bg-[#E8FBF1] px-2 py-0.5 rounded-md mr-1">가정</span>종전·MOU 체결 → 유가 하락 + Up-Cycle, 비중동산 다변화로 원가우위.</p>
+            <p><span class="inline-block text-xs font-semibold text-[#DC2626] bg-[#FDECEC] px-2 py-0.5 rounded-md mr-1">반대</span>MOU 무산·분쟁 재발 시 유가 급등 역작용 / 석화 약세 지속.</p>
+          </div>
+        </article>
+        <article class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 text-[#16A34A] mb-3"><iconify-icon icon="solar:chart-square-bold"></iconify-icon><h3 class="font-bold text-ink">핵심 숫자</h3></div>
+          <ul class="grid sm:grid-cols-2 gap-2.5">
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">Long-Only 누적</span><span class="font-semibold cite">+1,427.7% <a class="text-[11px] text-mut bg-white border border-line px-1.5 py-0.5 rounded-md ml-1">p.10</a></span></li>
+            <li class="flex items-center justify-between bg-pagebg/60 rounded-xl px-3 py-2"><span class="text-sub text-sm">사우디 7월 OSP</span><span class="font-semibold cite">9.5$ <span class="text-[#16A34A]">-6.0$</span> <a class="text-[11px] text-mut bg-white border border-line px-1.5 py-0.5 rounded-md ml-1">p.5</a></span></li>
+          </ul>
+        </article>
+        <div class="flex items-center gap-2 text-xs text-mut bg-[#FFF7E8] border border-[#F0E2C0] rounded-2xl px-4 py-3">
+          <iconify-icon icon="solar:info-circle-bold" class="text-[#C98A14] text-base shrink-0"></iconify-icon>투자조언이 아니며 참고용입니다. 국내 리포트는 매도 의견이 드무니 보수적으로 해석하세요.
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-3 mt-6">
+        <button class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-brand text-white font-semibold rounded-2xl shadow-soft hover:scale-[1.02] active:scale-[0.98] transition">
+          <iconify-icon icon="solar:check-circle-bold"></iconify-icon>저장</button>
+        <button class="flex items-center justify-center gap-2 px-6 py-3 bg-white text-sub font-semibold rounded-2xl border border-line hover:bg-white/70 transition">
+          <iconify-icon icon="solar:refresh-linear"></iconify-icon>다시 요약</button>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+function showLens(k){
+  document.getElementById('lens-job').classList.toggle('hidden',k!=='job');
+  document.getElementById('lens-inv').classList.toggle('hidden',k!=='inv');
+  const on='bg-[#EAF0FF] text-brand', off='text-sub hover:bg-white';
+  const job=document.getElementById('tab-job'), inv=document.getElementById('tab-inv');
+  job.className='lenstab px-4 py-2 rounded-full text-sm font-semibold '+(k==='job'?'bg-[#EAF0FF] text-brand':'text-sub hover:bg-white');
+  inv.className='lenstab px-4 py-2 rounded-full text-sm font-semibold '+(k==='inv'?'bg-[#E8FBF1] text-[#16A34A]':'text-sub hover:bg-white');
+}
+</script>
+</body>
+</html>

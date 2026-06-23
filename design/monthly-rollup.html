@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리포트렌즈 · 월별 롤업</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{
+ colors:{brand:'#2D5BFF',brandlite:'#5B8DEF',ink:'#1D2333',sub:'#5A6377',mut:'#8A93A8',line:'#E4E8F2',pagebg:'#EEF1F8'},
+ fontFamily:{sans:['Pretendard','sans-serif']},
+ boxShadow:{soft:'0 10px 30px rgba(20,30,60,0.06)',soft2:'0 4px 14px rgba(20,30,60,0.05)'}
+}}}
+</script>
+<style>body{word-break:keep-all}.fade{animation:f .4s ease}@keyframes f{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style>
+</head>
+<body class="bg-pagebg font-sans text-ink min-h-[100dvh]">
+<div class="flex min-h-[100dvh]">
+  <aside class="hidden lg:flex w-60 shrink-0 flex-col gap-1 px-4 py-6 border-r border-line bg-white/60">
+    <div class="flex items-center gap-2 px-2 mb-6">
+      <div class="w-9 h-9 rounded-xl bg-brand grid place-items-center text-white"><iconify-icon icon="solar:document-text-bold" class="text-lg"></iconify-icon></div>
+      <span class="font-bold text-lg tracking-tight">리포트렌즈</span>
+    </div>
+    <p class="px-3 text-xs font-semibold text-mut mb-1">산업</p>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#EAF0FF] text-brand grid place-items-center text-xs font-bold">반</span>반도체</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#E8FBF1] text-[#16A34A] grid place-items-center text-xs font-bold">2</span>2차전지</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#EAF0FF] text-brand font-semibold"><span class="w-7 h-7 rounded-lg bg-brand text-white grid place-items-center text-xs font-bold">에</span>에너지/화학</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FFF1E8] text-[#E8893B] grid place-items-center text-xs font-bold">자</span>자동차</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FDEAF1] text-[#DB4F97] grid place-items-center text-xs font-bold">방</span>방산</a>
+  </aside>
+
+  <main class="flex-1 min-w-0">
+    <header class="sticky top-0 z-30 backdrop-blur-xl bg-pagebg/80 border-b border-line">
+      <div class="flex items-center justify-between gap-3 px-5 lg:px-8 h-16">
+        <div class="flex items-center gap-3 min-w-0">
+          <button class="w-9 h-9 rounded-full bg-white border border-line grid place-items-center text-sub shadow-soft2 shrink-0"><iconify-icon icon="solar:alt-arrow-left-linear"></iconify-icon></button>
+          <h1 class="font-bold truncate">에너지/화학 · 2026-06 월별 흐름</h1>
+        </div>
+        <button class="flex items-center gap-2 px-4 py-2.5 bg-white text-sub font-semibold rounded-2xl border border-line hover:bg-white/70 transition shrink-0">
+          <iconify-icon icon="solar:file-download-bold" class="text-brand"></iconify-icon><span class="hidden sm:inline">PDF 내보내기</span></button>
+      </div>
+    </header>
+
+    <div class="px-5 lg:px-8 py-6 max-w-4xl mx-auto fade">
+      <!-- Time view tabs + Lens -->
+      <div class="flex items-center justify-between gap-3 mb-5 flex-wrap">
+        <div class="flex items-center gap-1 bg-white rounded-full p-1 border border-line shadow-soft2">
+          <a class="px-4 py-1.5 rounded-full text-sm font-semibold text-sub">일별</a>
+          <a class="px-4 py-1.5 rounded-full text-sm font-semibold bg-brand text-white">월별</a>
+          <a class="px-4 py-1.5 rounded-full text-sm font-semibold text-mut flex items-center gap-1">연별 <iconify-icon icon="solar:lock-keyhole-minimalistic-bold" class="text-xs"></iconify-icon></a>
+        </div>
+        <div class="flex items-center gap-1.5 bg-white rounded-full p-1 border border-line shadow-soft2">
+          <button class="px-3 py-1 rounded-full text-xs font-semibold bg-[#EAF0FF] text-brand">취업</button>
+          <button class="px-3 py-1 rounded-full text-xs font-semibold text-sub">주식투자</button>
+        </div>
+      </div>
+
+      <!-- One-line -->
+      <div class="bg-white rounded-3xl p-6 shadow-soft mb-4">
+        <p class="text-xs font-semibold text-mut mb-1">이 달의 한 줄</p>
+        <p class="text-lg font-bold leading-snug">HBM 쇼티지가 흐름을 지배한 가운데, 중동 종전 기대가 정유·석유화학 Up-Cycle 전환 신호로 부각.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <!-- 공통 팩트 -->
+        <div class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 mb-4"><span class="w-8 h-8 rounded-xl bg-[#E8FBF1] text-[#16A34A] grid place-items-center"><iconify-icon icon="solar:check-circle-bold"></iconify-icon></span><h3 class="font-bold">공통 팩트</h3><span class="text-xs text-mut">여러 증권사 일치</span></div>
+          <ul class="space-y-3">
+            <li class="flex gap-2 text-sub"><iconify-icon icon="solar:check-read-linear" class="text-[#16A34A] mt-1 shrink-0"></iconify-icon>HBM 공급 부족 지속, AI 서버 수요 상향</li>
+            <li class="flex gap-2 text-sub"><iconify-icon icon="solar:check-read-linear" class="text-[#16A34A] mt-1 shrink-0"></iconify-icon>중동 종전 시 원유 공급처 다변화 구조 정착</li>
+            <li class="flex gap-2 text-sub"><iconify-icon icon="solar:check-read-linear" class="text-[#16A34A] mt-1 shrink-0"></iconify-icon>정제마진 회복 흐름</li>
+          </ul>
+        </div>
+        <!-- 엇갈림 -->
+        <div class="bg-white rounded-3xl p-6 shadow-soft">
+          <div class="flex items-center gap-2 mb-4"><span class="w-8 h-8 rounded-xl bg-[#FFF7E8] text-[#C98A14] grid place-items-center"><iconify-icon icon="solar:posts-carousel-vertical-bold"></iconify-icon></span><h3 class="font-bold">엇갈림</h3><span class="text-xs text-mut">의견 상이</span></div>
+          <ul class="space-y-3">
+            <li class="flex gap-2 text-sub"><iconify-icon icon="solar:double-alt-arrow-right-linear" class="text-[#C98A14] mt-1 shrink-0"></iconify-icon>DRAM 가격 반등 시점: 3Q(미래에셋) vs 4Q(KB)</li>
+            <li class="flex gap-2 text-sub"><iconify-icon icon="solar:double-alt-arrow-right-linear" class="text-[#C98A14] mt-1 shrink-0"></iconify-icon>태양광 바닥 판단: 하반기 vs 2027</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 근거 엔트리 -->
+      <div class="bg-white rounded-3xl p-6 shadow-soft mt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold flex items-center gap-2"><iconify-icon icon="solar:documents-bold" class="text-brand"></iconify-icon>근거 엔트리 <span class="text-sm text-mut font-normal">8건</span></h3>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="px-3 py-1.5 rounded-xl bg-pagebg text-sm text-sub border border-line">06-22 하나증권</span>
+          <span class="px-3 py-1.5 rounded-xl bg-pagebg text-sm text-sub border border-line">06-20 미래에셋</span>
+          <span class="px-3 py-1.5 rounded-xl bg-pagebg text-sm text-sub border border-line">06-18 KB증권</span>
+          <span class="px-3 py-1.5 rounded-xl bg-pagebg text-sm text-sub border border-line">06-15 하나증권</span>
+          <span class="px-3 py-1.5 rounded-xl bg-pagebg text-sm text-mut border border-line">+4건</span>
+        </div>
+        <p class="text-[11px] text-mut mt-4 flex items-center gap-1"><iconify-icon icon="solar:shield-check-bold" class="text-[#16A34A]"></iconify-icon>월별 요약은 일별 엔트리만 근거로 종합합니다. 새 수치를 생성하지 않습니다.</p>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

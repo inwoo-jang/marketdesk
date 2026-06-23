@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리포트렌즈 · 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{
+ colors:{brand:'#2D5BFF',brandlite:'#5B8DEF',ink:'#1D2333',sub:'#5A6377',mut:'#8A93A8',line:'#E4E8F2',pagebg:'#EEF1F8'},
+ fontFamily:{sans:['Pretendard','sans-serif']},
+ boxShadow:{soft:'0 10px 30px rgba(20,30,60,0.06)',soft2:'0 4px 14px rgba(20,30,60,0.05)'}
+}}}
+</script>
+<style>body{word-break:keep-all}.fade{animation:f .4s ease}@keyframes f{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style>
+</head>
+<body class="bg-pagebg font-sans text-ink min-h-[100dvh]">
+<div class="flex min-h-[100dvh]">
+
+  <!-- Sidebar -->
+  <aside class="hidden lg:flex w-60 shrink-0 flex-col gap-1 px-4 py-6 border-r border-line bg-white/60">
+    <div class="flex items-center gap-2 px-2 mb-6">
+      <div class="w-9 h-9 rounded-xl bg-brand grid place-items-center text-white"><iconify-icon icon="solar:document-text-bold" class="text-lg"></iconify-icon></div>
+      <span class="font-bold text-lg tracking-tight">리포트렌즈</span>
+    </div>
+    <p class="px-3 text-xs font-semibold text-mut mb-1">산업</p>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#EAF0FF] text-brand grid place-items-center text-xs font-bold">반</span>반도체</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#E8FBF1] text-[#16A34A] grid place-items-center text-xs font-bold">2</span>2차전지</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#EAF0FF] text-brand font-semibold"><span class="w-7 h-7 rounded-lg bg-brand text-white grid place-items-center text-xs font-bold">에</span>에너지/화학</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FFF1E8] text-[#E8893B] grid place-items-center text-xs font-bold">자</span>자동차</a>
+    <a class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-pagebg text-sub"><span class="w-7 h-7 rounded-lg bg-[#FDEAF1] text-[#DB4F97] grid place-items-center text-xs font-bold">방</span>방산</a>
+    <button class="mt-2 flex items-center gap-2 px-3 py-2.5 rounded-xl text-mut hover:bg-pagebg text-sm"><iconify-icon icon="solar:add-circle-linear" class="text-lg"></iconify-icon>산업 추가</button>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 min-w-0">
+    <!-- Topbar -->
+    <header class="sticky top-0 z-30 backdrop-blur-xl bg-pagebg/80 border-b border-line">
+      <div class="flex items-center justify-between gap-4 px-5 lg:px-8 h-16">
+        <h1 class="text-lg font-bold">대시보드</h1>
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex items-center gap-1.5 bg-white rounded-full p-1 shadow-soft2 border border-line">
+            <span class="text-xs text-mut px-2">렌즈</span>
+            <button class="px-3 py-1 rounded-full text-xs font-semibold bg-[#EAF0FF] text-brand">취업</button>
+            <button class="px-3 py-1 rounded-full text-xs font-semibold bg-[#E8FBF1] text-[#16A34A]">주식투자</button>
+          </div>
+          <button class="w-9 h-9 rounded-full bg-white border border-line grid place-items-center text-sub shadow-soft2"><iconify-icon icon="solar:bell-linear"></iconify-icon></button>
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brandlite to-brand"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="px-5 lg:px-8 py-6 max-w-6xl mx-auto fade">
+      <!-- Actions -->
+      <div class="flex flex-wrap gap-3 mb-6">
+        <button class="flex items-center gap-2 px-5 py-3 bg-brand text-white font-semibold rounded-2xl shadow-soft hover:scale-[1.02] active:scale-[0.98] transition">
+          <iconify-icon icon="solar:upload-minimalistic-bold"></iconify-icon>리포트 업로드</button>
+        <button class="flex items-center gap-2 px-5 py-3 bg-white text-sub font-semibold rounded-2xl border border-line hover:bg-white/70 transition">
+          <iconify-icon icon="solar:add-square-linear"></iconify-icon>산업 추가</button>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-3xl p-5 shadow-soft">
+          <div class="flex items-center justify-between"><span class="text-sm text-sub">누적 산업</span><iconify-icon icon="solar:layers-bold" class="text-brand"></iconify-icon></div>
+          <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold">6</span><span class="mb-1 text-xs font-semibold text-[#16A34A] bg-[#E3F8EC] px-2 py-0.5 rounded-full">+1</span></div>
+        </div>
+        <div class="bg-white rounded-3xl p-5 shadow-soft">
+          <div class="flex items-center justify-between"><span class="text-sm text-sub">이번 달 엔트리</span><iconify-icon icon="solar:calendar-bold" class="text-brand"></iconify-icon></div>
+          <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold">14</span><span class="mb-1 text-xs font-semibold text-[#16A34A] bg-[#E3F8EC] px-2 py-0.5 rounded-full">+3</span></div>
+        </div>
+        <div class="bg-white rounded-3xl p-5 shadow-soft col-span-2 lg:col-span-1">
+          <div class="flex items-center justify-between"><span class="text-sm text-sub">분석 리포트</span><iconify-icon icon="solar:document-text-bold" class="text-brand"></iconify-icon></div>
+          <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold">38</span>
+            <svg class="mb-1 ml-auto" width="84" height="28" viewBox="0 0 84 28"><polyline points="0,22 14,18 28,20 42,10 56,13 70,6 84,9" fill="none" stroke="#2D5BFF" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent entries -->
+      <div class="bg-white rounded-3xl shadow-soft overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-line">
+          <h2 class="font-bold">최근 엔트리</h2>
+          <button class="text-sm text-mut hover:text-brand flex items-center gap-1">전체 보기<iconify-icon icon="solar:alt-arrow-right-linear"></iconify-icon></button>
+        </div>
+        <ul>
+          <li class="flex items-center gap-4 px-6 py-4 border-b border-line/70 hover:bg-pagebg/50 transition cursor-pointer">
+            <span class="w-10 h-10 rounded-xl bg-brand text-white grid place-items-center font-bold shrink-0">에</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-semibold">에너지/화학</span>
+                <span class="text-xs text-mut">하나증권 · 윤재성</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EAF0FF] text-brand">취업</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8FBF1] text-[#16A34A]">주식투자</span>
+              </div>
+              <p class="text-sm text-sub truncate mt-0.5">호르무즈 개방은 매수의 근거. 2026 하반기~2028 Up-Cycle 진입 전망.</p>
+            </div>
+            <span class="text-sm text-mut shrink-0 hidden sm:block">06-22</span>
+            <iconify-icon icon="solar:alt-arrow-right-linear" class="text-mut shrink-0"></iconify-icon>
+          </li>
+          <li class="flex items-center gap-4 px-6 py-4 border-b border-line/70 hover:bg-pagebg/50 transition cursor-pointer">
+            <span class="w-10 h-10 rounded-xl bg-[#E8FBF1] text-[#16A34A] grid place-items-center font-bold shrink-0">2</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap"><span class="font-semibold">2차전지</span><span class="text-xs text-mut">삼성증권</span><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8FBF1] text-[#16A34A]">주식투자</span></div>
+              <p class="text-sm text-sub truncate mt-0.5">CATL ESS로 무게 이동, SK온 가동률 부진 지속.</p>
+            </div>
+            <span class="text-sm text-mut shrink-0 hidden sm:block">06-21</span>
+            <iconify-icon icon="solar:alt-arrow-right-linear" class="text-mut shrink-0"></iconify-icon>
+          </li>
+          <li class="flex items-center gap-4 px-6 py-4 hover:bg-pagebg/50 transition cursor-pointer">
+            <span class="w-10 h-10 rounded-xl bg-[#EAF0FF] text-brand grid place-items-center font-bold shrink-0">반</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap"><span class="font-semibold">반도체</span><span class="text-xs text-mut">KB증권</span><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EAF0FF] text-brand">취업</span></div>
+              <p class="text-sm text-sub truncate mt-0.5">HBM 쇼티지 지속, CXL 신규 수요 부각.</p>
+            </div>
+            <span class="text-sm text-mut shrink-0 hidden sm:block">06-18</span>
+            <iconify-icon icon="solar:alt-arrow-right-linear" class="text-mut shrink-0"></iconify-icon>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

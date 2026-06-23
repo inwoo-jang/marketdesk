@@ -1,0 +1,7 @@
+packages:
+  - "web"
+  - "api"
+  - "mcp"
+  - "infra"
+  - "packages/*"
+# worker/ 는 Python 패키지라 pnpm 워크스페이스에서 제외 (자체 venv 사용)

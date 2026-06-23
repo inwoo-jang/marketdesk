@@ -1,0 +1,26 @@
+{
+  "name": "@reportlens/infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "리포트렌즈 IaC (AWS CDK) - 네트워크/데이터/인증/컴퓨팅 스택",
+  "bin": {
+    "reportlens-infra": "bin/app.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "deploy:dev": "cdk deploy --all --context env=dev",
+    "deploy:prod": "cdk deploy --all --context env=prod",
+    "destroy:dev": "cdk destroy --all --context env=dev"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.173.4",
+    "aws-cdk-lib": "^2.173.4",
+    "constructs": "^10.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.5"
+  }
+}

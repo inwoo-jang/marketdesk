@@ -1,0 +1,45 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/out/
+.next/
+out/
+*.tsbuildinfo
+
+# env / secrets (절대 커밋 금지)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# python (worker)
+__pycache__/
+*.pyc
+.venv/
+venv/
+.python-version
+
+# IaC
+infra/cdk.out/
+infra/.cdk.staging/
+
+# Claude Code 로컬 설정(개인)
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# drizzle 임시
+drizzle/.cache/

@@ -1,0 +1,214 @@
+// 리포트렌즈 ERD (DBML)
+// dbdiagram.io 용 표준 포맷. 원천(source of truth)은 Drizzle 스키마(../src/schema).
+// 사용법: https://dbdiagram.io → 새 다이어그램 → 좌측 에디터에 이 파일 전체 붙여넣기.
+// (ERDCloud 는 DBML import 미지원 → ERDCloud 는 reportlens_erdcloud.sql 사용)
+
+Enum auth_provider {
+  google
+  kakao
+}
+Enum source_type {
+  broker
+  public
+}
+Enum parse_status {
+  pending
+  parsing
+  parsed
+  failed
+}
+Enum entry_status {
+  draft
+  saved
+}
+Enum llm_provider {
+  gemini
+  claude
+  mcp
+}
+Enum period_type {
+  month
+  year
+}
+Enum fact_type {
+  common
+  conflict
+}
+Enum llm_tier {
+  default
+  byo
+  mcp
+}
+Enum export_scope {
+  entry
+  rollup
+}
+Enum job_status {
+  pending
+  done
+  failed
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  cognito_sub text [not null, unique]
+  email text
+  provider auth_provider
+  display_name text
+  avatar_url text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table lenses {
+  "key" text [pk]
+  label text [not null]
+  description text
+  is_preset boolean [not null, default: true]
+  sort integer
+}
+
+Table user_lenses {
+  user_id uuid [not null, ref: > users.id]
+  lens_key text [not null, ref: > lenses."key"]
+  enabled boolean [not null, default: true]
+
+  indexes {
+    (user_id, lens_key) [pk]
+  }
+}
+
+Table industries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id, note: 'NULL = 글로벌 카탈로그']
+  name text [not null]
+  slug text [not null]
+  icon_color text
+  sort integer
+
+  indexes {
+    (user_id, slug) [unique]
+  }
+}
+
+Table user_industries {
+  user_id uuid [not null, ref: > users.id]
+  industry_id uuid [not null, ref: > industries.id]
+  sort integer
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, industry_id) [pk]
+  }
+}
+
+Table reports {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  industry_id uuid [ref: > industries.id]
+  title text
+  broker text
+  analyst text
+  pub_date date
+  source_type source_type
+  file_key text [note: 'S3 객체 키']
+  file_size integer
+  page_count integer
+  parse_status parse_status [not null, default: 'pending']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, industry_id, pub_date)
+  }
+}
+
+Table report_pages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  report_id uuid [not null, ref: > reports.id]
+  page_no integer [not null]
+  text text
+
+  indexes {
+    (report_id, page_no) [unique]
+  }
+}
+
+Table entries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  report_id uuid [not null, ref: > reports.id]
+  industry_id uuid [ref: > industries.id]
+  lens_key text [not null, ref: > lenses."key"]
+  entry_date date [not null]
+  frame jsonb [note: '{new_biz, core_biz_structural, core_biz_short, overseas, insight}']
+  status entry_status [not null, default: 'draft']
+  provider llm_provider [note: '생성 출처(투명성·eval)']
+  model text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+
+  indexes {
+    (report_id, lens_key) [unique]
+    (user_id, industry_id, lens_key, entry_date)
+  }
+}
+
+Table entry_numbers {
+  id uuid [pk, default: `gen_random_uuid()`]
+  entry_id uuid [not null, ref: > entries.id]
+  label text [note: "예: 'WTI'"]
+  value text [note: "예: '84.9$ -6%'"]
+  page_no integer [note: '출처 [p.N]']
+  verified boolean [note: '룰매칭: 페이지 텍스트에 값 존재 확인']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table rollups {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  industry_id uuid [ref: > industries.id]
+  lens_key text [not null, ref: > lenses."key"]
+  period_type period_type [not null]
+  period_key text [not null, note: "예: '2026-06'"]
+  one_liner text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+
+  indexes {
+    (user_id, industry_id, lens_key, period_type, period_key) [unique]
+  }
+}
+
+Table rollup_facts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  rollup_id uuid [not null, ref: > rollups.id]
+  fact_type fact_type [not null]
+  content text
+  sort integer
+}
+
+Table rollup_sources {
+  rollup_id uuid [not null, ref: > rollups.id]
+  entry_id uuid [not null, ref: > entries.id]
+
+  indexes {
+    (rollup_id, entry_id) [pk]
+  }
+}
+
+Table user_llm_settings {
+  user_id uuid [pk, ref: > users.id]
+  tier llm_tier [not null, default: 'default']
+  claude_key_enc bytea [note: 'KMS 암호화, 절대 로깅 금지']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table export_jobs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  scope export_scope [not null]
+  ref_id uuid
+  status job_status [not null, default: 'pending']
+  file_key text [note: 'S3']
+  created_at timestamptz [not null, default: `now()`]
+}

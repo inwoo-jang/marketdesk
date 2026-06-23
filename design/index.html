@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리포트렌즈 · 디자인 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:'#2D5BFF',ink:'#1D2333',sub:'#5A6377',mut:'#8A93A8',line:'#E4E8F2',pagebg:'#EEF1F8'},fontFamily:{sans:['Pretendard','sans-serif']},boxShadow:{soft:'0 10px 30px rgba(20,30,60,0.06)'}}}}</script>
+<style>body{word-break:keep-all}</style>
+</head>
+<body class="bg-pagebg font-sans text-ink min-h-[100dvh]">
+<div class="max-w-3xl mx-auto px-5 py-16">
+  <div class="flex items-center gap-2 mb-2"><div class="w-10 h-10 rounded-xl bg-brand grid place-items-center text-white"><iconify-icon icon="solar:document-text-bold" class="text-xl"></iconify-icon></div><span class="font-bold text-2xl">리포트렌즈</span></div>
+  <p class="text-sub mb-8">디자인 시안 (Falcon 톤 · 라이트모드). 핵심 화면 3종.</p>
+  <div class="grid sm:grid-cols-3 gap-4">
+    <a href="dashboard.html" class="bg-white rounded-3xl p-6 shadow-soft hover:scale-[1.02] transition block">
+      <iconify-icon icon="solar:widget-5-bold" class="text-brand text-2xl"></iconify-icon>
+      <h3 class="font-bold mt-3">대시보드</h3><p class="text-sm text-sub mt-1">산업 누적 현황·최근 엔트리</p></a>
+    <a href="entry-review.html" class="bg-white rounded-3xl p-6 shadow-soft hover:scale-[1.02] transition block">
+      <iconify-icon icon="solar:checklist-minimalistic-bold" class="text-brand text-2xl"></iconify-icon>
+      <h3 class="font-bold mt-3">요약 엔트리 검토</h3><p class="text-sm text-sub mt-1">렌즈 탭·틀 항목·출처칩</p></a>
+    <a href="monthly-rollup.html" class="bg-white rounded-3xl p-6 shadow-soft hover:scale-[1.02] transition block">
+      <iconify-icon icon="solar:calendar-mark-bold" class="text-brand text-2xl"></iconify-icon>
+      <h3 class="font-bold mt-3">월별 롤업</h3><p class="text-sm text-sub mt-1">공통 팩트·엇갈림</p></a>
+  </div>
+</div>
+</body>
+</html>
