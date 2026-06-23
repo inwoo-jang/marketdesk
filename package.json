@@ -7,9 +7,14 @@
   "engines": {
     "node": ">=20"
   },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
   "scripts": {
+    "dev": "concurrently -n api,web,worker -c blue,green,magenta \"pnpm dev:api\" \"pnpm dev:web\" \"pnpm dev:worker\"",
     "dev:api": "pnpm --filter @reportlens/api dev",
     "dev:web": "pnpm --filter @reportlens/web dev",
+    "dev:worker": "pnpm --filter @reportlens/worker dev",
     "db:seed": "pnpm --filter @reportlens/db seed",
     "typecheck": "pnpm --filter @reportlens/db typecheck && pnpm --filter @reportlens/infra typecheck",
     "db:generate": "pnpm --filter @reportlens/db generate",

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, inArray, desc } from "drizzle-orm";
-import { lenses, userLenses, industries, userIndustries, entries, reports } from "@reportlens/db";
+import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports } from "@reportlens/db";
 import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
@@ -204,4 +204,100 @@ meRoute.post("/reports", async (c) => {
     .returning();
 
   return c.json({ report });
+});
+
+// GET /api/me/reports/:id - 리포트 1건 + 추출 작업 상태(AI 요약 작업 상태 조회)
+meRoute.get("/reports/:id", async (c) => {
+  const user = c.get("user");
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, c.req.param("id")), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+  return c.json({ report });
+});
+
+// POST /api/me/reports/:id/extract - 추출 재요청(AI 요약 생성 요청). parse_status=pending 으로 큐잉.
+// 운영(SQS)에서는 여기서 메시지 enqueue. 로컬은 워커가 pending 을 폴링.
+meRoute.post("/reports/:id/extract", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+  if (report.parseStatus === "parsing") return c.json({ error: "이미 처리 중입니다" }, 409);
+  if (!report.requestedLenses || report.requestedLenses.length === 0)
+    return c.json({ error: "추출할 렌즈가 없습니다" }, 400);
+
+  await db.update(reports).set({ parseStatus: "pending" }).where(eq(reports.id, id));
+  return c.json({ ok: true, parseStatus: "pending" });
+});
+
+// GET /api/me/reports/:id/entries - 리포트의 렌즈별 엔트리 + 핵심숫자(검토 화면용)
+meRoute.get("/reports/:id/entries", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+
+  const entryRows = await db.select().from(entries).where(eq(entries.reportId, id)).orderBy(entries.lensKey);
+  const ids = entryRows.map((e) => e.id);
+  const numbers = ids.length
+    ? await db.select().from(entryNumbers).where(inArray(entryNumbers.entryId, ids))
+    : [];
+  const byEntry = new Map<string, typeof numbers>();
+  for (const n of numbers) {
+    const arr = byEntry.get(n.entryId) ?? [];
+    arr.push(n);
+    byEntry.set(n.entryId, arr);
+  }
+  return c.json({
+    report,
+    entries: entryRows.map((e) => ({ ...e, numbers: byEntry.get(e.id) ?? [] })),
+  });
+});
+
+const frameSchema = z
+  .object({
+    new_biz: z.string(),
+    core_biz_structural: z.string(),
+    core_biz_short: z.string(),
+    overseas: z.string(),
+    insight: z.string(),
+  })
+  .partial();
+const saveEntrySchema = z.object({
+  frame: frameSchema.optional(),
+  status: z.enum(["draft", "saved"]).optional(),
+});
+
+// PUT /api/me/entries/:id - 엔트리 검토/수정 저장(요약 엔트리 저장 API)
+meRoute.put("/entries/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const parsed = saveEntrySchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body", detail: parsed.error.flatten() }, 400);
+
+  const [existing] = await db
+    .select()
+    .from(entries)
+    .where(and(eq(entries.id, id), eq(entries.userId, user.id)))
+    .limit(1);
+  if (!existing) return c.json({ error: "엔트리 없음" }, 404);
+
+  const next = {
+    frame: parsed.data.frame ? { ...(existing.frame ?? {}), ...parsed.data.frame } : existing.frame,
+    status: parsed.data.status ?? existing.status,
+    updatedAt: new Date(),
+  };
+  const [updated] = await db.update(entries).set(next).where(eq(entries.id, id)).returning();
+  return c.json({ entry: updated });
 });

@@ -51,6 +51,11 @@ export const api = {
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
   myReports: () => get<{ reports: Report[] }>("/api/me/reports"),
+  report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
+  reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
+  reExtract: (id: string) => post<{ ok: true; parseStatus: string }>(`/api/me/reports/${id}/extract`),
+  saveEntry: (id: string, input: { frame?: Partial<EntryFrame>; status?: "draft" | "saved" }) =>
+    put<{ entry: EntryFull }>(`/api/me/entries/${id}`, input),
   uploadReport: async (file: File, opts: { industryId?: string; lensKeys?: string[] }) => {
     const fd = new FormData();
     fd.append("file", file);
@@ -77,7 +82,31 @@ export type Report = {
   title: string | null;
   industryId: string | null;
   fileSize: number | null;
+  pageCount: number | null;
   requestedLenses: string[] | null;
   parseStatus: "pending" | "parsing" | "parsed" | "failed";
   createdAt: string;
+};
+export type EntryFrame = {
+  new_biz?: string;
+  core_biz_structural?: string;
+  core_biz_short?: string;
+  overseas?: string;
+  insight?: string;
+};
+export type EntryNumber = {
+  id: string;
+  label: string | null;
+  value: string | null;
+  pageNo: number | null;
+  verified: boolean | null;
+};
+export type EntryFull = {
+  id: string;
+  lensKey: string;
+  status: "draft" | "saved";
+  frame: EntryFrame | null;
+  provider: "gemini" | "claude" | "mcp" | null;
+  model: string | null;
+  numbers: EntryNumber[];
 };

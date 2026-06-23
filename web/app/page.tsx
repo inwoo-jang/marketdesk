@@ -169,24 +169,29 @@ export default function Home() {
         ) : (
           <ul className="space-y-2">
             {reports.map((r) => (
-              <li key={r.id} className="flex items-center justify-between rounded-card bg-card p-4 shadow-card">
-                <div>
-                  <div className="font-medium">{r.title ?? "제목 없음"}</div>
-                  <div className="mt-0.5 text-xs text-ink-muted">
-                    {(r.requestedLenses ?? []).join(", ") || "렌즈 미지정"} · {new Date(r.createdAt).toLocaleDateString("ko-KR")}
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    r.parseStatus === "parsed"
-                      ? "bg-success-bg text-success-text"
-                      : r.parseStatus === "failed"
-                        ? "bg-red-50 text-red-500"
-                        : "bg-ink/5 text-ink-muted"
-                  }`}
+              <li key={r.id}>
+                <a
+                  href={`/reports/${r.id}`}
+                  className="flex items-center justify-between rounded-card bg-card p-4 shadow-card hover:ring-1 hover:ring-primary/30"
                 >
-                  {r.parseStatus === "pending" ? "대기중 (Sprint2 추출)" : r.parseStatus}
-                </span>
+                  <div>
+                    <div className="font-medium">{r.title ?? "제목 없음"}</div>
+                    <div className="mt-0.5 text-xs text-ink-muted">
+                      {(r.requestedLenses ?? []).join(", ") || "렌즈 미지정"} · {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                    </div>
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      r.parseStatus === "parsed"
+                        ? "bg-success-bg text-success-text"
+                        : r.parseStatus === "failed"
+                          ? "bg-red-50 text-red-500"
+                          : "bg-ink/5 text-ink-muted"
+                    }`}
+                  >
+                    {r.parseStatus === "pending" ? "대기중" : r.parseStatus === "parsed" ? "완료" : r.parseStatus}
+                  </span>
+                </a>
               </li>
             ))}
           </ul>

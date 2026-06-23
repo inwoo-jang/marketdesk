@@ -1,0 +1,25 @@
+{
+  "name": "@reportlens/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "리포트렌즈 추출 워커 (Node/TS): PDF 파싱 + 렌즈별 LLM 추출 + 가드레일",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "once": "tsx src/main.ts --once",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@reportlens/db": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "unpdf": "^0.12.1",
+    "@google/genai": "^0.3.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.5"
+  }
+}
