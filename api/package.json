@@ -1,0 +1,24 @@
+{
+  "name": "@reportlens/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "리포트렌즈 백엔드 API (Hono, ECS Fargate)",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@reportlens/db": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "hono": "^4.6.14",
+    "@hono/node-server": "^1.13.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.5"
+  }
+}
