@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole } from "@/lib/api";
+import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report } from "@/lib/api";
+import { ReportCard } from "@/components/report-card";
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -14,16 +15,18 @@ export default function Home() {
   const [myJobRole, setMyJobRole] = useState<string | undefined>();
   const [myIndustries, setMyIndustries] = useState<MyIndustry[]>([]);
   const [catalog, setCatalog] = useState<Industry[]>([]);
+  const [recent, setRecent] = useState<Report[]>([]);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }] = await Promise.all([
+    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }] = await Promise.all([
       api.lenses(),
       api.myLenses(),
       api.jobRoles(),
       api.myIndustries(),
       api.industries(),
+      api.myReports(),
     ]);
     setLenses(lenses);
     setJobRoles(jobRoles);
@@ -31,6 +34,7 @@ export default function Home() {
     setMyJobRole(jobRole);
     setMyIndustries(mi.industries);
     setCatalog(industries);
+    setRecent(reports);
   }, []);
 
   useEffect(() => {
@@ -41,6 +45,14 @@ export default function Home() {
       setLoaded(true);
     })();
   }, [loadData]);
+
+  // 분석중 리포트 있으면 폴링
+  useEffect(() => {
+    if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
+      const t = setInterval(() => loadData().catch(() => {}), 2500);
+      return () => clearInterval(t);
+    }
+  }, [user, recent, loadData]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -68,6 +80,10 @@ export default function Home() {
     if (!name) return;
     await api.createIndustry(name);
     setNewIndustry("");
+    await loadData();
+  }
+  async function deleteReport(rid: string) {
+    await api.deleteReport(rid);
     await loadData();
   }
 
@@ -173,6 +189,22 @@ export default function Home() {
               </button>
             </div>
           </>
+        )}
+      </section>
+
+      {/* 최근 리포트 피드 */}
+      <section className="mt-10">
+        <h2 className="mb-3 text-sm font-semibold text-ink-muted">최근 리포트 ({recent.length})</h2>
+        {recent.length === 0 ? (
+          <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
+            업로드한 리포트가 없어요. 우측 상단 &quot;+ 리포트 업로드&quot;로 PDF·텍스트를 올려보세요.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {recent.map((r) => (
+              <ReportCard key={r.id} report={r} onDelete={deleteReport} />
+            ))}
+          </div>
         )}
       </section>
     </main>

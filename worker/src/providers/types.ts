@@ -13,7 +13,8 @@ export type ExtractedEntry = {
 };
 
 export type DocType = "industry" | "company" | "news";
-export type ExtractCtx = { jobRole?: string; docType?: DocType };
+// 추출 컨텍스트: 문서타입 + 켠 렌즈(관점 레이어 결정) + 취업 직무.
+export type ExtractCtx = { docType: DocType; lenses: string[]; jobRole?: string };
 
 // 문서 메타: 제목·발간일·한줄요약·문서타입·산업(멀티).
 export type DocMeta = {
@@ -31,6 +32,6 @@ export interface Provider {
   model: string; // entries.model (예: gemini-2.0-flash-001, mock)
   // 메타 추출(제목·발간일·요약·타입·멀티산업). industries = 카탈로그 후보 이름.
   analyze(document: string, industries: string[]): Promise<DocMeta>;
-  // 렌즈별 구조화 추출(ctx: 취업 직무·문서타입)
-  extract(document: string, lensKey: string, ctx?: ExtractCtx): Promise<ExtractedEntry>;
+  // 구조화 분석(리포트당 1회): 공통 틀 + 관점 레이어(켠 렌즈만). 가드레일용 numbers 동반.
+  extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry>;
 }

@@ -36,16 +36,31 @@ export class MockProvider implements Provider {
       : null;
     const docType: DocType = /뉴스|속보|기자/.test(oneLine) ? "news" : "industry";
 
+    // 제목 정리: [태그]·날짜·기자명·입력 등 군더더기 제거
+    const cleanTitle = firstLine
+      .replace(/\[[^\]]*\]/g, "")
+      .replace(/20\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}.*$/, "")
+      .replace(/기자명.*$/, "")
+      .replace(/입력.*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
     return {
-      title: firstLine.slice(0, 60) || null,
+      title: (cleanTitle || firstLine).slice(0, 50) || null,
       pubDate,
-      summary: oneLine.slice(0, 90) || null,
+      summary:
+        oneLine
+          .replace(/\[[^\]]*\]/g, "")
+          .replace(/기자명[^,.]*기자/g, "")
+          .replace(/입력\s*20\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80) || null,
       docType,
       industries: list,
     };
   }
 
-  async extract(document: string, lensKey: string, ctx?: ExtractCtx): Promise<ExtractedEntry> {
+  async extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry> {
     const pages = splitPages(document);
     const numbers: ExtractedNumber[] = [];
     for (const { pageNo, text } of pages) {
@@ -58,25 +73,45 @@ export class MockProvider implements Provider {
       }
       if (numbers.length >= 6) break;
     }
-    // 환각 예시(어느 페이지에도 없는 값) → 가드레일이 verified=false 로 걸러야 함
+    // 환각 예시(어느 페이지에도 없음) → 가드레일이 verified=false 로 걸러야 함
     numbers.push({ label: "환각 테스트", value: "999999억", pageNo: 1 });
 
-    const first = pages[0]?.text.replace(/\s+/g, " ").trim().slice(0, 120) ?? "";
-    const roleTag = lensKey === "job" && ctx?.jobRole ? `·${ctx.jobRole}` : "";
-    const tag = lensKey === "invest" ? "투자" : lensKey === "job" ? `취업${roleTag}` : lensKey;
-    return {
-      frame: {
-        new_biz: `(mock·${tag}) 신사업 요약: ${first.slice(0, 60)}`,
-        core_biz_structural: `(mock) 구조적 변화 요약`,
-        core_biz_short: `(mock) 단기 변동 요약`,
-        overseas: `(mock) 해외 동향 요약`,
-        insight:
-          lensKey === "invest"
-            ? "(mock) 투자 인사이트 ※ 투자조언 아님, 참고용"
-            : `(mock) 취업 인사이트${ctx?.jobRole ? ` - ${ctx.jobRole} 관점` : ""}`,
+    const oneLine = document.replace(/=== p\.\d+ ===/g, "").replace(/\s+/g, " ").trim();
+    const dt = ctx.docType === "company" ? "기업" : ctx.docType === "news" ? "뉴스" : "산업";
+    const frame: ExtractedEntry["frame"] = {
+      summary: `(mock·${dt}) ${oneLine.slice(0, 60)}`,
+      facts: {
+        what: `(mock) ${dt} 핵심 사실 요약`,
+        numbers: numbers
+          .filter((n) => n.label !== "환각 테스트")
+          .map((n) => n.value)
+          .join(", "),
+        sourceDate: "명시 없음",
       },
-      numbers,
+      drivers: [`(mock) ${dt} 동인·맥락 1`],
+      risks: [`(mock) ${dt} 리스크·쟁점 1`],
+      perspectives: {},
+      sources: [{ item: "본문", source: "업로드 문서", date: "명시 없음" }],
     };
+    if (ctx.lenses.includes("invest")) {
+      frame.perspectives!.investment = {
+        valuation: "(mock) 밸류에이션 명시 없음",
+        points: ["(mock) 상승 트리거 1"],
+        downside: ["(mock) 하방 리스크 1"],
+        opinion: "(mock) 관망 ※ 투자조언 아님, 참고용",
+      };
+    }
+    if (ctx.lenses.includes("job")) {
+      const role = ctx.jobRole ?? "직무 미지정";
+      frame.perspectives!.career = {
+        direction: "(mock) 회사·산업 방향성",
+        jobFit: `(mock) ${role} 직무 접점`,
+        aiInsight: "(mock) AI·프로덕트 시사점",
+        interviewHooks: ["(mock) 면접 떡밥 1"],
+        motivation: "(mock) 지원동기 연결 한 문장",
+      };
+    }
+    return { frame, numbers };
   }
 }
 

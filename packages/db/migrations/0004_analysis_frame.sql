@@ -1,0 +1,1 @@
+ALTER TABLE "entries" ALTER COLUMN "lens_key" DROP NOT NULL;

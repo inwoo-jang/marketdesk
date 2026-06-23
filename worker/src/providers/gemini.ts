@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType } from "./types.js";
-import { FRAME_DESC, GUARDRAIL, lensPersona, docTypeHint, buildAnalyzePrompt } from "../prompts.js";
+import type { EntryFrame } from "@reportlens/db";
+import { buildAnalyzePrompt, buildExtractPrompt } from "../prompts.js";
 
-// 기본 프로바이더. MVP 는 단일 Flash 호출(JSON 출력).
-// TODO(캐스케이드): Flash 초벌 추출 → Pro 로 핵심요약/검증 재호출(비용·품질 균형).
+// 기본 프로바이더. MVP 는 단일 호출(JSON). TODO 캐스케이드: Flash 초벌 → Pro 검증.
 export class GeminiProvider implements Provider {
   providerKey = "gemini" as const;
   private ai: GoogleGenAI;
@@ -14,66 +14,82 @@ export class GeminiProvider implements Provider {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async analyze(document: string, industries: string[]): Promise<DocMeta> {
+  private async json(prompt: string, maxTokens: number): Promise<Record<string, unknown>> {
     const res = await this.ai.models.generateContent({
       model: this.model,
-      contents: [{ role: "user", parts: [{ text: buildAnalyzePrompt(document, industries) }] }],
-      config: { responseMimeType: "application/json", maxOutputTokens: 400 },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json", maxOutputTokens: maxTokens },
     });
+    const text = res.text ?? "{}";
     try {
-      const o = JSON.parse(res.text ?? "{}") as Record<string, unknown>;
-      const dt = o.doc_type;
-      const docType: DocType = dt === "company" || dt === "news" ? dt : "industry";
-      const list = Array.isArray(o.industries)
-        ? o.industries.filter((x): x is string => typeof x === "string" && industries.includes(x)).slice(0, 3)
-        : [];
-      const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-      return {
-        title: str(o.title),
-        pubDate: str(o.pub_date),
-        summary: str(o.summary),
-        docType,
-        industries: list,
-      };
+      return JSON.parse(text) as Record<string, unknown>;
     } catch {
-      return { title: null, pubDate: null, summary: null, docType: "industry", industries: [] };
+      const s = text.indexOf("{");
+      const e = text.lastIndexOf("}");
+      return s >= 0 && e > s ? (JSON.parse(text.slice(s, e + 1)) as Record<string, unknown>) : {};
     }
   }
 
-  async extract(document: string, lensKey: string, ctx?: ExtractCtx): Promise<ExtractedEntry> {
-    const system = `${lensPersona(lensKey, ctx?.jobRole)}\n${docTypeHint(ctx?.docType)}\n\n${GUARDRAIL}`;
-    const user =
-      `아래는 문서 전문이다(페이지는 '=== p.N ===' 로 구분).\n` +
-      `${lensKey} 렌즈로 아래 틀에 맞춰 JSON 으로만 답하라.\n\n${FRAME_DESC}\n\n` +
-      `출력 JSON 형태: {"frame":{"new_biz":"","core_biz_structural":"","core_biz_short":"","overseas":"","insight":""},` +
-      `"numbers":[{"label":"","value":"","page_no":1}]}\n\n--- 리포트 ---\n${document}`;
+  async analyze(document: string, industries: string[]): Promise<DocMeta> {
+    const o = await this.json(buildAnalyzePrompt(document, industries), 400);
+    const dt = o.doc_type;
+    const docType: DocType = dt === "company" || dt === "news" ? dt : "industry";
+    const list = Array.isArray(o.industries)
+      ? o.industries.filter((x): x is string => typeof x === "string" && industries.includes(x)).slice(0, 3)
+      : [];
+    const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    return { title: str(o.title), pubDate: str(o.pub_date), summary: str(o.summary), docType, industries: list };
+  }
 
-    const res = await this.ai.models.generateContent({
-      model: this.model,
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      config: { systemInstruction: system, responseMimeType: "application/json", maxOutputTokens: 4096 },
-    });
-
-    const text = res.text ?? "{}";
-    return parseExtraction(text);
+  async extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry> {
+    const o = await this.json(buildExtractPrompt(document, ctx), 4096);
+    return { frame: parseFrame(o, ctx), numbers: parseNumbers(o.numbers) };
   }
 }
 
-function parseExtraction(text: string): ExtractedEntry {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    // JSON 외 텍스트가 섞이면 첫 { ~ 마지막 } 구간만 시도
-    const s = text.indexOf("{");
-    const e = text.lastIndexOf("}");
-    raw = s >= 0 && e > s ? JSON.parse(text.slice(s, e + 1)) : {};
+const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+function parseFrame(o: Record<string, unknown>, ctx: ExtractCtx): EntryFrame {
+  const facts = (o.facts ?? {}) as Record<string, unknown>;
+  const persp = (o.perspectives ?? {}) as Record<string, unknown>;
+  const frame: EntryFrame = {
+    summary: str(o.summary),
+    facts: { what: str(facts.what), numbers: str(facts.numbers), sourceDate: str(facts.sourceDate) },
+    drivers: arr(o.drivers),
+    risks: arr(o.risks),
+    perspectives: {},
+    sources: Array.isArray(o.sources)
+      ? o.sources
+          .map((s) => (s ?? {}) as Record<string, unknown>)
+          .map((s) => ({ item: str(s.item) ?? "", source: str(s.source) ?? "", date: str(s.date) ?? "" }))
+      : [],
+  };
+  if (ctx.lenses.includes("invest") && persp.investment) {
+    const i = persp.investment as Record<string, unknown>;
+    frame.perspectives!.investment = {
+      valuation: str(i.valuation),
+      points: arr(i.points),
+      downside: arr(i.downside),
+      opinion: str(i.opinion),
+    };
   }
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  const frameIn = (obj.frame ?? {}) as Record<string, unknown>;
-  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-  const numbersIn = Array.isArray(obj.numbers) ? obj.numbers : [];
-  const numbers: ExtractedNumber[] = numbersIn.map((n) => {
+  if (ctx.lenses.includes("job") && persp.career) {
+    const c = persp.career as Record<string, unknown>;
+    frame.perspectives!.career = {
+      direction: str(c.direction),
+      jobFit: str(c.jobFit),
+      aiInsight: str(c.aiInsight),
+      interviewHooks: arr(c.interviewHooks),
+      motivation: str(c.motivation),
+    };
+  }
+  return frame;
+}
+
+function parseNumbers(v: unknown): ExtractedNumber[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((n) => {
     const o = (n ?? {}) as Record<string, unknown>;
     const page = o.page_no ?? o.pageNo;
     return {
@@ -82,14 +98,4 @@ function parseExtraction(text: string): ExtractedEntry {
       pageNo: typeof page === "number" ? page : page != null ? Number(page) || null : null,
     };
   });
-  return {
-    frame: {
-      new_biz: str(frameIn.new_biz),
-      core_biz_structural: str(frameIn.core_biz_structural),
-      core_biz_short: str(frameIn.core_biz_short),
-      overseas: str(frameIn.overseas),
-      insight: str(frameIn.insight),
-    },
-    numbers,
-  };
 }

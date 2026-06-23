@@ -12,6 +12,7 @@ import {
   reportIndustries,
   usageDaily,
   JOB_ROLES,
+  type EntryFrame,
 } from "@reportlens/db";
 import { db } from "../db.js";
 import { storage } from "../storage.js";
@@ -318,6 +319,21 @@ meRoute.post("/reports", async (c) => {
   return c.json({ report });
 });
 
+// DELETE /api/me/reports/:id - 리포트 삭제(엔트리·숫자·페이지·태그 cascade + 파일)
+meRoute.delete("/reports/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+  if (report.fileKey) await storage.remove(report.fileKey).catch(() => {});
+  await db.delete(reports).where(eq(reports.id, id));
+  return c.json({ ok: true });
+});
+
 const setIndustrySchema = z.object({ industryId: z.string().uuid().nullable() });
 
 // PUT /api/me/reports/:id/industry - AI 매칭 산업 확인/수정. 확인 시 자동 팔로우.
@@ -429,17 +445,9 @@ meRoute.get("/reports/:id/entries", async (c) => {
   });
 });
 
-const frameSchema = z
-  .object({
-    new_biz: z.string(),
-    core_biz_structural: z.string(),
-    core_biz_short: z.string(),
-    overseas: z.string(),
-    insight: z.string(),
-  })
-  .partial();
+// frame 은 문서타입 공통 분석 구조(AnalysisFrame). 편집 저장은 전체 frame 을 받아 병합.
 const saveEntrySchema = z.object({
-  frame: frameSchema.optional(),
+  frame: z.record(z.string(), z.unknown()).optional(),
   status: z.enum(["draft", "saved"]).optional(),
 });
 
@@ -458,7 +466,9 @@ meRoute.put("/entries/:id", async (c) => {
   if (!existing) return c.json({ error: "엔트리 없음" }, 404);
 
   const next = {
-    frame: parsed.data.frame ? { ...(existing.frame ?? {}), ...parsed.data.frame } : existing.frame,
+    frame: parsed.data.frame
+      ? ({ ...(existing.frame ?? {}), ...parsed.data.frame } as EntryFrame)
+      : existing.frame,
     status: parsed.data.status ?? existing.status,
     updatedAt: new Date(),
   };

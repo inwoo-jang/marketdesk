@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { env } from "./env.js";
@@ -7,6 +7,7 @@ import { env } from "./env.js";
 // fileKey 는 DB(reports.file_key)에 저장하는 논리 키(사용자별 prefix).
 export interface Storage {
   save(userId: string, filename: string, bytes: Uint8Array): Promise<{ fileKey: string; size: number }>;
+  remove(fileKey: string): Promise<void>;
 }
 
 class LocalStorage implements Storage {
@@ -18,6 +19,9 @@ class LocalStorage implements Storage {
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, bytes);
     return { fileKey, size: bytes.byteLength };
+  }
+  async remove(fileKey: string) {
+    await rm(join(this.root, fileKey), { force: true });
   }
 }
 

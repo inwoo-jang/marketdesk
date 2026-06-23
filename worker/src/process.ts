@@ -76,53 +76,37 @@ export async function processReport(report: Report): Promise<void> {
     const entryDate = meta.pubDate ?? report.pubDate ?? new Date().toISOString().slice(0, 10);
     const industryId = primaryId;
 
-    for (const lensKey of lensKeys) {
-      const extracted = await provider.extract(document, lensKey, {
-        jobRole: lensKey === "job" ? jobRole : undefined,
-        docType: meta.docType,
-      });
-      const numbers = verifyNumbers(extracted.numbers, pages);
+    // 리포트당 1개 분석(공통 틀 + 켠 렌즈 관점). 가드레일용 numbers 동반.
+    const extracted = await provider.extract(document, { docType: meta.docType, lenses: lensKeys, jobRole });
+    const numbers = verifyNumbers(extracted.numbers, pages);
 
-      const [entry] = await db
-        .insert(entries)
-        .values({
-          userId: report.userId,
-          reportId: report.id,
-          industryId,
-          lensKey,
-          entryDate,
-          frame: extracted.frame,
-          status: "draft",
-          provider: provider.providerKey,
-          model: provider.model,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [entries.reportId, entries.lensKey],
-          set: {
-            frame: extracted.frame,
-            industryId,
-            entryDate,
-            status: "draft",
-            provider: provider.providerKey,
-            model: provider.model,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+    await db.delete(entries).where(eq(entries.reportId, report.id)); // 재추출 시 교체(엔트리 삭제 시 numbers cascade)
+    const [entry] = await db
+      .insert(entries)
+      .values({
+        userId: report.userId,
+        reportId: report.id,
+        industryId,
+        lensKey: null,
+        entryDate,
+        frame: extracted.frame,
+        status: "draft",
+        provider: provider.providerKey,
+        model: provider.model,
+        updatedAt: new Date(),
+      })
+      .returning();
 
-      await db.delete(entryNumbers).where(eq(entryNumbers.entryId, entry.id));
-      if (numbers.length > 0) {
-        await db.insert(entryNumbers).values(
-          numbers.map((n) => ({
-            entryId: entry.id,
-            label: n.label,
-            value: n.value,
-            pageNo: n.pageNo,
-            verified: n.verified ?? false,
-          })),
-        );
-      }
+    if (numbers.length > 0) {
+      await db.insert(entryNumbers).values(
+        numbers.map((n) => ({
+          entryId: entry.id,
+          label: n.label,
+          value: n.value,
+          pageNo: n.pageNo,
+          verified: n.verified ?? false,
+        })),
+      );
     }
 
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));

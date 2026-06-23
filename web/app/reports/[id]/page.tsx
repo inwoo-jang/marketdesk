@@ -1,30 +1,23 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry } from "@/lib/api";
 
-const LENS_LABEL: Record<string, string> = { job: "취업", invest: "투자" };
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
-const FRAME_FIELDS: { key: keyof EntryFrame; label: string }[] = [
-  { key: "new_biz", label: "🚀 신사업" },
-  { key: "core_biz_structural", label: "🏭 기존사업 · 구조적" },
-  { key: "core_biz_short", label: "🏭 기존사업 · 단기" },
-  { key: "overseas", label: "🌍 해외상황" },
-  { key: "insight", label: "🎯 인사이트" },
-];
 
 export default function ReportReviewPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
-  const [entries, setEntries] = useState<EntryFull[]>([]);
+  const [entry, setEntry] = useState<EntryFull | null>(null);
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     const [d, { industries }] = await Promise.all([api.reportEntries(id), api.industries()]);
     setReport(d.report);
-    setEntries(d.entries);
+    setEntry(d.entries[0] ?? null);
     setCatalog(industries);
     setLoaded(true);
   }, [id]);
@@ -44,6 +37,11 @@ export default function ReportReviewPage() {
     await api.reExtract(id).catch((e) => alert(e instanceof Error ? e.message : "실패"));
     await load();
   }
+  async function remove() {
+    if (!confirm("이 리포트를 삭제할까요? 분석 결과도 함께 삭제됩니다.")) return;
+    await api.deleteReport(id);
+    router.push("/");
+  }
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (!report)
@@ -55,36 +53,35 @@ export default function ReportReviewPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
+      <div className="flex items-center justify-between">
+        <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
+        <button onClick={remove} className="text-sm text-ink-muted hover:text-red-500">삭제</button>
+      </div>
       <div className="mt-3 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-bold">{report.title ?? "리포트"}</h1>
         <StatusBadge status={report.parseStatus} />
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
         {report.docType && <span className="rounded bg-ink/5 px-2 py-0.5">{DOC_TYPE_LABEL[report.docType]}</span>}
-        <span>{report.pageCount ?? "?"}페이지</span>
-        <span>· 렌즈 {(report.requestedLenses ?? []).join(", ")}</span>
+        {report.pubDate && <span>발간 {report.pubDate}</span>}
+        <span>· 추가 {new Date(report.createdAt).toLocaleDateString("ko-KR")}</span>
       </div>
 
-      {/* 산업 확인/수정 */}
       <IndustryRow report={report} catalog={catalog} onSaved={load} />
 
       {report.parseStatus !== "parsed" ? (
         <div className="mt-6 rounded-card bg-card p-8 text-center shadow-card">
-          {report.parseStatus === "pending" && <p className="text-ink-sub">추출 대기 중... (처리되면 자동 갱신)</p>}
-          {report.parseStatus === "parsing" && <p className="text-ink-sub">추출 중...</p>}
-          {report.parseStatus === "failed" && <p className="text-red-500">추출 실패.</p>}
+          <p className="text-ink-sub">
+            {report.parseStatus === "failed" ? "추출 실패." : "분석 중... (처리되면 자동 갱신)"}
+          </p>
           <button onClick={reExtract} className="mt-4 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white">
-            {report.parseStatus === "failed" ? "다시 추출" : "지금 추출"}
+            {report.parseStatus === "failed" ? "다시 분석" : "지금 분석"}
           </button>
         </div>
+      ) : entry ? (
+        <AnalysisCard entry={entry} onSaved={load} />
       ) : (
-        <div className="mt-6 space-y-6">
-          {entries.map((e) => (
-            <EntryCard key={e.id} entry={e} onSaved={load} />
-          ))}
-          {entries.length === 0 && <p className="text-ink-sub">아직 엔트리가 없어요.</p>}
-        </div>
+        <p className="mt-6 text-ink-sub">분석 결과가 없어요.</p>
       )}
     </main>
   );
@@ -93,8 +90,8 @@ export default function ReportReviewPage() {
 function StatusBadge({ status }: { status: Report["parseStatus"] }) {
   const map: Record<string, { t: string; c: string }> = {
     parsed: { t: "완료", c: "bg-success-bg text-success-text" },
-    pending: { t: "대기중", c: "bg-ink/5 text-ink-muted" },
-    parsing: { t: "처리중", c: "bg-primary/10 text-primary" },
+    pending: { t: "분석중", c: "bg-ink/5 text-ink-muted" },
+    parsing: { t: "분석중", c: "bg-primary/10 text-primary" },
     failed: { t: "실패", c: "bg-red-50 text-red-500" },
   };
   const s = map[status] ?? map.pending;
@@ -104,8 +101,6 @@ function StatusBadge({ status }: { status: Report["parseStatus"] }) {
 function IndustryRow({ report, catalog, onSaved }: { report: Report; catalog: Industry[]; onSaved: () => void }) {
   const [value, setValue] = useState(report.industryId ?? "");
   const [saving, setSaving] = useState(false);
-  const current = catalog.find((c) => c.id === report.industryId);
-
   async function save() {
     setSaving(true);
     try {
@@ -115,11 +110,10 @@ function IndustryRow({ report, catalog, onSaved }: { report: Report; catalog: In
       setSaving(false);
     }
   }
-
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-card bg-card p-4 shadow-card">
       <span className="text-sm font-semibold text-ink-muted">산업</span>
-      {!report.industryConfirmed && current && (
+      {!report.industryConfirmed && report.industryId && (
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">AI 추정</span>
       )}
       <select
@@ -129,17 +123,11 @@ function IndustryRow({ report, catalog, onSaved }: { report: Report; catalog: In
       >
         <option value="">미지정</option>
         {catalog.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
+          <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
       {value !== (report.industryId ?? "") || !report.industryConfirmed ? (
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={saving} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
           {saving ? "..." : report.industryConfirmed ? "변경" : "확인"}
         </button>
       ) : (
@@ -149,15 +137,68 @@ function IndustryRow({ report, catalog, onSaved }: { report: Report; catalog: In
   );
 }
 
-function EntryCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => void }) {
+// 읽기/편집 겸용 텍스트
+function TextBlock({ value, edit, onChange, rows = 2 }: { value?: string; edit: boolean; onChange: (v: string) => void; rows?: number }) {
+  if (edit)
+    return (
+      <textarea
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full resize-y rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
+      />
+    );
+  return <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{value?.trim() || <span className="text-ink-muted">명시 없음</span>}</p>;
+}
+// 읽기/편집 겸용 리스트(편집은 줄바꿈 구분)
+function ListBlock({ items, edit, onChange }: { items?: string[]; edit: boolean; onChange: (v: string[]) => void }) {
+  if (edit)
+    return (
+      <textarea
+        value={(items ?? []).join("\n")}
+        onChange={(e) => onChange(e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))}
+        rows={Math.max(2, (items ?? []).length)}
+        className="w-full resize-y rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
+        placeholder="한 줄에 하나씩"
+      />
+    );
+  if (!items || items.length === 0) return <p className="text-sm text-ink-muted">명시 없음</p>;
+  return (
+    <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
+      {items.map((it, i) => (
+        <li key={i}>{it}</li>
+      ))}
+    </ul>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-1.5 text-sm font-semibold text-ink-muted">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
-  const [frame, setFrame] = useState<EntryFrame>(entry.frame ?? {});
+  const [f, setF] = useState<EntryFrame>(entry.frame ?? {});
   const [saving, setSaving] = useState(false);
+  const inv = f.perspectives?.investment;
+  const car = f.perspectives?.career;
+
+  // 중첩 업데이트 헬퍼
+  const set = (patch: Partial<EntryFrame>) => setF((p) => ({ ...p, ...patch }));
+  const setInv = (patch: Partial<NonNullable<NonNullable<EntryFrame["perspectives"]>["investment"]>>) =>
+    setF((p) => ({ ...p, perspectives: { ...p.perspectives, investment: { ...p.perspectives?.investment, ...patch } } }));
+  const setCar = (patch: Partial<NonNullable<NonNullable<EntryFrame["perspectives"]>["career"]>>) =>
+    setF((p) => ({ ...p, perspectives: { ...p.perspectives, career: { ...p.perspectives?.career, ...patch } } }));
 
   async function save() {
     setSaving(true);
     try {
-      await api.saveEntry(entry.id, { frame, status: "saved" });
+      await api.saveEntry(entry.id, { frame: f, status: "saved" });
       setEditing(false);
       onSaved();
     } finally {
@@ -166,46 +207,74 @@ function EntryCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => void }
   }
 
   return (
-    <section className="rounded-card bg-card p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between">
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-          {LENS_LABEL[entry.lensKey] ?? entry.lensKey} 렌즈
+    <section className="mt-6 space-y-6 rounded-card bg-card p-6 shadow-card">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-ink-muted">
+          {entry.provider ?? "mock"} · {entry.status === "saved" ? "저장됨" : "초안"}
         </span>
-        <div className="flex items-center gap-3 text-xs text-ink-muted">
-          <span>
-            {entry.provider ?? "mock"} · {entry.status === "saved" ? "저장됨" : "초안"}
-          </span>
-          {!editing && (
-            <button onClick={() => setEditing(true)} className="rounded border border-line px-2 py-1 hover:bg-bg-deep">
-              수정
+        {!editing ? (
+          <button onClick={() => setEditing(true)} className="rounded border border-line px-2 py-1 text-xs hover:bg-bg-deep">
+            수정
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving} className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+              {saving ? "저장 중..." : "저장"}
             </button>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {FRAME_FIELDS.map((f) => (
-          <div key={f.key}>
-            <div className="mb-1 text-sm font-semibold text-ink-muted">{f.label}</div>
-            {editing ? (
-              <textarea
-                value={frame[f.key] ?? ""}
-                onChange={(ev) => setFrame((p) => ({ ...p, [f.key]: ev.target.value }))}
-                rows={2}
-                className="w-full resize-y rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-            ) : (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                {entry.frame?.[f.key]?.trim() || <span className="text-ink-muted">명시 없음</span>}
-              </p>
-            )}
+            <button onClick={() => { setF(entry.frame ?? {}); setEditing(false); }} className="text-xs text-ink-sub">취소</button>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* 핵심숫자 */}
-      <div className="mt-5 border-t border-line pt-4">
-        <h3 className="mb-2 text-sm font-semibold text-ink-muted">🔢 핵심숫자</h3>
+      <Section title="① 한 줄 요약">
+        <TextBlock value={f.summary} edit={editing} onChange={(v) => set({ summary: v })} />
+      </Section>
+
+      <Section title="② 핵심 사실">
+        <div className="space-y-2">
+          <TextBlock value={f.facts?.what} edit={editing} onChange={(v) => set({ facts: { ...f.facts, what: v } })} />
+          <div className="text-xs text-ink-muted">숫자</div>
+          <TextBlock value={f.facts?.numbers} edit={editing} onChange={(v) => set({ facts: { ...f.facts, numbers: v } })} />
+          <div className="text-xs text-ink-muted">출처 기준일</div>
+          <TextBlock value={f.facts?.sourceDate} edit={editing} onChange={(v) => set({ facts: { ...f.facts, sourceDate: v } })} rows={1} />
+        </div>
+      </Section>
+
+      <Section title="③ 동인 · 맥락">
+        <ListBlock items={f.drivers} edit={editing} onChange={(v) => set({ drivers: v })} />
+      </Section>
+
+      <Section title="④ 리스크 · 쟁점">
+        <ListBlock items={f.risks} edit={editing} onChange={(v) => set({ risks: v })} />
+      </Section>
+
+      {(inv || (editing && entry.frame?.perspectives?.investment)) && (
+        <div className="rounded-xl bg-bg-deep p-4">
+          <h3 className="mb-2 text-sm font-bold">💰 투자 관점</h3>
+          <div className="space-y-2">
+            <Section title="밸류에이션"><TextBlock value={inv?.valuation} edit={editing} onChange={(v) => setInv({ valuation: v })} rows={1} /></Section>
+            <Section title="투자 포인트"><ListBlock items={inv?.points} edit={editing} onChange={(v) => setInv({ points: v })} /></Section>
+            <Section title="하방 리스크"><ListBlock items={inv?.downside} edit={editing} onChange={(v) => setInv({ downside: v })} /></Section>
+            <Section title="잠정 의견"><TextBlock value={inv?.opinion} edit={editing} onChange={(v) => setInv({ opinion: v })} /></Section>
+          </div>
+        </div>
+      )}
+
+      {(car || (editing && entry.frame?.perspectives?.career)) && (
+        <div className="rounded-xl bg-bg-deep p-4">
+          <h3 className="mb-2 text-sm font-bold">🎯 취업 관점</h3>
+          <div className="space-y-2">
+            <Section title="회사·산업 방향성"><TextBlock value={car?.direction} edit={editing} onChange={(v) => setCar({ direction: v })} /></Section>
+            <Section title="내 직무와의 접점"><TextBlock value={car?.jobFit} edit={editing} onChange={(v) => setCar({ jobFit: v })} /></Section>
+            <Section title="AI·프로덕트 시사점"><TextBlock value={car?.aiInsight} edit={editing} onChange={(v) => setCar({ aiInsight: v })} /></Section>
+            <Section title="면접·자소서 활용"><ListBlock items={car?.interviewHooks} edit={editing} onChange={(v) => setCar({ interviewHooks: v })} /></Section>
+            <Section title="지원동기 연결 한 문장"><TextBlock value={car?.motivation} edit={editing} onChange={(v) => setCar({ motivation: v })} rows={1} /></Section>
+          </div>
+        </div>
+      )}
+
+      {/* ⑥ 출처 + 핵심숫자(가드레일) */}
+      <Section title="⑥ 핵심숫자 · 출처">
         {entry.numbers.length === 0 ? (
           <p className="text-sm text-ink-sub">추출된 숫자가 없어요.</p>
         ) : (
@@ -214,9 +283,7 @@ function EntryCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => void }
               <li key={n.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-medium">{n.label}</span>
                 <span>{n.value}</span>
-                {n.pageNo != null && (
-                  <span className="rounded bg-ink/5 px-1.5 py-0.5 text-xs text-ink-muted">p.{n.pageNo}</span>
-                )}
+                {n.pageNo != null && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-xs text-ink-muted">p.{n.pageNo}</span>}
                 {n.verified ? (
                   <span className="rounded-full bg-success-bg px-2 py-0.5 text-xs text-success-text">출처확인</span>
                 ) : (
@@ -226,22 +293,14 @@ function EntryCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => void }
             ))}
           </ul>
         )}
-      </div>
-
-      {editing && (
-        <div className="mt-5 flex items-center gap-3">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {saving ? "저장 중..." : "저장"}
-          </button>
-          <button onClick={() => setEditing(false)} className="text-sm text-ink-sub hover:text-ink">
-            취소
-          </button>
-        </div>
-      )}
+        {(f.sources ?? []).length > 0 && (
+          <ul className="mt-2 text-xs text-ink-muted">
+            {(f.sources ?? []).map((s, i) => (
+              <li key={i}>· {s.item} {s.source && `(${s.source}${s.date ? `, ${s.date}` : ""})`}</li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </section>
   );
 }

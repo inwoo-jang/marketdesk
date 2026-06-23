@@ -57,7 +57,16 @@ export default function DocsFeed() {
             <a href="/upload" className="text-primary">업로드</a> 하면 AI 가 자동 분류합니다.
           </p>
         ) : (
-          reports.map((r) => <ReportCard key={r.id} report={r} />)
+          reports.map((r) => (
+            <ReportCard
+              key={r.id}
+              report={r}
+              onDelete={async (rid) => {
+                await api.deleteReport(rid);
+                load();
+              }}
+            />
+          ))
         )}
       </div>
     </main>

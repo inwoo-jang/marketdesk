@@ -5,13 +5,32 @@ import { industries } from "./industries";
 import { lenses } from "./users";
 import { entryStatus, llmProvider } from "./enums";
 
-// frame jsonb 형태(틀): 가드레일 기반 구조화 요약.
+// frame jsonb: 문서타입(산업/기업/뉴스) 공통 분석 구조 + 관점 레이어(투자/취업).
+// 리포트당 1엔트리. perspectives 는 사용자가 켠 렌즈만 채움.
+export type InvestmentPerspective = {
+  valuation?: string;
+  points?: string[];
+  downside?: string[];
+  opinion?: string;
+};
+export type CareerPerspective = {
+  direction?: string;
+  jobFit?: string;
+  aiInsight?: string;
+  interviewHooks?: string[];
+  motivation?: string;
+};
+export type AnalysisSource = { item: string; source: string; date: string };
 export type EntryFrame = {
-  new_biz?: string;
-  core_biz_structural?: string;
-  core_biz_short?: string;
-  overseas?: string;
-  insight?: string;
+  summary?: string;
+  facts?: { what?: string; numbers?: string; sourceDate?: string };
+  drivers?: string[];
+  risks?: string[];
+  perspectives?: {
+    investment?: InvestmentPerspective;
+    career?: CareerPerspective;
+  };
+  sources?: AnalysisSource[];
 };
 
 // entries: 리포트 × 렌즈 = 1엔트리. 멀티렌즈 = (report, lens)별 분리.
@@ -26,9 +45,7 @@ export const entries = pgTable(
       .notNull()
       .references(() => reports.id, { onDelete: "cascade" }),
     industryId: uuid("industry_id").references(() => industries.id),
-    lensKey: text("lens_key")
-      .notNull()
-      .references(() => lenses.key),
+    lensKey: text("lens_key").references(() => lenses.key), // nullable: 새 모델은 리포트당 1엔트리(관점은 frame 내부)
     entryDate: date("entry_date").notNull(),
     frame: jsonb("frame").$type<EntryFrame>(),
     status: entryStatus("status").default("draft").notNull(),

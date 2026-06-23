@@ -87,6 +87,7 @@ export const api = {
   },
   setReportIndustry: (reportId: string, industryId: string | null) =>
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
+  deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
   usage: () => get<Usage>("/api/me/usage"),
 };
 
@@ -114,12 +115,17 @@ export type Report = {
   createdAt: string;
   industries?: { id: string; name: string }[]; // 멀티 산업 태그
 };
+export type AnalysisSource = { item: string; source: string; date: string };
 export type EntryFrame = {
-  new_biz?: string;
-  core_biz_structural?: string;
-  core_biz_short?: string;
-  overseas?: string;
-  insight?: string;
+  summary?: string;
+  facts?: { what?: string; numbers?: string; sourceDate?: string };
+  drivers?: string[];
+  risks?: string[];
+  perspectives?: {
+    investment?: { valuation?: string; points?: string[]; downside?: string[]; opinion?: string };
+    career?: { direction?: string; jobFit?: string; aiInsight?: string; interviewHooks?: string[]; motivation?: string };
+  };
+  sources?: AnalysisSource[];
 };
 export type EntryNumber = {
   id: string;
@@ -130,7 +136,7 @@ export type EntryNumber = {
 };
 export type EntryFull = {
   id: string;
-  lensKey: string;
+  lensKey: string | null;
   status: "draft" | "saved";
   frame: EntryFrame | null;
   provider: "gemini" | "claude" | "mcp" | null;

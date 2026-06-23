@@ -89,7 +89,16 @@ export default function IndustryDashboard() {
             이 산업으로 분류된 리포트가 아직 없어요. 업로드하면 AI 가 이 산업으로 매칭합니다.
           </p>
         ) : (
-          reports.map((r) => <ReportCard key={r.id} report={r} />)
+          reports.map((r) => (
+            <ReportCard
+              key={r.id}
+              report={r}
+              onDelete={async (rid) => {
+                await api.deleteReport(rid);
+                load();
+              }}
+            />
+          ))
         )}
       </div>
     </main>
