@@ -15,6 +15,13 @@
       "when": 1782183213518,
       "tag": "0001_add_requested_lenses",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782192417590,
+      "tag": "0002_rework_doctype_plan",
+      "breakpoints": true
     }
   ]
 }

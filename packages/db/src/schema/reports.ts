@@ -1,7 +1,7 @@
-import { pgTable, uuid, text, integer, date, timestamp, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, boolean, date, timestamp, unique, index } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { industries } from "./industries";
-import { sourceType, parseStatus } from "./enums";
+import { sourceType, parseStatus, docType, inputFormat } from "./enums";
 
 // reports: 업로드한 원본 메타.
 export const reports = pgTable(
@@ -11,13 +11,16 @@ export const reports = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    industryId: uuid("industry_id").references(() => industries.id),
+    industryId: uuid("industry_id").references(() => industries.id), // AI 매칭(확인 전 추정)
+    industryConfirmed: boolean("industry_confirmed").default(false).notNull(),
     title: text("title"),
-    broker: text("broker"), // 증권사
+    broker: text("broker"), // 증권사(해당 시)
     analyst: text("analyst"),
     pubDate: date("pub_date"),
     sourceType: sourceType("source_type"), // 'broker'(수동) | 'public'(Phase2)
-    fileKey: text("file_key"), // S3 객체 키
+    docType: docType("doc_type"), // industry|company|news (AI 분류)
+    inputFormat: inputFormat("input_format").default("pdf").notNull(), // pdf|text|image
+    fileKey: text("file_key"), // S3 객체 키(text 입력도 .txt 로 저장)
     fileSize: integer("file_size"),
     pageCount: integer("page_count"),
     // 업로드 시 사용자가 고른 렌즈(추출 대상). Sprint2 워커가 이 렌즈들로 entries 생성.

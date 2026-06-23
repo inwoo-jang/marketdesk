@@ -2,13 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, type Lens } from "@/lib/api";
+import { api, type Lens, type JobRole } from "@/lib/api";
 
 // 렌즈 선택 온보딩. 로그인 필요(미인증이면 /login).
 export default function OnboardingPage() {
   const router = useRouter();
   const [lenses, setLenses] = useState<Lens[]>([]);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [jobRole, setJobRole] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,10 +22,15 @@ export default function OnboardingPage() {
         router.replace("/login");
         return;
       }
-      const [{ lenses }, { enabled }] = await Promise.all([api.lenses(), api.myLenses()]);
+      const [{ lenses }, { enabled, jobRole }, { jobRoles }] = await Promise.all([
+        api.lenses(),
+        api.myLenses(),
+        api.jobRoles(),
+      ]);
       setLenses(lenses);
-      // 기존 선택이 있으면 그걸로, 없으면 전체 기본 선택
+      setJobRoles(jobRoles);
       setSelected(new Set(enabled.length > 0 ? enabled : lenses.map((l) => l.key)));
+      if (jobRole) setJobRole(jobRole);
       setLoaded(true);
     })();
   }, [router]);
@@ -41,10 +48,14 @@ export default function OnboardingPage() {
       setError("렌즈를 1개 이상 선택하세요.");
       return;
     }
+    if (selected.has("job") && !jobRole) {
+      setError("취업 렌즈는 직무를 선택하세요.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await api.setMyLenses([...selected]);
+      await api.setMyLenses([...selected], jobRole || undefined);
       router.push("/");
       router.refresh();
     } catch {
@@ -86,6 +97,25 @@ export default function OnboardingPage() {
           );
         })}
       </div>
+
+      {selected.has("job") && (
+        <div className="mt-6 rounded-card border border-line bg-card p-5">
+          <label className="mb-2 block text-sm font-semibold">취업 렌즈 · 직무</label>
+          <p className="mb-3 text-xs text-ink-sub">직무에 따라 리포트를 읽는 관점이 달라집니다.</p>
+          <select
+            value={jobRole}
+            onChange={(e) => setJobRole(e.target.value)}
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+          >
+            <option value="">직무 선택...</option>
+            {jobRoles.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 

@@ -1,29 +1,31 @@
-# 리포트렌즈 — 아키텍처 & DB 설계 v0.1 (Phase 0)
+# 리포트렌즈 — 아키텍처 & DB 설계 (Phase 0, 갱신 2026-06-23)
 
 > 빌드 워크플로우 Phase 0(스펙 확정). 목표: 프로토타입이 아니라 **상용화 가능한 탄탄한 구조**.
 > 호스팅: AWS (Supabase 미사용). DB는 처음부터 상용화 수준으로, 컴퓨팅은 작게 시작.
+> 갱신: 컴퓨팅 = **ECS Fargate + Hono(TS)** 확정(Lambda 아님), 워커 = **Node/TS(unpdf 파싱)**, LLM 기본 = **Gemini**(로컬 mock), 스키마 보강(doc_type·input_format·requested_lenses·industry_confirmed·user_lenses.config), 입력 = PDF·텍스트(이미지 Phase 2), 문서타입·산업 = AI 자동 분류·매칭.
 
 ---
 
 ## 1. AWS 아키텍처 (청사진)
 
 ```
-[사용자] ──> [프론트엔드(React/Next)] ──> [API Gateway] ──> [Lambda: CRUD]
-                                                              │
-   로그인: Cognito (+구글/카카오 OIDC)                          ▼
-                                                          [RDS PostgreSQL]
-[PDF 업로드] ──presigned──> [S3(프라이빗,사용자별)]
-        │ (S3 이벤트/요청)
+[사용자] ──> [프론트(Next.js·Vercel)] ──> [ALB] ──> [API: Hono (ECS Fargate)]
+                                                          │
+   로그인: Cognito (+구글/카카오) / 로컬: dev 세션            ▼
+                                                      [RDS PostgreSQL]
+[업로드: PDF·텍스트] ──presigned──> [S3(프라이빗,사용자별)] / 로컬: 디스크
+        │
         ▼
-   [SQS] ──> [워커: 파싱(PyMuPDF/kordoc) → 렌즈별 Claude 추출 → 가드레일 검증]
-                          │ (LLM: Bedrock Claude 또는 Anthropic API)
+   [SQS] ──> [워커(Node/TS): 파싱(unpdf) → 산업·타입 AI분류 → 렌즈·직무별 추출 → 가드레일]
+                          │ (LLM 라우터: 기본 Gemini / 로컬 mock / BYO Claude)
                           ▼
                     [RDS: entries/entry_numbers 기록, parse_status 갱신]
-   시크릿: Secrets Manager  /  관측: CloudWatch  /  IaC: CDK
+   시크릿: Secrets Manager·KMS  /  관측: CloudWatch  /  IaC: CDK  /  로컬: DB 폴링 큐
 ```
 
 핵심 설계 결정:
-- **추출은 비동기**(SQS+워커). 파싱+LLM은 길어서 API 타임아웃(API GW 29s) 회피. 멀티 렌즈는 워커에서 렌즈별 처리(파싱 1회 캐싱).
+- **추출은 비동기**(SQS+워커, 로컬은 DB 폴링). 파싱+LLM은 길어서 동기 요청 타임아웃 회피. 멀티 렌즈는 워커에서 렌즈별 처리(파싱 1회 캐싱).
+- **AI 자동 분류**: 워커가 문서 타입(산업/기업/뉴스)과 산업(표준 22 세트)을 분류해 `reports.doc_type`/`industry_id` 에 기록(사용자 확인·수정). 취업 렌즈는 사용자 직무(`user_lenses.config.jobRole`)에 따라 추출 관점을 조정.
 - **멀티테넌트 스코핑은 API 계층에서** 강제(모든 쿼리에 Cognito JWT의 user_id 필터). RDS는 Supabase식 RLS가 없으므로 애플리케이션에서 보장 + DB FK/제약으로 무결성.
 - **BYO**: 외부 수집 없음. 업로드는 presigned URL로 S3 직접, 사용자별 prefix로 격리.
 
@@ -59,19 +61,22 @@ sort        int
 user_id  uuid FK->users ON DELETE CASCADE
 lens_key text FK->lenses
 enabled  bool DEFAULT true
+config   jsonb        -- 렌즈별 설정. 취업 렌즈는 {jobRole:'pm'} (직무 프리셋 15종 중)
 PRIMARY KEY (user_id, lens_key)
 ```
+> 취업 직무 프리셋(코드 상수, api `/api/job-roles` 로 노출): 기획/PM·전략/사업개발·마케팅·영업·데이터분석·리서치/애널리스트·재무/IR·컨설팅·정책/공공·법무/규제대응·구매/SCM·기자/미디어·인사/HR·개발/기술기획·기타. 직무별 추출 페르소나는 워커가 보유.
 
 ### industries  (글로벌 카탈로그 + 사용자 커스텀)
 ```
 id        uuid PK
 user_id   uuid FK->users NULL        -- NULL=글로벌 카탈로그, 값 있으면 커스텀
-name      text NOT NULL              -- 반도체, 2차전지 ...
+name      text NOT NULL              -- 반도체, AI, IT·소프트웨어 ...
 slug      text NOT NULL
 icon_color text
 sort      int
 UNIQUE (user_id, slug)
 ```
+> 글로벌 카탈로그 = 네이버 증권 업종을 계열 통합한 표준 **22개 세트**(반도체·AI·IT·소프트웨어·디스플레이·전기전자·게임·미디어·광고·통신·자동차·조선·기계·운송·물류·철강·금속·석유·화학·에너지·유틸리티·건설·섬유·의류·화장품·음식료·제약·바이오·유통·여행·교육·금융·기타). 업로드 문서의 산업은 워커가 이 세트 중 하나로 AI 매칭.
 
 ### user_industries  (관심 산업 팔로우/정렬)
 ```
@@ -86,13 +91,17 @@ PRIMARY KEY (user_id, industry_id)
 ```
 id          uuid PK
 user_id     uuid FK->users ON DELETE CASCADE
-industry_id uuid FK->industries
+industry_id uuid FK->industries          -- AI 매칭(또는 사용자 지정), 확인 전엔 추정값
+industry_confirmed bool DEFAULT false    -- 사용자가 AI 매칭 산업을 확인/수정했는지
 title       text
-broker      text          -- 증권사
+broker      text          -- 증권사(해당 시)
 analyst     text
 pub_date    date
 source_type text          -- 'broker'(수동) | 'public'(자동, Phase2)
-file_key    text          -- S3 객체 키
+doc_type    text          -- 'industry'|'company'|'news' (AI 자동 분류)
+input_format text DEFAULT 'pdf'  -- 'pdf'|'text'|'image'(Phase2)
+requested_lenses text[]   -- 업로드 시 고른 렌즈(추출 대상). 워커가 이 렌즈로 entries 생성
+file_key    text          -- S3 객체 키(text 입력도 .txt 로 저장)
 file_size   int
 page_count  int
 parse_status text DEFAULT 'pending'  -- pending|parsing|parsed|failed

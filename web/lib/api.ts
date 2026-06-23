@@ -2,6 +2,7 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 
 export type Lens = { key: string; label: string; description: string | null; isPreset: boolean; sort: number | null };
+export type JobRole = { key: string; label: string };
 export type Industry = { id: string; name: string; slug: string; iconColor: string | null; sort: number | null };
 export type User = {
   id: string;
@@ -42,8 +43,10 @@ export const api = {
   devLogin: (input: { provider: "google" | "kakao"; email?: string; displayName?: string }) =>
     post<{ user: User }>("/api/auth/dev-login", input),
   logout: () => post<{ ok: true }>("/api/auth/logout"),
-  myLenses: () => get<{ enabled: string[] }>("/api/me/lenses"),
-  setMyLenses: (keys: string[]) => put<{ enabled: string[] }>("/api/me/lenses", { keys }),
+  jobRoles: () => get<{ jobRoles: JobRole[] }>("/api/job-roles"),
+  myLenses: () => get<{ enabled: string[]; jobRole?: string }>("/api/me/lenses"),
+  setMyLenses: (keys: string[], jobRole?: string) =>
+    put<{ enabled: string[]; jobRole?: string }>("/api/me/lenses", { keys, jobRole }),
   myIndustries: () => get<{ industries: MyIndustry[] }>("/api/me/industries"),
   followIndustry: (industryId: string) => post<{ ok: true }>("/api/me/industries/follow", { industryId }),
   unfollowIndustry: (id: string) => del<{ ok: true }>(`/api/me/industries/${id}`),

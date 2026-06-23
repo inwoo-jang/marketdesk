@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, boolean, integer, timestamp, primaryKey } from "drizzle-orm/pg-core";
-import { authProvider } from "./enums";
+import { pgTable, uuid, text, boolean, integer, date, jsonb, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { authProvider, userPlan } from "./enums";
 
 // users: 인증은 Cognito, DB엔 프로필 미러.
 export const users = pgTable("users", {
@@ -9,8 +9,22 @@ export const users = pgTable("users", {
   provider: authProvider("provider"),
   displayName: text("display_name"),
   avatarUrl: text("avatar_url"),
+  plan: userPlan("plan").default("free").notNull(), // free=하루 3회, pro=상향/BYO
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// usage_daily: 사용량 미터링(무료 한도 게이팅). 추출 요청 1건 = count +1.
+export const usageDaily = pgTable(
+  "usage_daily",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(), // KST 기준 날짜 문자열
+    count: integer("count").default(0).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
 
 // lenses: 프리셋 렌즈 카탈로그(향후 커스텀). key 가 자연키 PK.
 export const lenses = pgTable("lenses", {
@@ -32,6 +46,7 @@ export const userLenses = pgTable(
       .notNull()
       .references(() => lenses.key),
     enabled: boolean("enabled").default(true).notNull(),
+    config: jsonb("config").$type<{ jobRole?: string }>(), // 취업 렌즈 직무 등 렌즈별 설정
   },
   (t) => [primaryKey({ columns: [t.userId, t.lensKey] })],
 );

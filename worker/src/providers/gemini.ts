@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Provider, ExtractedEntry, ExtractedNumber } from "./types.js";
-import { FRAME_DESC, GUARDRAIL, lensPersona } from "../prompts.js";
+import type { Provider, ExtractedEntry, ExtractedNumber, Classification, ExtractCtx, DocType } from "./types.js";
+import { FRAME_DESC, GUARDRAIL, lensPersona, docTypeHint, buildClassifyPrompt } from "../prompts.js";
 
 // 기본 프로바이더. MVP 는 단일 Flash 호출(JSON 출력).
 // TODO(캐스케이드): Flash 초벌 추출 → Pro 로 핵심요약/검증 재호출(비용·품질 균형).
@@ -14,10 +14,27 @@ export class GeminiProvider implements Provider {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async extract(document: string, lensKey: string): Promise<ExtractedEntry> {
-    const system = `${lensPersona(lensKey)}\n\n${GUARDRAIL}`;
+  async classify(document: string, industries: string[]): Promise<Classification> {
+    const res = await this.ai.models.generateContent({
+      model: this.model,
+      contents: [{ role: "user", parts: [{ text: buildClassifyPrompt(document, industries) }] }],
+      config: { responseMimeType: "application/json", maxOutputTokens: 200 },
+    });
+    try {
+      const o = JSON.parse(res.text ?? "{}") as Record<string, unknown>;
+      const industry = typeof o.industry === "string" && industries.includes(o.industry) ? o.industry : null;
+      const dt = o.doc_type;
+      const docType: DocType = dt === "company" || dt === "news" ? dt : "industry";
+      return { industry, docType };
+    } catch {
+      return { industry: null, docType: "industry" };
+    }
+  }
+
+  async extract(document: string, lensKey: string, ctx?: ExtractCtx): Promise<ExtractedEntry> {
+    const system = `${lensPersona(lensKey, ctx?.jobRole)}\n${docTypeHint(ctx?.docType)}\n\n${GUARDRAIL}`;
     const user =
-      `아래는 증권사 리포트 전문이다(페이지는 '=== p.N ===' 로 구분).\n` +
+      `아래는 문서 전문이다(페이지는 '=== p.N ===' 로 구분).\n` +
       `${lensKey} 렌즈로 아래 틀에 맞춰 JSON 으로만 답하라.\n\n${FRAME_DESC}\n\n` +
       `출력 JSON 형태: {"frame":{"new_biz":"","core_biz_structural":"","core_biz_short":"","overseas":"","insight":""},` +
       `"numbers":[{"label":"","value":"","page_no":1}]}\n\n--- 리포트 ---\n${document}`;

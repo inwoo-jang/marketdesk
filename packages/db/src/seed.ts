@@ -1,7 +1,7 @@
 // 시드: 프리셋 렌즈 + 글로벌 산업 카탈로그. 재실행 안전(기존 키/슬러그 건너뜀).
 // 실행: pnpm --filter @reportlens/db seed
 import { isNull } from "drizzle-orm";
-import { createDb, lenses, industries } from "./index.js";
+import { createDb, lenses, industries, STANDARD_INDUSTRIES } from "./index.js";
 
 try {
   process.loadEnvFile(new URL("../.env", import.meta.url));
@@ -18,18 +18,7 @@ const PRESET_LENSES = [
   { key: "invest", label: "투자", description: "주식투자 관점(실적·수급·전망 숫자)", sort: 2 },
 ];
 
-const GLOBAL_INDUSTRIES = [
-  { name: "반도체", slug: "semiconductor", iconColor: "#3B82F6" },
-  { name: "2차전지", slug: "battery", iconColor: "#22C55E" },
-  { name: "자동차", slug: "auto", iconColor: "#6366F1" },
-  { name: "화학", slug: "chemical", iconColor: "#A855F7" },
-  { name: "정유·에너지", slug: "energy", iconColor: "#F59E0B" },
-  { name: "방산", slug: "defense", iconColor: "#64748B" },
-  { name: "바이오·제약", slug: "bio", iconColor: "#EC4899" },
-  { name: "인터넷·게임", slug: "internet", iconColor: "#06B6D4" },
-  { name: "금융", slug: "finance", iconColor: "#0EA5E9" },
-  { name: "조선", slug: "shipbuilding", iconColor: "#14B8A6" },
-];
+const GLOBAL_INDUSTRIES = STANDARD_INDUSTRIES;
 
 async function main() {
   // 렌즈: PK(key) 충돌 무시

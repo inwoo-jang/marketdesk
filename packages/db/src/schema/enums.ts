@@ -12,3 +12,6 @@ export const factType = pgEnum("fact_type", ["common", "conflict"]);
 export const llmTier = pgEnum("llm_tier", ["default", "byo", "mcp"]);
 export const exportScope = pgEnum("export_scope", ["entry", "rollup"]);
 export const jobStatus = pgEnum("job_status", ["pending", "done", "failed"]);
+export const docType = pgEnum("doc_type", ["industry", "company", "news"]); // 문서 타입(AI 분류)
+export const inputFormat = pgEnum("input_format", ["pdf", "text", "image"]); // image=Phase2
+export const userPlan = pgEnum("user_plan", ["free", "pro"]); // 요금 플랜

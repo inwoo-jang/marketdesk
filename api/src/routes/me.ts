@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, inArray, desc } from "drizzle-orm";
-import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports } from "@reportlens/db";
+import { lenses, userLenses, industries, userIndustries, entries, entryNumbers, reports, JOB_ROLES } from "@reportlens/db";
 import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
@@ -11,37 +11,50 @@ import { requireUser, type AppEnv } from "../auth.js";
 export const meRoute = new Hono<AppEnv>();
 meRoute.use("*", requireUser);
 
-// GET /api/me/lenses - 내가 켠 렌즈 키 목록
+// GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
 meRoute.get("/lenses", async (c) => {
   const user = c.get("user");
   const rows = await db
-    .select({ lensKey: userLenses.lensKey, enabled: userLenses.enabled })
+    .select({ lensKey: userLenses.lensKey, enabled: userLenses.enabled, config: userLenses.config })
     .from(userLenses)
     .where(eq(userLenses.userId, user.id));
   const enabled = rows.filter((r) => r.enabled).map((r) => r.lensKey);
-  return c.json({ enabled });
+  const jobRole = rows.find((r) => r.lensKey === "job")?.config?.jobRole;
+  return c.json({ enabled, jobRole });
 });
 
-const setLensesSchema = z.object({ keys: z.array(z.string()).min(1, "렌즈를 1개 이상 선택하세요") });
+const JOB_ROLE_KEYS = JOB_ROLES.map((r) => r.key) as string[];
+const setLensesSchema = z.object({
+  keys: z.array(z.string()).min(1, "렌즈를 1개 이상 선택하세요"),
+  jobRole: z.string().optional(),
+});
 
-// PUT /api/me/lenses - 내 렌즈 설정(전체 교체). 유효한 렌즈 키만 반영.
+// PUT /api/me/lenses - 내 렌즈 설정(전체 교체). 취업 렌즈면 직무(jobRole) config 저장.
 meRoute.put("/lenses", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
   const parsed = setLensesSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: "invalid body", detail: parsed.error.flatten() }, 400);
 
-  // 존재하는 렌즈만 통과(무결성)
   const valid = await db.select({ key: lenses.key }).from(lenses).where(inArray(lenses.key, parsed.data.keys));
   const validKeys = valid.map((v) => v.key);
   if (validKeys.length === 0) return c.json({ error: "유효한 렌즈가 없습니다" }, 400);
 
+  const jobRole = parsed.data.jobRole && JOB_ROLE_KEYS.includes(parsed.data.jobRole) ? parsed.data.jobRole : undefined;
+
   await db.transaction(async (tx) => {
     await tx.delete(userLenses).where(eq(userLenses.userId, user.id));
-    await tx.insert(userLenses).values(validKeys.map((key) => ({ userId: user.id, lensKey: key, enabled: true })));
+    await tx.insert(userLenses).values(
+      validKeys.map((key) => ({
+        userId: user.id,
+        lensKey: key,
+        enabled: true,
+        config: key === "job" && jobRole ? { jobRole } : null,
+      })),
+    );
   });
 
-  return c.json({ enabled: validKeys });
+  return c.json({ enabled: validKeys, jobRole });
 });
 
 // ---- 산업 ----
