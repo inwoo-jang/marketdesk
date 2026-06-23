@@ -20,6 +20,8 @@ export const reports = pgTable(
     fileKey: text("file_key"), // S3 객체 키
     fileSize: integer("file_size"),
     pageCount: integer("page_count"),
+    // 업로드 시 사용자가 고른 렌즈(추출 대상). Sprint2 워커가 이 렌즈들로 entries 생성.
+    requestedLenses: text("requested_lenses").array(),
     parseStatus: parseStatus("parse_status").default("pending").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

@@ -27,6 +27,9 @@ venv/
 infra/cdk.out/
 infra/.cdk.staging/
 
+# 로컬 업로드 스토리지(개발용)
+api/.uploads/
+
 # Claude Code 로컬 설정(개인)
 .claude/settings.local.json
 

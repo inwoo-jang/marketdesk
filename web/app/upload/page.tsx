@@ -1,0 +1,171 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { api, type MyIndustry, type Lens } from "@/lib/api";
+
+// 리포트 업로드: 드롭존 + 산업 + 렌즈 선택. 로그인 필요.
+export default function UploadPage() {
+  const router = useRouter();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [industries, setIndustries] = useState<MyIndustry[]>([]);
+  const [lenses, setLenses] = useState<Lens[]>([]);
+  const [enabledKeys, setEnabledKeys] = useState<string[]>([]);
+
+  const [file, setFile] = useState<File | null>(null);
+  const [industryId, setIndustryId] = useState<string>("");
+  const [lensKeys, setLensKeys] = useState<Set<string>>(new Set());
+  const [dragging, setDragging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const me = await api.me().catch(() => ({ user: null }));
+      if (!me.user) {
+        router.replace("/login");
+        return;
+      }
+      const [mi, all, mine] = await Promise.all([api.myIndustries(), api.lenses(), api.myLenses()]);
+      setIndustries(mi.industries);
+      setLenses(all.lenses);
+      setEnabledKeys(mine.enabled);
+      setLensKeys(new Set(mine.enabled)); // 기본: 켠 렌즈 전체
+      setLoaded(true);
+    })();
+  }, [router]);
+
+  function pickFile(f: File | null) {
+    setError(null);
+    if (f && !f.name.toLowerCase().endsWith(".pdf")) {
+      setError("PDF 파일만 올릴 수 있어요.");
+      return;
+    }
+    setFile(f);
+  }
+
+  function toggleLens(key: string) {
+    setLensKeys((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  async function submit() {
+    if (!file) {
+      setError("PDF 파일을 선택하세요.");
+      return;
+    }
+    if (lensKeys.size === 0) {
+      setError("렌즈를 1개 이상 선택하세요.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.uploadReport(file, { industryId: industryId || undefined, lensKeys: [...lensKeys] });
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "업로드 실패");
+      setBusy(false);
+    }
+  }
+
+  if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
+
+  const myLensOptions = lenses.filter((l) => enabledKeys.includes(l.key));
+
+  return (
+    <main className="mx-auto max-w-lg px-6 py-12">
+      <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
+      <h1 className="mt-4 text-2xl font-bold">리포트 업로드</h1>
+      <p className="mt-2 text-sm text-ink-sub">증권사 PDF를 올리면 선택한 렌즈로 정리됩니다.</p>
+
+      {/* 드롭존 */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          pickFile(e.dataTransfer.files?.[0] ?? null);
+        }}
+        onClick={() => fileInput.current?.click()}
+        className={`mt-6 cursor-pointer rounded-card border-2 border-dashed p-10 text-center transition ${
+          dragging ? "border-primary bg-primary/5" : "border-line bg-card"
+        }`}
+      >
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+        />
+        {file ? (
+          <div className="font-medium text-ink">📄 {file.name}</div>
+        ) : (
+          <div className="text-ink-sub">여기로 PDF를 끌어다 놓거나 클릭해서 선택</div>
+        )}
+      </div>
+
+      {/* 산업 */}
+      <div className="mt-6">
+        <label className="mb-2 block text-sm font-semibold text-ink-muted">산업</label>
+        <select
+          value={industryId}
+          onChange={(e) => setIndustryId(e.target.value)}
+          className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+        >
+          <option value="">선택 안 함</option>
+          {industries.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+        {industries.length === 0 && (
+          <p className="mt-1 text-xs text-ink-muted">팔로우한 산업이 없어요. 대시보드에서 추가할 수 있어요.</p>
+        )}
+      </div>
+
+      {/* 렌즈 */}
+      <div className="mt-6">
+        <label className="mb-2 block text-sm font-semibold text-ink-muted">렌즈 (추출 관점)</label>
+        <div className="flex gap-2">
+          {myLensOptions.map((l) => {
+            const on = lensKeys.has(l.key);
+            return (
+              <button
+                key={l.key}
+                type="button"
+                onClick={() => toggleLens(l.key)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  on ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"
+                }`}
+              >
+                {l.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+
+      <button
+        onClick={submit}
+        disabled={busy}
+        className="mt-8 w-full rounded-xl bg-primary py-3 font-medium text-white hover:brightness-105 disabled:opacity-50"
+      >
+        {busy ? "업로드 중..." : "업로드"}
+      </button>
+    </main>
+  );
+}

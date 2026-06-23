@@ -1,0 +1,1 @@
+ALTER TABLE "reports" ADD COLUMN "requested_lenses" text[];

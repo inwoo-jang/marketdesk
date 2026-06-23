@@ -8,6 +8,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev:api": "pnpm --filter @reportlens/api dev",
+    "dev:web": "pnpm --filter @reportlens/web dev",
+    "db:seed": "pnpm --filter @reportlens/db seed",
     "typecheck": "pnpm --filter @reportlens/db typecheck && pnpm --filter @reportlens/infra typecheck",
     "db:generate": "pnpm --filter @reportlens/db generate",
     "db:migrate": "pnpm --filter @reportlens/db migrate",

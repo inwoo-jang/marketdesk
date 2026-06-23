@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 // 로컬은 .env 파일 로드, 운영은 컨테이너 환경변수 사용(파일 없으면 무시).
 try {
   process.loadEnvFile(new URL("../.env", import.meta.url));
@@ -19,4 +21,8 @@ export const env = {
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me",
   // 로컬 dev 로그인 허용(운영에서는 false → Cognito 만 사용)
   devAuthEnabled: process.env.DEV_AUTH_ENABLED !== "false",
+  // 스토리지: local(디스크) | s3. 로컬 우선 기본 local.
+  storageDriver: process.env.STORAGE_DRIVER ?? "local",
+  uploadDir: process.env.UPLOAD_DIR ?? fileURLToPath(new URL("../.uploads", import.meta.url)),
+  maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 25),
 };
