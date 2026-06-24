@@ -5,39 +5,46 @@ import { getProvider } from "./providers/index.js";
 
 type Rollup = typeof rollups.$inferSelect;
 
-function nextMonthStart(periodKey: string): string {
+// periodType+periodKey → [start, end) (date 문자열). month='YYYY-MM', year='YYYY'.
+function periodRange(periodType: string, periodKey: string): { start: string; end: string } {
+  if (periodType === "year") {
+    const y = Number(periodKey);
+    return { start: `${y}-01-01`, end: `${y + 1}-01-01` };
+  }
   const [y, m] = periodKey.split("-").map(Number);
   const ny = m === 12 ? y + 1 : y;
   const nm = m === 12 ? 1 : m + 1;
-  return `${ny}-${String(nm).padStart(2, "0")}-01`;
+  return { start: `${periodKey}-01`, end: `${ny}-${String(nm).padStart(2, "0")}-01` };
 }
 
-// 월별 롤업 1건 처리: 그 산업·그 달 엔트리 → 흐름 한 줄 + 공통/엇갈림(하위 엔트리만 근거).
+// 롤업 1건 처리: scope(산업/기업/뉴스) × 기간(월/년) 엔트리 → 흐름 한 줄 + 공통/엇갈림(하위 엔트리만 근거).
 export async function processRollup(r: Rollup): Promise<void> {
   try {
-    if (!r.industryId) throw new Error("industry_id 없음");
-    const start = `${r.periodKey}-01`;
-    const end = nextMonthStart(r.periodKey);
+    const { start, end } = periodRange(r.periodType, r.periodKey);
+
+    let scopeCond;
+    let label: string;
+    if (r.scope === "company") {
+      if (!r.companyName) throw new Error("company_name 없음");
+      scopeCond = eq(reports.company, r.companyName);
+      label = r.companyName;
+    } else if (r.scope === "news") {
+      scopeCond = eq(reports.docType, "news");
+      label = "경제뉴스";
+    } else {
+      if (!r.industryId) throw new Error("industry_id 없음");
+      scopeCond = eq(entries.industryId, r.industryId);
+      const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, r.industryId)).limit(1);
+      label = ind?.name ?? "산업";
+    }
 
     const rows = await db
       .select({ id: entries.id, frame: entries.frame, title: reports.title })
       .from(entries)
       .innerJoin(reports, eq(entries.reportId, reports.id))
-      .where(
-        and(
-          eq(entries.userId, r.userId),
-          eq(entries.industryId, r.industryId),
-          gte(entries.entryDate, start),
-          lt(entries.entryDate, end),
-        ),
-      );
+      .where(and(eq(entries.userId, r.userId), scopeCond, gte(entries.entryDate, start), lt(entries.entryDate, end)));
 
-    const [ind] = await db
-      .select({ name: industries.name })
-      .from(industries)
-      .where(eq(industries.id, r.industryId))
-      .limit(1);
-    const industryName = ind?.name ?? "산업";
+    const industryName = label;
 
     if (rows.length === 0) {
       await db

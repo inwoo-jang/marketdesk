@@ -38,7 +38,8 @@ export function buildAnalyzePrompt(document: string, industries: string[]): stri
     `3) summary: 한 줄 요약(40자 내외).\n` +
     `4) doc_type: 'industry'(산업 리포트) | 'company'(기업 리포트) | 'news'(경제뉴스).\n` +
     `5) industries: 다음 후보 중 해당하는 것 모두(1~3개) 정확한 이름 배열. [${industries.join(", ")}]\n` +
-    `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."]}` +
+    `6) company: 특정 기업이 핵심 주제면 그 회사명 1개(예: 삼성전자), 아니면 null.\n` +
+    `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."],"company":null}` +
     STRICT_JSON +
     `\n\n--- 문서(일부) ---\n${document.slice(0, 6000)}`
   );

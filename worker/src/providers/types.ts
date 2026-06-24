@@ -23,6 +23,7 @@ export type DocMeta = {
   summary: string | null; // 한줄요약(피드 미리보기)
   docType: DocType;
   industries: string[]; // 후보 카탈로그 이름 중 매칭(복수 가능)
+  company: string | null; // 기업 문서의 핵심 회사명(흐름 보드 기업별)
 };
 
 // 월별 롤업(요약의 요약): 한 달 엔트리 → 흐름 한 줄 + 공통/엇갈림.

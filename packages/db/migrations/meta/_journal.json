@@ -71,6 +71,13 @@
       "when": 1782286650142,
       "tag": "0009_glossy_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782288051101,
+      "tag": "0010_burly_lilith",
+      "breakpoints": true
     }
   ]
 }

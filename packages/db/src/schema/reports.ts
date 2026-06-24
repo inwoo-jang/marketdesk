@@ -20,6 +20,7 @@ export const reports = pgTable(
     pubDate: date("pub_date"), // AI 추출 발간일
     sourceType: sourceType("source_type"), // 'broker'(수동) | 'public'(Phase2)
     docType: docType("doc_type"), // industry|company|news (AI 분류)
+    company: text("company"), // AI 추출 회사명(기업 문서). 흐름 보드 기업별 묶음용
     inputFormat: inputFormat("input_format").default("pdf").notNull(), // pdf|text|image
     fileKey: text("file_key"), // S3 객체 키(text 입력도 .txt 로 저장)
     fileSize: integer("file_size"),

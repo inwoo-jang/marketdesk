@@ -57,6 +57,7 @@ export function parseMeta(o: Record<string, unknown>, industries: string[]): Doc
     summary: str(o.summary) ?? null,
     docType,
     industries: list,
+    company: str(o.company) ?? null,
   };
 }
 

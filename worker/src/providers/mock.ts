@@ -60,6 +60,7 @@ export class MockProvider implements Provider {
       summary: cleanNoise(oneLine).slice(0, 80) || null,
       docType,
       industries: list,
+      company: null,
     };
   }
 

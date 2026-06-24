@@ -15,7 +15,10 @@ export const rollups = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     industryId: uuid("industry_id").references(() => industries.id),
     lensKey: text("lens_key").references(() => lenses.key), // nullable: 산업 전체 롤업(관점 무관)
-    periodType: periodType("period_type").notNull(), // 'month'(MVP) | 'year'(Phase2)
+    // 흐름 보드 차원: industry(산업, industryId 사용) | company(기업, companyName) | news(경제뉴스 전체)
+    scope: text("scope").default("industry").notNull(),
+    companyName: text("company_name"), // scope=company 일 때 회사명
+    periodType: periodType("period_type").notNull(), // 'month' | 'year'
     periodKey: text("period_key").notNull(), // '2026-06'
     oneLiner: text("one_liner"),
     status: jobStatus("status").default("pending").notNull(), // pending|done|failed (워커 생성)

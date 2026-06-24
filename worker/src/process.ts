@@ -50,6 +50,7 @@ export async function processReport(report: Report): Promise<void> {
         docType: meta.docType,
         summary: meta.summary,
         title: meta.title ?? report.title,
+        company: meta.company,
         ...(meta.pubDate ? { pubDate: meta.pubDate } : {}),
         ...(report.industryConfirmed ? {} : { industryId: primaryId }),
       })
