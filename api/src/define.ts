@@ -33,9 +33,13 @@ export async function defineTerm(term: string, context?: string): Promise<string
   if (!t) return "";
   if (env.defineProvider === "mock") return `(mock) ${t}: 간단 설명 자리(로컬 mock).`;
   const prompt =
-    `다음 용어를 한국어로 100자 이내로 쉽고 정확하게 설명하라. 설명 문장만 출력(따옴표·머리말 금지).\n` +
+    `다음 "용어 자체"의 뜻을 한국어로 설명하라. 글 전체 주제가 아니라 이 용어의 일반적·사전적 의미를 설명한다.\n` +
+    `규칙:\n` +
+    `- 영어 약어(축약어)이면 맨 앞에 "약어 (정식 영어 풀네임)" 형식으로 쓰고, 이어서 100자 이내 설명. 예: "PBR (Price-to-Book Ratio): 주가를 주당순자산으로 나눈 지표로 1보다 낮으면 저평가로 본다."\n` +
+    `- 약어가 아니면 용어명 없이 100자 이내 설명만.\n` +
+    `- 설명 문장만 출력(머리말·따옴표 금지), 100자 이내.\n` +
     `용어: ${t}\n` +
-    (context ? `맥락(이 글에서 쓰인 의미 우선): ${context.slice(0, 400)}\n` : "");
+    (context ? `참고 맥락(용어가 여러 뜻이면 이 맥락에 맞는 뜻을 고르는 용도. 맥락 주제 자체를 설명하지 말 것): ${context.slice(0, 300)}\n` : "");
   try {
     const text = (await runClaude(prompt)).trim().replace(/^["']|["']$/g, "");
     return text.slice(0, 200) || `${t}: 설명을 찾지 못했어요.`;

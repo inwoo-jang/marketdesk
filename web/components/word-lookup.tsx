@@ -48,17 +48,20 @@ export function WordLookup({
   targetRef: React.RefObject<HTMLElement | null>;
   contextText?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const [clickMode, setClickMode] = useState(false);
   const [term, setTerm] = useState("");
   const [input, setInput] = useState("");
   const [def, setDef] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const cache = useRef<Map<string, string>>(new Map());
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const lookup = useCallback(
     async (raw: string) => {
       const t = raw.trim().slice(0, 40);
       if (!t) return;
+      setOpen(true);
       setTerm(t);
       setDef(null);
       const cached = cache.current.get(t);
@@ -96,42 +99,80 @@ export function WordLookup({
     };
   }, [clickMode, targetRef, lookup]);
 
+  // 바깥(다른 화면) 클릭 시 접기. 단, 패널 내부와 클릭모드 중 본문 클릭(단어 풀이)은 예외.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t)) return;
+      if (clickMode && targetRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, clickMode, targetRef]);
+
+  // 접힘: 돋보기 + 용어 검색 버튼만
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-5 right-5 z-20 inline-flex items-center gap-1.5 rounded-full border border-line bg-card/95 px-4 py-2.5 text-sm font-medium shadow-card backdrop-blur hover:bg-bg-deep print:hidden"
+      >
+        🔎 <span>용어 검색</span>
+      </button>
+    );
+  }
+
   return (
-    <div className="fixed bottom-5 right-5 z-20 w-72 rounded-card border border-line bg-card/95 p-3 shadow-card backdrop-blur print:hidden">
-      <div className="mb-2 flex items-center justify-between">
+    <div
+      ref={panelRef}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="fixed bottom-5 right-5 z-20 w-72 rounded-card border border-line bg-card/95 p-3 shadow-card backdrop-blur print:hidden"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">🔎 용어 풀이</span>
-        <button
-          onClick={() => setClickMode((v) => !v)}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            clickMode ? "bg-primary text-white" : "border border-line text-ink-sub hover:bg-bg-deep"
-          }`}
-          title="켜면 본문 단어를 클릭해 바로 뜻을 볼 수 있어요"
-        >
-          {clickMode ? "단어 클릭 ON" : "단어 클릭 OFF"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setClickMode((v) => !v)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              clickMode ? "bg-primary text-white" : "border border-line text-ink-sub hover:bg-bg-deep"
+            }`}
+            title="켜면 본문 단어를 클릭해 바로 뜻을 볼 수 있어요"
+          >
+            {clickMode ? "단어 클릭 ON" : "단어 클릭 OFF"}
+          </button>
+          <button
+            onClick={() => setOpen(false)}
+            className="rounded-full px-1.5 py-1 text-xs text-ink-muted hover:bg-bg-deep"
+            title="숨김"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-      <div className="flex gap-1.5">
+      <div className="flex items-center gap-1.5">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (lookup(input), setInput(""))}
-          placeholder="단어 입력 또는 본문 클릭"
-          className="w-full rounded-lg border border-line px-2.5 py-1.5 text-sm outline-none focus:border-primary"
+          placeholder="단어 입력"
+          className="min-w-0 flex-1 rounded-lg border border-line px-2 py-1.5 text-xs outline-none focus:border-primary"
         />
         <button
           onClick={() => {
             lookup(input);
             setInput("");
           }}
-          className="rounded-lg bg-ink px-3 text-sm font-medium text-white"
+          className="shrink-0 rounded-lg bg-ink px-2.5 py-1.5 text-xs font-medium text-white"
         >
           검색
         </button>
       </div>
       {(term || loading) && (
-        <div className="mt-2 rounded-lg bg-bg-deep p-2.5 text-sm">
+        <div className="mt-2 rounded-lg bg-bg-deep p-2.5 text-xs">
           <div className="font-semibold text-primary">{term}</div>
-          <div className="mt-0.5 text-ink-sub">{loading ? "찾는 중..." : def}</div>
+          <div className="mt-0.5 leading-relaxed text-ink-sub">{loading ? "찾는 중..." : def}</div>
         </div>
       )}
       {clickMode && <p className="mt-2 text-[11px] text-ink-muted">본문에서 궁금한 단어를 클릭하세요.</p>}
