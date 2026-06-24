@@ -116,10 +116,25 @@ export const api = {
   addHighlight: (reportId: string, input: { startOffset: number; endOffset: number; color: HighlightColor; text: string }) =>
     post<{ highlight: Highlight }>(`/api/me/reports/${reportId}/highlights`, input),
   deleteHighlight: (hid: string) => del<{ ok: true }>(`/api/me/highlights/${hid}`),
+  board: (params: { dim: BoardDim; key?: string; period: "month" | "year" }) => {
+    const q = new URLSearchParams({ dim: params.dim, period: params.period });
+    if (params.key) q.set("key", params.key);
+    return get<Board>(`/api/me/board?${q.toString()}`);
+  },
+  generateBoardCell: (input: { dim: BoardDim; key?: string; period: "month" | "year"; periodKey: string }) =>
+    post<{ rollup: { id: string } }>("/api/me/board/generate", input),
+  boardScopes: () => get<{ industries: { id: string; name: string }[]; companies: string[] }>("/api/me/board/scopes"),
   rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
   createRollup: (industryId: string, period: string) =>
     post<{ rollup: Rollup }>(`/api/me/industries/${industryId}/rollups`, { period }),
 };
+
+export type BoardDim = "industry" | "company" | "news";
+export type BoardCell = {
+  periodKey: string;
+  rollup: { id: string; oneLiner: string | null; status: "pending" | "done" | "failed"; facts: RollupFact[] } | null;
+};
+export type Board = { dim: BoardDim; key: string; period: "month" | "year"; label: string; cells: BoardCell[] };
 
 export type RollupFact = { id: string; factType: "common" | "conflict"; content: string | null; sort: number | null };
 export type Rollup = {

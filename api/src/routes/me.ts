@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray, desc, sql, getTableColumns } from "drizzle-orm";
+import { eq, and, inArray, desc, sql, isNull, getTableColumns } from "drizzle-orm";
 import {
   lenses,
   userLenses,
@@ -271,6 +271,110 @@ meRoute.delete("/public/:id/bookmark", async (c) => {
     .delete(userPublicBookmark)
     .where(and(eq(userPublicBookmark.userId, user.id), eq(userPublicBookmark.contentId, c.req.param("id"))));
   return c.json({ ok: true });
+});
+
+// ===== 흐름 보드: 월/년 × 산업/기업/뉴스 타임라인 =====
+type Dim = "industry" | "company" | "news";
+const isDim = (v: unknown): v is Dim => v === "industry" || v === "company" || v === "news";
+
+// 최근 n개 기간키(과거→현재). month='YYYY-MM', year='YYYY'.
+function periodKeys(period: "month" | "year", n: number): string[] {
+  const now = new Date();
+  const keys: string[] = [];
+  if (period === "year") {
+    const y = now.getFullYear();
+    for (let i = n - 1; i >= 0; i--) keys.push(String(y - i));
+  } else {
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+  }
+  return keys;
+}
+
+function boardMatch(userId: string, dim: Dim, key: string, periodType: "month" | "year") {
+  const conds = [eq(rollups.userId, userId), eq(rollups.scope, dim), eq(rollups.periodType, periodType)];
+  if (dim === "industry") conds.push(eq(rollups.industryId, key));
+  else if (dim === "company") conds.push(eq(rollups.companyName, key));
+  return and(...conds);
+}
+
+// GET /api/me/board?dim=&key=&period= - 기간 시리즈 + 각 칸의 롤업(흐름/이슈)
+meRoute.get("/board", async (c) => {
+  const user = c.get("user");
+  const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
+  const period = c.req.query("period") === "year" ? "year" : "month";
+  const key = c.req.query("key") ?? "all";
+  if (dim !== "news" && key === "all") return c.json({ error: "key 필요" }, 400);
+
+  let label = "경제뉴스";
+  if (dim === "industry") {
+    const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, key)).limit(1);
+    label = ind?.name ?? "산업";
+  } else if (dim === "company") label = key;
+
+  const rows = await db.select().from(rollups).where(boardMatch(user.id, dim, key, period));
+  const ids = rows.map((r) => r.id);
+  const facts = ids.length ? await db.select().from(rollupFacts).where(inArray(rollupFacts.rollupId, ids)) : [];
+  const factsBy = new Map<string, typeof facts>();
+  for (const f of facts) factsBy.set(f.rollupId, [...(factsBy.get(f.rollupId) ?? []), f]);
+  const byKey = new Map(rows.map((r) => [r.periodKey, r]));
+
+  const n = period === "year" ? 5 : 12;
+  const cells = periodKeys(period, n).map((pk) => {
+    const r = byKey.get(pk);
+    return {
+      periodKey: pk,
+      rollup: r ? { id: r.id, oneLiner: r.oneLiner, status: r.status, facts: factsBy.get(r.id) ?? [] } : null,
+    };
+  });
+  return c.json({ dim, key, period, label, cells });
+});
+
+// POST /api/me/board/generate - 한 칸 생성(워커가 LLM 처리). { dim, key, period, periodKey }
+meRoute.post("/board/generate", async (c) => {
+  const user = c.get("user");
+  const b = await c.req.json().catch(() => ({}));
+  const dim: Dim = isDim(b.dim) ? b.dim : "industry";
+  const period = b.period === "year" ? "year" : "month";
+  const key = typeof b.key === "string" ? b.key : "all";
+  const periodKey = typeof b.periodKey === "string" ? b.periodKey : "";
+  if (!periodKey) return c.json({ error: "periodKey 필요" }, 400);
+  if (dim !== "news" && (!key || key === "all")) return c.json({ error: "key 필요" }, 400);
+
+  const quota = await consumeAnalysis(user);
+  if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
+
+  await db.delete(rollups).where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, periodKey)));
+  const [rollup] = await db
+    .insert(rollups)
+    .values({
+      userId: user.id,
+      scope: dim,
+      industryId: dim === "industry" ? key : null,
+      companyName: dim === "company" ? key : null,
+      periodType: period,
+      periodKey,
+      status: "pending",
+    })
+    .returning();
+  return c.json({ rollup });
+});
+
+// GET /api/me/board/scopes - 보드 선택지(산업 + 내 기업 목록)
+meRoute.get("/board/scopes", async (c) => {
+  const user = c.get("user");
+  const inds = await db
+    .select({ id: industries.id, name: industries.name })
+    .from(industries)
+    .where(isNull(industries.userId));
+  const companyRows = await db
+    .selectDistinct({ company: reports.company })
+    .from(reports)
+    .where(and(eq(reports.userId, user.id), sql`${reports.company} is not null`));
+  const companies = companyRows.map((r) => r.company).filter((x): x is string => !!x);
+  return c.json({ industries: inds, companies });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
