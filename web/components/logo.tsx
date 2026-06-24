@@ -27,9 +27,9 @@ export function LogoMark({ size = 28 }: { size?: number }) {
 
 export function Logo({ size = 28, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 font-bold tracking-tight text-ink ${className}`}>
+    <span className={`inline-flex items-center gap-1 font-bold tracking-tight text-ink ${className}`}>
       <LogoMark size={size} />
-      <span>
+      <span className="-ml-0.5">
         Market<span className="text-primary">Desk</span>
       </span>
     </span>

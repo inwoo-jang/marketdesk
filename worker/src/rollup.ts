@@ -49,7 +49,7 @@ export async function processRollup(r: Rollup): Promise<void> {
     if (rows.length === 0) {
       await db
         .update(rollups)
-        .set({ oneLiner: "이 달 분석된 리포트가 없습니다.", status: "done", updatedAt: new Date() })
+        .set({ oneLiner: "이 기간 분석된 자료가 없습니다.", status: "done", updatedAt: new Date() })
         .where(eq(rollups.id, r.id));
       return;
     }
@@ -58,7 +58,7 @@ export async function processRollup(r: Rollup): Promise<void> {
       .map((e) => `- ${e.title ?? "제목 없음"}: ${e.frame?.summary ?? ""} ${e.frame?.facts?.what ?? ""}`.trim())
       .join("\n");
 
-    const provider = getProvider();
+    const provider = getProvider(r.llmProvider); // 생성 시 고정된 엔진(개발자=claude 등)
     const result = await provider.rollup(industryName, r.periodKey, digest);
 
     await db.delete(rollupFacts).where(eq(rollupFacts.rollupId, r.id));

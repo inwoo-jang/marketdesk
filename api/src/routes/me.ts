@@ -277,15 +277,15 @@ meRoute.delete("/public/:id/bookmark", async (c) => {
 type Dim = "industry" | "company" | "news";
 const isDim = (v: unknown): v is Dim => v === "industry" || v === "company" || v === "news";
 
-// 최근 n개 기간키(과거→현재). month='YYYY-MM', year='YYYY'.
+// 최근 n개 기간키(최신→과거, 보드 왼쪽이 최신). month='YYYY-MM', year='YYYY'.
 function periodKeys(period: "month" | "year", n: number): string[] {
   const now = new Date();
   const keys: string[] = [];
   if (period === "year") {
     const y = now.getFullYear();
-    for (let i = n - 1; i >= 0; i--) keys.push(String(y - i));
+    for (let i = 0; i < n; i++) keys.push(String(y - i));
   } else {
-    for (let i = n - 1; i >= 0; i--) {
+    for (let i = 0; i < n; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
@@ -356,6 +356,7 @@ meRoute.post("/board/generate", async (c) => {
       companyName: dim === "company" ? key : null,
       periodType: period,
       periodKey,
+      llmProvider: await resolveProvider(user),
       status: "pending",
     })
     .returning();
@@ -566,7 +567,14 @@ meRoute.post("/industries/:id/rollups", async (c) => {
     );
   const [rollup] = await db
     .insert(rollups)
-    .values({ userId: user.id, industryId, periodType: "month", periodKey: period, status: "pending" })
+    .values({
+      userId: user.id,
+      industryId,
+      periodType: "month",
+      periodKey: period,
+      llmProvider: await resolveProvider(user),
+      status: "pending",
+    })
     .returning();
   return c.json({ rollup });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "rollups" ADD COLUMN "llm_provider" text;
