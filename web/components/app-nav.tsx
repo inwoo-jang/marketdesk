@@ -4,13 +4,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type User, type Usage } from "@/lib/api";
 import { Logo } from "@/components/logo";
+import { BookmarkIcon } from "@/components/bookmark-icon";
 
 const NAV = [
   { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
   { href: "/docs/industry", label: "산업리포트", match: (p: string) => p === "/docs/industry" },
   { href: "/docs/company", label: "기업리포트", match: (p: string) => p === "/docs/company" },
   { href: "/docs/news", label: "뉴스", match: (p: string) => p === "/docs/news" },
-  { href: "/favorites", label: "🔖 즐겨찾기", match: (p: string) => p === "/favorites" },
+  { href: "/favorites", label: "저장", icon: true, match: (p: string) => p === "/favorites" },
   { href: "/settings", label: "설정", match: (p: string) => p === "/settings" },
 ];
 
@@ -53,10 +54,11 @@ export function AppNav() {
               <a
                 key={n.href}
                 href={n.href}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
                   active ? "bg-primary/10 text-primary" : "text-ink-sub hover:bg-bg-deep"
                 }`}
               >
+                {n.icon && <BookmarkIcon filled={active} className="h-4 w-4" />}
                 {n.label}
               </a>
             );

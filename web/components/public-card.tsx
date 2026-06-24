@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, type PublicContent } from "@/lib/api";
 import { BookmarkIcon } from "@/components/bookmark-icon";
+import { HideIcon } from "@/components/hide-icon";
 
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) : null);
@@ -56,9 +57,9 @@ export function PublicCard({
   }
 
   return (
-    <div className="group relative rounded-card bg-card p-4 shadow-card transition hover:ring-1 hover:ring-primary/30">
-      <div className="flex items-start justify-between gap-3">
-        <a href={content.sourceUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
+    <div className="group relative rounded-card bg-card p-4 pr-12 shadow-card transition hover:ring-1 hover:ring-primary/30">
+      <div>
+        <a href={content.sourceUrl} target="_blank" rel="noopener noreferrer" className="block min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-success-bg px-1.5 py-0.5 text-[11px] font-medium text-success-text">공공</span>
             {content.docType && (
@@ -77,27 +78,37 @@ export function PublicCard({
             <span>· 출처 {content.source}</span>
           </div>
         </a>
-
-        <div className="flex shrink-0 flex-col items-center gap-2">
-          <button
-            onClick={toggleBookmark}
-            disabled={busy}
-            title={bm ? "즐겨찾기 해제" : "즐겨찾기"}
-            className={`leading-none transition ${bm ? "" : "text-ink-muted opacity-50 hover:opacity-100"}`}
-          >
-            <BookmarkIcon filled={bm} />
-          </button>
-          {variant === "hidden" ? (
-            <button onClick={unhide} disabled={busy} className="text-[11px] text-primary hover:underline" title="다시 표시">
-              복원
-            </button>
-          ) : variant === "feed" ? (
-            <button onClick={hide} disabled={busy} className="text-[11px] text-ink-muted hover:text-red-500" title="숨기기">
-              숨김
-            </button>
-          ) : null}
-        </div>
       </div>
+
+      {/* 저장(책갈피): 우상단 */}
+      <button
+        onClick={toggleBookmark}
+        disabled={busy}
+        title={bm ? "저장 해제" : "저장"}
+        className={`absolute right-3 top-3 leading-none transition ${bm ? "" : "text-ink-muted opacity-50 hover:opacity-100"}`}
+      >
+        <BookmarkIcon filled={bm} />
+      </button>
+      {/* 숨김/복원: 우하단(저장과 분리) */}
+      {variant === "hidden" ? (
+        <button
+          onClick={unhide}
+          disabled={busy}
+          title="다시 표시"
+          className="absolute bottom-3 right-3 text-ink-muted hover:text-ink"
+        >
+          <HideIcon slashed={false} />
+        </button>
+      ) : (
+        <button
+          onClick={hide}
+          disabled={busy}
+          title="숨기기"
+          className="absolute bottom-3 right-3 text-ink-muted hover:text-ink"
+        >
+          <HideIcon slashed />
+        </button>
+      )}
     </div>
   );
 }

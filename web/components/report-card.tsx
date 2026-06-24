@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, type Report } from "@/lib/api";
 import { BookmarkIcon } from "@/components/bookmark-icon";
+import { HideIcon } from "@/components/hide-icon";
 
 const STATUS: Record<string, { t: string; c: string }> = {
   parsed: { t: "완료", c: "bg-success-bg text-success-text" },
@@ -84,32 +85,36 @@ export function ReportCard({
         </div>
       </a>
 
-      {/* 액션: 책갈피 + 숨김/복원 */}
-      <div className="absolute right-3 top-3 flex items-center gap-2">
-        <button
-          onClick={toggleBookmark}
-          disabled={busy}
-          title={bm ? "즐겨찾기 해제" : "즐겨찾기"}
-          className={`leading-none transition ${bm ? "" : "text-ink-muted opacity-40 hover:opacity-100"}`}
-        >
-          <BookmarkIcon filled={bm} />
-        </button>
-      </div>
-      <div className="absolute bottom-3 right-3 hidden items-center gap-3 group-hover:flex">
-        <button onClick={hideOrRestore} disabled={busy} className="text-xs text-ink-muted hover:text-ink">
-          {variant === "hidden" ? "복원" : "숨김"}
-        </button>
+      {/* 저장(책갈피): 우상단 */}
+      <button
+        onClick={toggleBookmark}
+        disabled={busy}
+        title={bm ? "저장 해제" : "저장"}
+        className={`absolute right-3 top-3 leading-none transition ${bm ? "" : "text-ink-muted opacity-40 hover:opacity-100"}`}
+      >
+        <BookmarkIcon filled={bm} />
+      </button>
+      {/* 숨김/복원 + 삭제: 우하단(저장과 분리) */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-3">
         {onDelete && (
           <button
             onClick={(e) => {
               e.preventDefault();
               if (confirm("이 리포트를 삭제할까요?")) onDelete(report.id);
             }}
-            className="text-xs text-ink-muted hover:text-red-500"
+            className="hidden text-xs text-ink-muted hover:text-red-500 group-hover:block"
           >
             삭제
           </button>
         )}
+        <button
+          onClick={hideOrRestore}
+          disabled={busy}
+          title={variant === "hidden" ? "다시 표시" : "숨김"}
+          className="text-ink-muted hover:text-ink"
+        >
+          <HideIcon slashed={variant !== "hidden"} />
+        </button>
       </div>
     </div>
   );

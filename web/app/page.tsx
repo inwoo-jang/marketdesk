@@ -7,6 +7,7 @@ import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
 import { LoginPanel } from "@/components/login-panel";
 import { UsageBadge } from "@/components/usage-badge";
+import { HideIcon } from "@/components/hide-icon";
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -23,6 +24,7 @@ export default function Home() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [pub, setPub] = useState<PublicContent[]>([]);
   const [view, setView] = useState<"all" | "bookmarks" | "hidden">("all");
+  const [hidePublicFeed, setHidePublicFeed] = useState(false); // 공공 콘텐츠 피드에서 숨기기
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
@@ -253,10 +255,10 @@ export default function Home() {
 
       {/* 피드: 탭(전체/즐겨찾기/숨긴항목) — 리포트 + 공공 콘텐츠 통합 */}
       <section className="mt-10">
-        <div className="mb-4 flex gap-1 border-b border-line">
+        <div className="mb-4 flex items-center gap-1 border-b border-line">
           {([
             { k: "all", label: "전체보기" },
-            { k: "bookmarks", label: "🔖 즐겨찾기" },
+            { k: "bookmarks", label: "저장" },
             { k: "hidden", label: "숨긴 항목" },
           ] as const).map((t) => (
             <button
@@ -269,9 +271,20 @@ export default function Home() {
               {t.label}
             </button>
           ))}
+          {/* 공공 숨기기 필터: 탭 오른쪽 끝 */}
+          <button
+            onClick={() => setHidePublicFeed((v) => !v)}
+            title="공공 콘텐츠를 피드에서 숨기기"
+            className={`ml-auto mb-1 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${
+              hidePublicFeed ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+            }`}
+          >
+            <HideIcon slashed className="h-3.5 w-3.5" />
+            공공 {hidePublicFeed ? "숨김" : "표시"}
+          </button>
         </div>
 
-        {recent.length === 0 && pub.length === 0 ? (
+        {recent.length === 0 && (hidePublicFeed || pub.length === 0) ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
             {view === "all"
               ? "표시할 자료가 없어요. 우측 상단 “+ 업로드”로 리포트·뉴스를 올리거나, 아래 산업에서 공공 콘텐츠를 확인하세요."
@@ -290,7 +303,7 @@ export default function Home() {
                 onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))}
               />
             ))}
-            {pub.map((c) => (
+            {!hidePublicFeed && pub.map((c) => (
               <PublicCard
                 key={c.id}
                 content={c}

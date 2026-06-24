@@ -32,8 +32,8 @@ export default function FavoritesPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
-      <h1 className="mt-3 text-2xl font-bold">🔖 즐겨찾기 ({total})</h1>
-      <p className="mt-1 text-sm text-ink-sub">책갈피한 리포트와 공공 콘텐츠를 모아봤어요.</p>
+      <h1 className="mt-3 text-2xl font-bold">저장 ({total})</h1>
+      <p className="mt-1 text-sm text-ink-sub">저장(책갈피)한 리포트와 공공 콘텐츠를 모아봤어요.</p>
 
       <div className="mt-6">
         {total === 0 ? (
