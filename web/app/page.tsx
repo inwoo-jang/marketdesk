@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report } from "@/lib/api";
+import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { Logo } from "@/components/logo";
+import { LoginPanel } from "@/components/login-panel";
+import { UsageBadge } from "@/components/usage-badge";
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -17,17 +19,19 @@ export default function Home() {
   const [myIndustries, setMyIndustries] = useState<MyIndustry[]>([]);
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [recent, setRecent] = useState<Report[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }] = await Promise.all([
+    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }, u] = await Promise.all([
       api.lenses(),
       api.myLenses(),
       api.jobRoles(),
       api.myIndustries(),
       api.industries(),
       api.myReports(),
+      api.usage(),
     ]);
     setLenses(lenses);
     setJobRoles(jobRoles);
@@ -36,6 +40,7 @@ export default function Home() {
     setMyIndustries(mi.industries);
     setCatalog(industries);
     setRecent(reports);
+    setUsage(u);
   }, []);
 
   useEffect(() => {
@@ -59,10 +64,42 @@ export default function Home() {
 
   if (!user) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-        <Logo size={40} className="text-3xl" />
-        <p className="text-ink-sub">산업·기업 리포트와 경제뉴스를 내 관점(취업·투자)으로 정리합니다.</p>
-        <a href="/login" className="rounded-full bg-primary px-6 py-3 font-medium text-white">시작하기</a>
+      <main className="mx-auto grid min-h-screen max-w-5xl items-center gap-12 px-6 py-12 md:grid-cols-2">
+        {/* 좌: 소개 */}
+        <section>
+          <Logo size={36} className="text-2xl" />
+          <h1 className="mt-6 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
+            산업을 내 관점으로
+            <br />
+            쌓아가는 리서치 데스크
+          </h1>
+          <p className="mt-4 text-ink-sub">
+            산업·기업 리포트와 경제뉴스를 올리면, 취업·투자 관점으로 구조화하고 산업별로 시간순 누적합니다. PDF로도 정리해 가져갈 수 있어요.
+          </p>
+          <ul className="mt-6 space-y-2.5 text-sm text-ink-sub">
+            {[
+              "PDF·텍스트 올리면 AI가 산업·문서타입 자동 분류",
+              "취업(직무 15종)·투자 렌즈로 핵심사실·동인·리스크 구조화",
+              "산업별 대시보드 + 월별 흐름(요약의 요약) 누적",
+              "핵심 하이라이트 강조 + 단어 클릭 풀이로 쉽게 읽기",
+            ].map((t) => (
+              <li key={t} className="flex gap-2">
+                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-xs text-ink-muted">무료로 하루 3회 분석. 더 필요하면 Pro 또는 본인 API 키(BYO).</p>
+        </section>
+
+        {/* 우: 로그인 */}
+        <section className="rounded-card bg-card p-7 shadow-card md:justify-self-end md:max-w-sm">
+          <h2 className="text-lg font-bold">시작하기</h2>
+          <p className="mt-1 text-sm text-ink-sub">소셜 계정으로 바로 시작하세요.</p>
+          <div className="mt-6">
+            <LoginPanel />
+          </div>
+        </section>
       </main>
     );
   }
@@ -91,7 +128,10 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
+          <UsageBadge usage={usage} />
+        </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {myLensKeys.map((k) => (
             <span key={k} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">

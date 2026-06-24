@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { api, type MyIndustry, type Lens } from "@/lib/api";
+import { api, type MyIndustry, type Lens, type Usage } from "@/lib/api";
+import { UsageBadge } from "@/components/usage-badge";
 
 // 업로드: PDF 또는 텍스트 + 산업(선택, 비우면 AI 매칭) + 렌즈. 로그인 필요.
 export default function UploadPage() {
@@ -14,6 +15,7 @@ export default function UploadPage() {
   const [industries, setIndustries] = useState<MyIndustry[]>([]);
   const [lenses, setLenses] = useState<Lens[]>([]);
   const [enabledKeys, setEnabledKeys] = useState<string[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
 
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [file, setFile] = useState<File | null>(null);
@@ -33,11 +35,12 @@ export default function UploadPage() {
         router.replace("/login");
         return;
       }
-      const [mi, all, mine] = await Promise.all([api.myIndustries(), api.lenses(), api.myLenses()]);
+      const [mi, all, mine, u] = await Promise.all([api.myIndustries(), api.lenses(), api.myLenses(), api.usage()]);
       setIndustries(mi.industries);
       setLenses(all.lenses);
       setEnabledKeys(mine.enabled);
       setLensKeys(new Set(mine.enabled));
+      setUsage(u);
       setLoaded(true);
     })();
   }, [router]);
@@ -84,12 +87,22 @@ export default function UploadPage() {
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
   const myLensOptions = lenses.filter((l) => enabledKeys.includes(l.key));
+  const noQuota =
+    !!usage && usage.plan === "free" && usage.limit != null && (usage.remaining ?? usage.limit - usage.used) <= 0;
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">
       <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
-      <h1 className="mt-4 text-2xl font-bold">리포트 업로드</h1>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">리포트 업로드</h1>
+        <UsageBadge usage={usage} />
+      </div>
       <p className="mt-2 text-sm text-ink-sub">산업·기업 리포트나 경제뉴스를 올리면 선택한 렌즈로 정리됩니다.</p>
+      {noQuota && (
+        <div className="mt-4 rounded-card border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+          오늘 무료 분석 3회를 모두 썼어요. 내일 다시 무료로 이용하거나, <a href="/settings" className="font-semibold underline">Pro 업그레이드 · 본인 API 키 등록</a>으로 계속할 수 있어요.
+        </div>
+      )}
 
       {/* 입력 모드 */}
       <div className="mt-6 flex gap-2">
@@ -198,10 +211,10 @@ export default function UploadPage() {
 
       <button
         onClick={submit}
-        disabled={busy}
+        disabled={busy || noQuota}
         className="mt-8 w-full rounded-xl bg-primary py-3 font-medium text-white hover:brightness-105 disabled:opacity-50"
       >
-        {busy ? "업로드 중..." : "업로드"}
+        {noQuota ? "무료 한도 소진" : busy ? "업로드 중..." : "업로드"}
       </button>
     </main>
   );
