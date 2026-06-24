@@ -101,6 +101,9 @@ source_type text          -- 'broker'(수동) | 'public'(자동, Phase2)
 doc_type    text          -- 'industry'|'company'|'news' (AI 자동 분류)
 input_format text DEFAULT 'pdf'  -- 'pdf'|'text'|'image'(Phase2)
 requested_lenses text[]   -- 업로드 시 고른 렌즈(추출 대상). 워커가 이 렌즈로 entries 생성
+llm_provider text         -- 분석 엔진(claude|gemini). 업로드 시 사용자 설정으로 고정. null=워커 env 기본
+hidden      bool DEFAULT false   -- 유저 숨김(피드 제외). 리포트는 단일 소유라 컬럼으로 충분
+bookmarked  bool DEFAULT false   -- 즐겨찾기(책갈피)
 file_key    text          -- S3 객체 키(text 입력도 .txt 로 저장)
 file_size   int
 page_count  int
