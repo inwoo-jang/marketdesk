@@ -1,5 +1,5 @@
 import { eq, and, isNull } from "drizzle-orm";
-import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses } from "@reportlens/db";
+import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses, rollups } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
@@ -110,6 +110,9 @@ export async function processReport(report: Report): Promise<void> {
       );
     }
 
+    // 흐름 자동 갱신: 이 자료가 속한 산업/기업/뉴스의 월·년 롤업을 pending 으로(워커가 이어서 처리).
+    await enqueueFlowRollups(report, entryDate, meta.docType, meta.company);
+
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));
     console.log(
       `처리 완료 ${report.id} (페이지 ${pageCount}, 산업 ${meta.industries.join("/") || "미매칭"}, 타입 ${meta.docType}, 렌즈 ${lensKeys.join(",")})`,
@@ -118,4 +121,42 @@ export async function processReport(report: Report): Promise<void> {
     console.error(`처리 실패 ${report.id}:`, e);
     await db.update(reports).set({ parseStatus: "failed" }).where(eq(reports.id, report.id));
   }
+}
+
+// 업로드 분석 완료 시 그 자료가 속한 산업/기업/뉴스의 월·년 흐름(롤업)을 pending 으로 갱신.
+async function enqueueFlowRollups(report: Report, entryDate: string, docType: string, company: string | null): Promise<void> {
+  const periods = [
+    { periodType: "month" as const, periodKey: entryDate.slice(0, 7) },
+    { periodType: "year" as const, periodKey: entryDate.slice(0, 4) },
+  ];
+  const upsert = async (scope: "industry" | "company" | "news", opts: { industryId?: string; companyName?: string }) => {
+    for (const p of periods) {
+      const match = [
+        eq(rollups.userId, report.userId),
+        eq(rollups.scope, scope),
+        eq(rollups.periodType, p.periodType),
+        eq(rollups.periodKey, p.periodKey),
+      ];
+      if (scope === "industry" && opts.industryId) match.push(eq(rollups.industryId, opts.industryId));
+      else if (scope === "company" && opts.companyName) match.push(eq(rollups.companyName, opts.companyName));
+      await db.delete(rollups).where(and(...match));
+      await db.insert(rollups).values({
+        userId: report.userId,
+        scope,
+        industryId: opts.industryId ?? null,
+        companyName: opts.companyName ?? null,
+        periodType: p.periodType,
+        periodKey: p.periodKey,
+        llmProvider: report.llmProvider,
+        status: "pending",
+      });
+    }
+  };
+  const indRows = await db
+    .select({ industryId: reportIndustries.industryId })
+    .from(reportIndustries)
+    .where(eq(reportIndustries.reportId, report.id));
+  for (const { industryId } of indRows) await upsert("industry", { industryId });
+  if (docType === "news") await upsert("news", {});
+  if (docType === "company" && company) await upsert("company", { companyName: company });
 }

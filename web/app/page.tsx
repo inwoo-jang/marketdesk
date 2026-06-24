@@ -279,8 +279,8 @@ export default function Home() {
               hidePublicFeed ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
             }`}
           >
-            <HideIcon slashed className="h-3.5 w-3.5" />
-            공공 {hidePublicFeed ? "숨김" : "표시"}
+            <HideIcon slashed={!hidePublicFeed} className="h-3.5 w-3.5" />
+            공공 {hidePublicFeed ? "표시" : "숨김"}
           </button>
         </div>
 
