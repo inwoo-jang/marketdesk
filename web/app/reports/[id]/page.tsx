@@ -55,7 +55,12 @@ export default function ReportReviewPage() {
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
         <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
-        <button onClick={remove} className="text-sm text-ink-muted hover:text-red-500">삭제</button>
+        <div className="flex items-center gap-3">
+          {report.parseStatus === "parsed" && (
+            <a href={`/reports/${id}/print`} className="text-sm text-primary hover:underline">PDF 내보내기</a>
+          )}
+          <button onClick={remove} className="text-sm text-ink-muted hover:text-red-500">삭제</button>
+        </div>
       </div>
       <div className="mt-3 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-bold">{report.title ?? "리포트"}</h1>

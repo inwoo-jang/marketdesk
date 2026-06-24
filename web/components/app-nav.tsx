@@ -40,7 +40,7 @@ export function AppNav() {
   }
 
   return (
-    <nav className="sticky top-0 z-10 border-b border-line bg-card/80 backdrop-blur">
+    <nav className="sticky top-0 z-10 border-b border-line bg-card/80 backdrop-blur print:hidden">
       <div className="mx-auto flex max-w-5xl items-center gap-1 px-6 py-3">
         <a href="/" className="mr-3">
           <Logo size={24} />
