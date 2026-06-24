@@ -89,6 +89,8 @@ export const api = {
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
   deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
   usage: () => get<Usage>("/api/me/usage"),
+  define: (term: string, context?: string) =>
+    post<{ term: string; definition: string }>("/api/me/define", { term, context }),
   rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
   createRollup: (industryId: string, period: string) =>
     post<{ rollup: Rollup }>(`/api/me/industries/${industryId}/rollups`, { period }),

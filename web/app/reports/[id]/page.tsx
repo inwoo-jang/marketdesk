@@ -1,8 +1,9 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry } from "@/lib/api";
+import { WordLookup } from "@/components/word-lookup";
 
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
 
@@ -13,6 +14,7 @@ export default function ReportReviewPage() {
   const [entry, setEntry] = useState<EntryFull | null>(null);
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const [d, { industries }] = await Promise.all([api.reportEntries(id), api.industries()]);
@@ -84,9 +86,15 @@ export default function ReportReviewPage() {
           </button>
         </div>
       ) : entry ? (
-        <AnalysisCard entry={entry} onSaved={load} />
+        <div ref={contentRef}>
+          <AnalysisCard entry={entry} onSaved={load} />
+        </div>
       ) : (
         <p className="mt-6 text-ink-sub">분석 결과가 없어요.</p>
+      )}
+
+      {report.parseStatus === "parsed" && entry && (
+        <WordLookup targetRef={contentRef} contextText={`${report.title ?? ""} ${entry.frame?.summary ?? ""}`} />
       )}
     </main>
   );

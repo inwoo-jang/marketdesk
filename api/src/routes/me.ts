@@ -19,6 +19,7 @@ import {
 import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
+import { defineTerm } from "../define.js";
 import { requireUser, type AppEnv, type AppUser } from "../auth.js";
 
 // 무료 한도: 하루 3회 분석. pro 는 무제한. (BYO Claude 키도 Pro 기능)
@@ -55,6 +56,16 @@ const QUOTA_MSG = "무료 한도(하루 3회 분석)를 다 썼어요. Pro 로 �
 // /api/me/* : 로그인 사용자 스코핑(requireUser). 모든 쿼리에 user.id 강제.
 export const meRoute = new Hono<AppEnv>();
 meRoute.use("*", requireUser);
+
+const defineSchema = z.object({ term: z.string().min(1).max(40), context: z.string().optional() });
+
+// POST /api/me/define - 용어를 100자 이내로 설명(단어 클릭 풀이). 한도 게이팅 없음(마이크로 호출).
+meRoute.post("/define", async (c) => {
+  const parsed = defineSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  const definition = await defineTerm(parsed.data.term, parsed.data.context);
+  return c.json({ term: parsed.data.term, definition });
+});
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
 meRoute.get("/lenses", async (c) => {

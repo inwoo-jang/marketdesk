@@ -25,4 +25,6 @@ export const env = {
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
   uploadDir: process.env.UPLOAD_DIR ?? fileURLToPath(new URL("../.uploads", import.meta.url)),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 25),
+  // 용어 풀이 LLM: claude(CLI) | mock
+  defineProvider: process.env.DEFINE_PROVIDER ?? "claude",
 };
