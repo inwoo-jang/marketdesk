@@ -53,13 +53,18 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (params?: { industryId?: string; docType?: string }) => {
+  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden" }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
+    if (params?.view) q.set("view", params.view);
     const qs = q.toString();
     return get<{ reports: Report[] }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
   },
+  bookmarkReport: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/bookmark`),
+  unbookmarkReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/bookmark`),
+  hideReport: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/hide`),
+  unhideReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/hide`),
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
   reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
   reExtract: (id: string) => post<{ ok: true; parseStatus: string }>(`/api/me/reports/${id}/extract`),
@@ -168,6 +173,8 @@ export type Report = {
   pageCount: number | null;
   requestedLenses: string[] | null;
   parseStatus: "pending" | "parsing" | "parsed" | "failed";
+  hidden?: boolean;
+  bookmarked?: boolean;
   createdAt: string;
   industries?: { id: string; name: string }[]; // 멀티 산업 태그
 };

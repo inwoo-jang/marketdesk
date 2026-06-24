@@ -22,20 +22,30 @@ export default function Home() {
   const [recent, setRecent] = useState<Report[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [pub, setPub] = useState<PublicContent[]>([]);
-  const [hiddenList, setHiddenList] = useState<PublicContent[] | null>(null); // null=안 펼침
+  const [view, setView] = useState<"all" | "bookmarks" | "hidden">("all");
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
+  // 탭(view)에 맞는 리포트+공공 콘텐츠 피드 로드
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden") => {
+    const [{ reports }, pc] = await Promise.all([
+      api.myReports({ view: v }),
+      (v === "all" ? api.publicContents() : v === "bookmarks" ? api.bookmarkedContents() : api.hiddenContents()).catch(() => ({
+        contents: [],
+      })),
+    ]);
+    setRecent(reports);
+    setPub(pc.contents);
+  }, []);
+
   const loadData = useCallback(async () => {
-    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }, u, pc] = await Promise.all([
+    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, u] = await Promise.all([
       api.lenses(),
       api.myLenses(),
       api.jobRoles(),
       api.myIndustries(),
       api.industries(),
-      api.myReports(),
       api.usage(),
-      api.publicContents().catch(() => ({ contents: [] })),
     ]);
     setLenses(lenses);
     setJobRoles(jobRoles);
@@ -43,27 +53,30 @@ export default function Home() {
     setMyJobRole(jobRole);
     setMyIndustries(mi.industries);
     setCatalog(industries);
-    setRecent(reports);
     setUsage(u);
-    setPub(pc.contents);
   }, []);
 
   useEffect(() => {
     (async () => {
       const me = await api.me().catch(() => ({ user: null }));
       setUser(me.user);
-      if (me.user) await loadData().catch(() => {});
+      if (me.user) await Promise.all([loadData().catch(() => {}), loadFeed("all").catch(() => {})]);
       setLoaded(true);
     })();
-  }, [loadData]);
+  }, [loadData, loadFeed]);
+
+  function switchView(v: "all" | "bookmarks" | "hidden") {
+    setView(v);
+    loadFeed(v).catch(() => {});
+  }
 
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadData().catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadData]);
+  }, [user, recent, loadFeed, view]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -127,15 +140,7 @@ export default function Home() {
   }
   async function deleteReport(rid: string) {
     await api.deleteReport(rid);
-    await loadData();
-  }
-  async function toggleHidden() {
-    if (hiddenList) {
-      setHiddenList(null);
-      return;
-    }
-    const { contents } = await api.hiddenContents().catch(() => ({ contents: [] }));
-    setHiddenList(contents);
+    setRecent((r) => r.filter((x) => x.id !== rid));
   }
 
   return (
@@ -246,64 +251,53 @@ export default function Home() {
         )}
       </section>
 
-      {/* 최근 리포트 피드 */}
+      {/* 피드: 탭(전체/즐겨찾기/숨긴항목) — 리포트 + 공공 콘텐츠 통합 */}
       <section className="mt-10">
-        <h2 className="mb-3 text-sm font-semibold text-ink-muted">최근 리포트 ({recent.length})</h2>
-        {recent.length === 0 ? (
+        <div className="mb-4 flex gap-1 border-b border-line">
+          {([
+            { k: "all", label: "전체보기" },
+            { k: "bookmarks", label: "🔖 즐겨찾기" },
+            { k: "hidden", label: "숨긴 항목" },
+          ] as const).map((t) => (
+            <button
+              key={t.k}
+              onClick={() => switchView(t.k)}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
+                view === t.k ? "border-primary text-primary" : "border-transparent text-ink-sub hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {recent.length === 0 && pub.length === 0 ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            업로드한 자료가 없어요. 우측 상단 &quot;+ 업로드&quot;로 리포트·뉴스(PDF·텍스트)를 올려보세요.
+            {view === "all"
+              ? "표시할 자료가 없어요. 우측 상단 “+ 업로드”로 리포트·뉴스를 올리거나, 아래 산업에서 공공 콘텐츠를 확인하세요."
+              : view === "bookmarks"
+                ? "즐겨찾기한 항목이 없어요. 카드의 책갈피를 눌러 추가하세요."
+                : "숨긴 항목이 없어요."}
           </p>
         ) : (
           <div className="space-y-2">
             {recent.map((r) => (
-              <ReportCard key={r.id} report={r} onDelete={deleteReport} />
+              <ReportCard
+                key={r.id}
+                report={r}
+                variant={view}
+                onDelete={deleteReport}
+                onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))}
+              />
             ))}
-          </div>
-        )}
-      </section>
-
-      {/* 추천 공개 콘텐츠(정책브리핑 등 공개소스) */}
-      <section className="mt-10">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink-muted">추천 공개 콘텐츠 ({pub.length})</h2>
-          <div className="flex items-center gap-3 text-xs">
-            <a href="/favorites" className="text-ink-sub hover:text-ink">🔖 즐겨찾기</a>
-            <button onClick={toggleHidden} className="text-ink-sub hover:text-ink">
-              {hiddenList ? "숨긴 항목 닫기" : "숨긴 항목 보기"}
-            </button>
-          </div>
-        </div>
-        {pub.length === 0 ? (
-          <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            공개 콘텐츠가 아직 없어요. (공개소스에서 핵심만 모아 보여드려요)
-          </p>
-        ) : (
-          <div className="space-y-2">
             {pub.map((c) => (
-              <PublicCard key={c.id} content={c} variant="feed" onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))} />
+              <PublicCard
+                key={c.id}
+                content={c}
+                variant={view === "all" ? "feed" : view}
+                onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))}
+              />
             ))}
-          </div>
-        )}
-        {hiddenList && (
-          <div className="mt-4 rounded-card bg-bg-deep p-4">
-            <h3 className="mb-2 text-xs font-semibold text-ink-muted">숨긴 항목 ({hiddenList.length})</h3>
-            {hiddenList.length === 0 ? (
-              <p className="text-sm text-ink-sub">숨긴 항목이 없어요.</p>
-            ) : (
-              <div className="space-y-2">
-                {hiddenList.map((c) => (
-                  <PublicCard
-                    key={c.id}
-                    content={c}
-                    variant="hidden"
-                    onRemoved={(id) => {
-                      setHiddenList((l) => (l ? l.filter((x) => x.id !== id) : l));
-                      loadData();
-                    }}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         )}
       </section>

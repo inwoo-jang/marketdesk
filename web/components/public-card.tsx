@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, type PublicContent } from "@/lib/api";
+import { BookmarkIcon } from "@/components/bookmark-icon";
 
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) : null);
@@ -59,7 +60,7 @@ export function PublicCard({
       <div className="flex items-start justify-between gap-3">
         <a href={content.sourceUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="rounded bg-success-bg px-1.5 py-0.5 text-[11px] font-medium text-success-text">공개</span>
+            <span className="rounded bg-success-bg px-1.5 py-0.5 text-[11px] font-medium text-success-text">공공</span>
             {content.docType && (
               <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
                 {DOC_TYPE[content.docType] ?? content.docType}
@@ -82,13 +83,13 @@ export function PublicCard({
             onClick={toggleBookmark}
             disabled={busy}
             title={bm ? "즐겨찾기 해제" : "즐겨찾기"}
-            className={`text-lg leading-none transition ${bm ? "opacity-100" : "opacity-25 hover:opacity-60 grayscale"}`}
+            className={`leading-none transition ${bm ? "" : "text-ink-muted opacity-50 hover:opacity-100"}`}
           >
-            🔖
+            <BookmarkIcon filled={bm} />
           </button>
           {variant === "hidden" ? (
-            <button onClick={unhide} disabled={busy} className="text-[11px] text-primary hover:underline" title="다시 공개">
-              공개
+            <button onClick={unhide} disabled={busy} className="text-[11px] text-primary hover:underline" title="다시 표시">
+              복원
             </button>
           ) : variant === "feed" ? (
             <button onClick={hide} disabled={busy} className="text-[11px] text-ink-muted hover:text-red-500" title="숨기기">

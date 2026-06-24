@@ -1,4 +1,8 @@
-import type { Report } from "@/lib/api";
+"use client";
+
+import { useState } from "react";
+import { api, type Report } from "@/lib/api";
+import { BookmarkIcon } from "@/components/bookmark-icon";
 
 const STATUS: Record<string, { t: string; c: string }> = {
   parsed: { t: "완료", c: "bg-success-bg text-success-text" },
@@ -9,56 +13,104 @@ const STATUS: Record<string, { t: string; c: string }> = {
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) : null);
 
-// 피드 카드: AI 제목·한줄요약·산업태그·발간일·추가일·상태. 펼치지 않고 훑어볼 용도.
-export function ReportCard({ report, onDelete }: { report: Report; onDelete?: (id: string) => void }) {
+// 피드 카드: AI 제목·요약·산업태그·발간일·상태 + 책갈피/숨김(복원)/삭제.
+export function ReportCard({
+  report,
+  onDelete,
+  variant = "all",
+  onRemoved,
+}: {
+  report: Report;
+  onDelete?: (id: string) => void;
+  variant?: "all" | "bookmarks" | "hidden";
+  onRemoved?: (id: string) => void;
+}) {
   const s = STATUS[report.parseStatus] ?? STATUS.pending;
-  const pub = fmt(report.pubDate);
-  const added = fmt(report.createdAt);
+  const date = fmt(report.pubDate) ?? fmt(report.createdAt);
   const processing = report.parseStatus === "pending" || report.parseStatus === "parsing";
+  const [bm, setBm] = useState(!!report.bookmarked);
+  const [busy, setBusy] = useState(false);
+
+  async function toggleBookmark(e: React.MouseEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      if (bm) {
+        await api.unbookmarkReport(report.id);
+        setBm(false);
+        if (variant === "bookmarks") onRemoved?.(report.id);
+      } else {
+        await api.bookmarkReport(report.id);
+        setBm(true);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function hideOrRestore(e: React.MouseEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      if (variant === "hidden") await api.unhideReport(report.id);
+      else await api.hideReport(report.id);
+      onRemoved?.(report.id);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="group relative">
-      <a
-        href={`/reports/${report.id}`}
-        className="block rounded-card bg-card p-4 shadow-card transition hover:ring-1 hover:ring-primary/30"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              {report.docType && (
-                <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
-                  {DOC_TYPE[report.docType] ?? report.docType}
-                </span>
-              )}
-              <span className="truncate font-semibold">
-                {processing ? (report.title ?? "분석 중...") : (report.title ?? "제목 없음")}
-              </span>
-            </div>
-            {report.summary && <p className="mt-1 line-clamp-2 text-sm text-ink-sub">{report.summary}</p>}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
-              {(report.industries ?? []).map((i) => (
-                <span key={i.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
-                  {i.name}
-                </span>
-              ))}
-              {(pub ?? added) && <span>발간 {pub ?? added}</span>}
-            </div>
-          </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${s.c}`}>{s.t}</span>
+    <div className="group relative rounded-card bg-card shadow-card transition hover:ring-1 hover:ring-primary/30">
+      <a href={`/reports/${report.id}`} className="block p-4 pr-12">
+        <div className="flex items-center gap-2">
+          {report.docType && (
+            <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
+              {DOC_TYPE[report.docType] ?? report.docType}
+            </span>
+          )}
+          <span className="truncate font-semibold">
+            {processing ? (report.title ?? "분석 중...") : (report.title ?? "제목 없음")}
+          </span>
+          <span className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${s.c}`}>{s.t}</span>
+        </div>
+        {report.summary && <p className="mt-1 line-clamp-2 text-sm text-ink-sub">{report.summary}</p>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
+          {(report.industries ?? []).map((i) => (
+            <span key={i.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+              {i.name}
+            </span>
+          ))}
+          {date && <span>발간 {date}</span>}
         </div>
       </a>
-      {onDelete && (
+
+      {/* 액션: 책갈피 + 숨김/복원 */}
+      <div className="absolute right-3 top-3 flex items-center gap-2">
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            if (confirm("이 리포트를 삭제할까요?")) onDelete(report.id);
-          }}
-          className="absolute bottom-3 right-3 hidden text-xs text-ink-muted hover:text-red-500 group-hover:block"
-          title="삭제"
+          onClick={toggleBookmark}
+          disabled={busy}
+          title={bm ? "즐겨찾기 해제" : "즐겨찾기"}
+          className={`leading-none transition ${bm ? "" : "text-ink-muted opacity-40 hover:opacity-100"}`}
         >
-          삭제
+          <BookmarkIcon filled={bm} />
         </button>
-      )}
+      </div>
+      <div className="absolute bottom-3 right-3 hidden items-center gap-3 group-hover:flex">
+        <button onClick={hideOrRestore} disabled={busy} className="text-xs text-ink-muted hover:text-ink">
+          {variant === "hidden" ? "복원" : "숨김"}
+        </button>
+        {onDelete && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              if (confirm("이 리포트를 삭제할까요?")) onDelete(report.id);
+            }}
+            className="text-xs text-ink-muted hover:text-red-500"
+          >
+            삭제
+          </button>
+        )}
+      </div>
     </div>
   );
 }

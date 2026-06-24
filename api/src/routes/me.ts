@@ -492,8 +492,12 @@ meRoute.get("/reports", async (c) => {
   const user = c.get("user");
   const industryId = c.req.query("industryId");
   const docType = c.req.query("docType");
+  const view = c.req.query("view"); // all(기본, 숨김 제외) | bookmarks | hidden
   const conds = [eq(reports.userId, user.id)];
   if (docType === "industry" || docType === "company" || docType === "news") conds.push(eq(reports.docType, docType));
+  if (view === "hidden") conds.push(eq(reports.hidden, true));
+  else conds.push(eq(reports.hidden, false)); // all·bookmarks 는 숨김 제외
+  if (view === "bookmarks") conds.push(eq(reports.bookmarked, true));
 
   const rows = industryId
     ? await db
@@ -514,6 +518,26 @@ meRoute.get("/reports", async (c) => {
         .limit(50);
 
   return c.json({ reports: await attachIndustries(rows) });
+});
+
+// 리포트 숨김/책갈피 토글(본인 리포트)
+const setReportFlag = (userId: string, id: string, patch: { hidden: boolean } | { bookmarked: boolean }) =>
+  db.update(reports).set(patch).where(and(eq(reports.id, id), eq(reports.userId, userId)));
+meRoute.post("/reports/:id/hide", async (c) => {
+  await setReportFlag(c.get("user").id, c.req.param("id"), { hidden: true });
+  return c.json({ ok: true });
+});
+meRoute.delete("/reports/:id/hide", async (c) => {
+  await setReportFlag(c.get("user").id, c.req.param("id"), { hidden: false });
+  return c.json({ ok: true });
+});
+meRoute.post("/reports/:id/bookmark", async (c) => {
+  await setReportFlag(c.get("user").id, c.req.param("id"), { bookmarked: true });
+  return c.json({ ok: true });
+});
+meRoute.delete("/reports/:id/bookmark", async (c) => {
+  await setReportFlag(c.get("user").id, c.req.param("id"), { bookmarked: false });
+  return c.json({ ok: true });
 });
 
 // POST /api/me/reports - 업로드(multipart). PDF 파일 또는 텍스트 입력. report 생성(parse_status=pending).
