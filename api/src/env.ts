@@ -27,4 +27,6 @@ export const env = {
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 25),
   // 용어 풀이 LLM: claude(CLI) | mock
   defineProvider: process.env.DEFINE_PROVIDER ?? "claude",
+  // 개발자 모드: 분석 무제한(무료 한도 게이팅 우회). 로컬 Claude CLI(무제한)와 함께 쓰는 본인 테스트용. 운영에서는 false.
+  devUnlimited: process.env.DEV_UNLIMITED === "true",
 };

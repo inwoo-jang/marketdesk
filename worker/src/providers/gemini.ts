@@ -18,7 +18,12 @@ export class GeminiProvider implements Provider {
     const res = await this.ai.models.generateContent({
       model: this.model,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { responseMimeType: "application/json", maxOutputTokens: maxTokens },
+      config: {
+        responseMimeType: "application/json",
+        maxOutputTokens: maxTokens,
+        // 2.5 계열은 추론(thinking) 모델 → 구조화 JSON 에선 thinking 비활성(출력 토큰 확보·속도·비용).
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     });
     return extractJson(res.text ?? "{}");
   }

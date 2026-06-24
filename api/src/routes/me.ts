@@ -36,6 +36,8 @@ async function bumpUsage(userId: string, day: string) {
 
 // 분석 1건 소비(게이팅). ok=false 면 한도 초과.
 async function consumeAnalysis(user: AppUser): Promise<{ ok: boolean; used: number; limit: number | null }> {
+  // 개발자 모드: 무제한(게이팅·집계 우회)
+  if (env.devUnlimited) return { ok: true, used: 0, limit: null };
   const day = seoulDay();
   if (user.plan === "pro") {
     await bumpUsage(user.id, day);
@@ -537,8 +539,10 @@ meRoute.get("/usage", async (c) => {
     .where(and(eq(usageDaily.userId, user.id), eq(usageDaily.day, day)))
     .limit(1);
   const used = row?.count ?? 0;
-  const limit = user.plan === "pro" ? null : FREE_DAILY_LIMIT;
-  return c.json({ plan: user.plan, used, limit, remaining: limit === null ? null : Math.max(0, limit - used) });
+  // 개발자 모드면 무제한(plan=pro 와 동일 표시)
+  const limit = env.devUnlimited || user.plan === "pro" ? null : FREE_DAILY_LIMIT;
+  const plan = env.devUnlimited ? "pro" : user.plan;
+  return c.json({ plan, used, limit, remaining: limit === null ? null : Math.max(0, limit - used) });
 });
 
 // GET /api/me/reports/:id/entries - 리포트의 렌즈별 엔트리 + 핵심숫자(검토 화면용)
