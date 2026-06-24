@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage } from "@/lib/api";
+import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage, type PublicContent } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
+import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
 import { LoginPanel } from "@/components/login-panel";
 import { UsageBadge } from "@/components/usage-badge";
@@ -20,11 +21,13 @@ export default function Home() {
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [recent, setRecent] = useState<Report[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [pub, setPub] = useState<PublicContent[]>([]);
+  const [hiddenList, setHiddenList] = useState<PublicContent[] | null>(null); // null=안 펼침
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }, u] = await Promise.all([
+    const [{ lenses }, { enabled, jobRole }, { jobRoles }, mi, { industries }, { reports }, u, pc] = await Promise.all([
       api.lenses(),
       api.myLenses(),
       api.jobRoles(),
@@ -32,6 +35,7 @@ export default function Home() {
       api.industries(),
       api.myReports(),
       api.usage(),
+      api.publicContents().catch(() => ({ contents: [] })),
     ]);
     setLenses(lenses);
     setJobRoles(jobRoles);
@@ -41,6 +45,7 @@ export default function Home() {
     setCatalog(industries);
     setRecent(reports);
     setUsage(u);
+    setPub(pc.contents);
   }, []);
 
   useEffect(() => {
@@ -123,6 +128,14 @@ export default function Home() {
   async function deleteReport(rid: string) {
     await api.deleteReport(rid);
     await loadData();
+  }
+  async function toggleHidden() {
+    if (hiddenList) {
+      setHiddenList(null);
+      return;
+    }
+    const { contents } = await api.hiddenContents().catch(() => ({ contents: [] }));
+    setHiddenList(contents);
   }
 
   return (
@@ -245,6 +258,52 @@ export default function Home() {
             {recent.map((r) => (
               <ReportCard key={r.id} report={r} onDelete={deleteReport} />
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* 추천 공개 콘텐츠(정책브리핑 등 공개소스) */}
+      <section className="mt-10">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-ink-muted">추천 공개 콘텐츠 ({pub.length})</h2>
+          <div className="flex items-center gap-3 text-xs">
+            <a href="/favorites" className="text-ink-sub hover:text-ink">🔖 즐겨찾기</a>
+            <button onClick={toggleHidden} className="text-ink-sub hover:text-ink">
+              {hiddenList ? "숨긴 항목 닫기" : "숨긴 항목 보기"}
+            </button>
+          </div>
+        </div>
+        {pub.length === 0 ? (
+          <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
+            공개 콘텐츠가 아직 없어요. (공개소스에서 핵심만 모아 보여드려요)
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {pub.map((c) => (
+              <PublicCard key={c.id} content={c} variant="feed" onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))} />
+            ))}
+          </div>
+        )}
+        {hiddenList && (
+          <div className="mt-4 rounded-card bg-bg-deep p-4">
+            <h3 className="mb-2 text-xs font-semibold text-ink-muted">숨긴 항목 ({hiddenList.length})</h3>
+            {hiddenList.length === 0 ? (
+              <p className="text-sm text-ink-sub">숨긴 항목이 없어요.</p>
+            ) : (
+              <div className="space-y-2">
+                {hiddenList.map((c) => (
+                  <PublicCard
+                    key={c.id}
+                    content={c}
+                    variant="hidden"
+                    onRemoved={(id) => {
+                      setHiddenList((l) => (l ? l.filter((x) => x.id !== id) : l));
+                      loadData();
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>

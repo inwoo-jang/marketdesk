@@ -10,6 +10,7 @@ const NAV = [
   { href: "/docs/industry", label: "산업리포트", match: (p: string) => p === "/docs/industry" },
   { href: "/docs/company", label: "기업리포트", match: (p: string) => p === "/docs/company" },
   { href: "/docs/news", label: "뉴스", match: (p: string) => p === "/docs/news" },
+  { href: "/favorites", label: "🔖 즐겨찾기", match: (p: string) => p === "/favorites" },
   { href: "/settings", label: "설정", match: (p: string) => p === "/settings" },
 ];
 

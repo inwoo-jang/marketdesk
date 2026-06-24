@@ -92,6 +92,19 @@ export const api = {
   llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm"),
   setLlmProvider: (provider: "claude" | "gemini") =>
     put<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm", { provider }),
+  publicContents: (params?: { industryId?: string; docType?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.industryId) q.set("industryId", params.industryId);
+    if (params?.docType) q.set("docType", params.docType);
+    const qs = q.toString();
+    return get<{ contents: PublicContent[] }>(`/api/me/public/contents${qs ? `?${qs}` : ""}`);
+  },
+  hiddenContents: () => get<{ contents: PublicContent[] }>("/api/me/public/hidden"),
+  bookmarkedContents: () => get<{ contents: PublicContent[] }>("/api/me/public/bookmarks"),
+  hidePublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/hide`),
+  unhidePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/hide`),
+  bookmarkPublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/bookmark`),
+  unbookmarkPublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/bookmark`),
   define: (term: string, context?: string) =>
     post<{ term: string; definition: string }>("/api/me/define", { term, context }),
   highlights: (reportId: string) => get<{ highlights: Highlight[] }>(`/api/me/reports/${reportId}/highlights`),
@@ -113,6 +126,19 @@ export type Rollup = {
 };
 
 export type Usage = { plan: "free" | "pro"; used: number; limit: number | null; remaining: number | null };
+
+export type PublicContent = {
+  id: string;
+  source: string;
+  sourceUrl: string;
+  title: string;
+  summary: string | null;
+  industryId: string | null;
+  industryName: string | null;
+  docType: "industry" | "company" | "news" | null;
+  pubDate: string | null;
+  isBookmarked: boolean;
+};
 
 export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "purple";
 export type Highlight = {

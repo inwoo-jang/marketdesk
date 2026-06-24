@@ -57,6 +57,13 @@
       "when": 1782282970332,
       "tag": "0007_famous_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782284214243,
+      "tag": "0008_milky_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

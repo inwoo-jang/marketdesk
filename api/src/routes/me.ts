@@ -15,6 +15,9 @@ import {
   usageDaily,
   highlights,
   userLlmSettings,
+  publicContents,
+  userPublicHidden,
+  userPublicBookmark,
   JOB_ROLES,
   type EntryFrame,
 } from "@reportlens/db";
@@ -158,6 +161,116 @@ meRoute.put("/llm", async (c) => {
       set: { analysisProvider: parsed.data.provider, updatedAt: new Date() },
     });
   return c.json({ isDeveloper: true, provider: parsed.data.provider });
+});
+
+// ===== 공개소스 콘텐츠(전역 공유) + 유저별 숨김/즐겨찾기 =====
+async function myPublicSets(userId: string) {
+  const [hidden, marks] = await Promise.all([
+    db.select({ id: userPublicHidden.contentId }).from(userPublicHidden).where(eq(userPublicHidden.userId, userId)),
+    db.select({ id: userPublicBookmark.contentId }).from(userPublicBookmark).where(eq(userPublicBookmark.userId, userId)),
+  ]);
+  return { hidden: new Set(hidden.map((r) => r.id)), bookmarked: new Set(marks.map((r) => r.id)) };
+}
+
+const shapePublic = (r: typeof publicContents.$inferSelect & { industryName: string | null }, bookmarked: boolean) => ({
+  id: r.id,
+  source: r.source,
+  sourceUrl: r.sourceUrl,
+  title: r.title,
+  summary: r.summary,
+  industryId: r.industryId,
+  industryName: r.industryName,
+  docType: r.docType,
+  pubDate: r.pubDate,
+  isBookmarked: bookmarked,
+});
+
+async function fetchPublic(where: ReturnType<typeof and> | ReturnType<typeof eq> | undefined) {
+  return db
+    .select({
+      id: publicContents.id,
+      source: publicContents.source,
+      sourceUrl: publicContents.sourceUrl,
+      title: publicContents.title,
+      summary: publicContents.summary,
+      industryId: publicContents.industryId,
+      industryName: industries.name,
+      docType: publicContents.docType,
+      pubDate: publicContents.pubDate,
+      createdAt: publicContents.createdAt,
+    })
+    .from(publicContents)
+    .leftJoin(industries, eq(industries.id, publicContents.industryId))
+    .where(where)
+    .orderBy(desc(publicContents.pubDate), desc(publicContents.createdAt))
+    .limit(200);
+}
+
+// GET /api/me/public/contents?industryId=&docType= - 공개 콘텐츠(내 숨김 제외) + 즐겨찾기 플래그
+meRoute.get("/public/contents", async (c) => {
+  const user = c.get("user");
+  const industryId = c.req.query("industryId");
+  const docTypeQ = c.req.query("docType");
+  const conds = [];
+  if (industryId) conds.push(eq(publicContents.industryId, industryId));
+  if (docTypeQ === "industry" || docTypeQ === "company" || docTypeQ === "news")
+    conds.push(eq(publicContents.docType, docTypeQ));
+  const { hidden, bookmarked } = await myPublicSets(user.id);
+  const rows = await fetchPublic(conds.length ? and(...conds) : undefined);
+  const contents = rows.filter((r) => !hidden.has(r.id)).map((r) => shapePublic(r, bookmarked.has(r.id)));
+  return c.json({ contents });
+});
+
+// GET /api/me/public/hidden - 내가 숨긴 공개 콘텐츠(다시 공개용)
+meRoute.get("/public/hidden", async (c) => {
+  const user = c.get("user");
+  const { hidden, bookmarked } = await myPublicSets(user.id);
+  if (hidden.size === 0) return c.json({ contents: [] });
+  const rows = await fetchPublic(inArray(publicContents.id, [...hidden]));
+  return c.json({ contents: rows.map((r) => shapePublic(r, bookmarked.has(r.id))) });
+});
+
+// GET /api/me/public/bookmarks - 즐겨찾기 따로보기
+meRoute.get("/public/bookmarks", async (c) => {
+  const user = c.get("user");
+  const { bookmarked } = await myPublicSets(user.id);
+  if (bookmarked.size === 0) return c.json({ contents: [] });
+  const rows = await fetchPublic(inArray(publicContents.id, [...bookmarked]));
+  return c.json({ contents: rows.map((r) => shapePublic(r, true)) });
+});
+
+// 숨김 추가/해제
+meRoute.post("/public/:id/hide", async (c) => {
+  const user = c.get("user");
+  await db
+    .insert(userPublicHidden)
+    .values({ userId: user.id, contentId: c.req.param("id") })
+    .onConflictDoNothing();
+  return c.json({ ok: true });
+});
+meRoute.delete("/public/:id/hide", async (c) => {
+  const user = c.get("user");
+  await db
+    .delete(userPublicHidden)
+    .where(and(eq(userPublicHidden.userId, user.id), eq(userPublicHidden.contentId, c.req.param("id"))));
+  return c.json({ ok: true });
+});
+
+// 즐겨찾기 추가/해제
+meRoute.post("/public/:id/bookmark", async (c) => {
+  const user = c.get("user");
+  await db
+    .insert(userPublicBookmark)
+    .values({ userId: user.id, contentId: c.req.param("id") })
+    .onConflictDoNothing();
+  return c.json({ ok: true });
+});
+meRoute.delete("/public/:id/bookmark", async (c) => {
+  const user = c.get("user");
+  await db
+    .delete(userPublicBookmark)
+    .where(and(eq(userPublicBookmark.userId, user.id), eq(userPublicBookmark.contentId, c.req.param("id"))));
+  return c.json({ ok: true });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)

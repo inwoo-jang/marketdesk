@@ -2,8 +2,9 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, type MyIndustry, type Industry, type Report, type Rollup } from "@/lib/api";
+import { api, type MyIndustry, type Industry, type Report, type Rollup, type PublicContent } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
+import { PublicCard } from "@/components/public-card";
 
 const monthKey = (r: Report) => (r.pubDate ?? r.createdAt).slice(0, 7);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -15,6 +16,7 @@ export default function IndustryDashboard() {
   const [pinned, setPinned] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [rollups, setRollups] = useState<Rollup[]>([]);
+  const [pub, setPub] = useState<PublicContent[]>([]);
   const [period, setPeriod] = useState(thisMonth());
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -25,16 +27,18 @@ export default function IndustryDashboard() {
       window.location.href = "/login";
       return;
     }
-    const [mi, { industries: catalog }, { reports }, { rollups }] = await Promise.all([
+    const [mi, { industries: catalog }, { reports }, { rollups }, pc] = await Promise.all([
       api.myIndustries(),
       api.industries(),
       api.myReports({ industryId: id }),
       api.rollups(id),
+      api.publicContents({ industryId: id }).catch(() => ({ contents: [] })),
     ]);
     setIndustry(mi.industries.find((i: MyIndustry) => i.id === id) ?? catalog.find((i: Industry) => i.id === id) ?? null);
     setPinned(mi.industries.some((i) => i.id === id));
     setReports(reports);
     setRollups(rollups);
+    setPub(pc.contents);
     if (reports[0]) setPeriod(monthKey(reports[0]));
     setLoaded(true);
   }, [id]);
@@ -200,6 +204,18 @@ export default function IndustryDashboard() {
           </div>
         )}
       </section>
+
+      {/* 이 산업의 공개 콘텐츠(추천) */}
+      {pub.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-3 text-sm font-semibold text-ink-muted">공개 콘텐츠 ({pub.length})</h2>
+          <div className="space-y-2">
+            {pub.map((c) => (
+              <PublicCard key={c.id} content={c} variant="feed" onRemoved={(cid) => setPub((p) => p.filter((x) => x.id !== cid))} />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

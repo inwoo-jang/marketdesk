@@ -8,6 +8,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "once": "tsx src/main.ts --once",
+    "ingest": "tsx src/ingest.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
