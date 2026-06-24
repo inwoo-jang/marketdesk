@@ -91,6 +91,10 @@ export const api = {
   usage: () => get<Usage>("/api/me/usage"),
   define: (term: string, context?: string) =>
     post<{ term: string; definition: string }>("/api/me/define", { term, context }),
+  highlights: (reportId: string) => get<{ highlights: Highlight[] }>(`/api/me/reports/${reportId}/highlights`),
+  addHighlight: (reportId: string, input: { startOffset: number; endOffset: number; color: HighlightColor; text: string }) =>
+    post<{ highlight: Highlight }>(`/api/me/reports/${reportId}/highlights`, input),
+  deleteHighlight: (hid: string) => del<{ ok: true }>(`/api/me/highlights/${hid}`),
   rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
   createRollup: (industryId: string, period: string) =>
     post<{ rollup: Rollup }>(`/api/me/industries/${industryId}/rollups`, { period }),
@@ -106,6 +110,15 @@ export type Rollup = {
 };
 
 export type Usage = { plan: "free" | "pro"; used: number; limit: number | null; remaining: number | null };
+
+export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "purple";
+export type Highlight = {
+  id: string;
+  startOffset: number;
+  endOffset: number;
+  color: HighlightColor;
+  text: string;
+};
 
 export type MyIndustry = { id: string; name: string; slug: string; iconColor: string | null; isCustom: boolean };
 export type Entry = {

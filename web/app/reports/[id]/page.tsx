@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry } from "@/lib/api";
 import { WordLookup } from "@/components/word-lookup";
+import { Highlighter } from "@/components/highlighter";
 
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
 
@@ -14,6 +15,7 @@ export default function ReportReviewPage() {
   const [entry, setEntry] = useState<EntryFull | null>(null);
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hlKey, setHlKey] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -21,6 +23,7 @@ export default function ReportReviewPage() {
     setReport(d.report);
     setEntry(d.entries[0] ?? null);
     setCatalog(industries);
+    setHlKey((k) => k + 1);
     setLoaded(true);
   }, [id]);
 
@@ -94,7 +97,10 @@ export default function ReportReviewPage() {
       )}
 
       {report.parseStatus === "parsed" && entry && (
-        <WordLookup targetRef={contentRef} contextText={`${report.title ?? ""} ${entry.frame?.summary ?? ""}`} />
+        <>
+          <Highlighter reportId={id} rootRef={contentRef} ready={loaded} reloadKey={hlKey} />
+          <WordLookup targetRef={contentRef} contextText={`${report.title ?? ""} ${entry.frame?.summary ?? ""}`} />
+        </>
       )}
     </main>
   );
@@ -253,6 +259,7 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
         )}
       </div>
 
+      <div data-highlight-root className="space-y-6">
       {/* 핵심 하이라이트 */}
       {editing ? (
         <Section title="⭐ 핵심 하이라이트">
@@ -348,6 +355,7 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
           </ul>
         )}
       </Section>
+      </div>
     </section>
   );
 }

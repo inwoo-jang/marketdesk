@@ -13,6 +13,7 @@ import {
   rollups,
   rollupFacts,
   usageDaily,
+  highlights,
   JOB_ROLES,
   type EntryFrame,
 } from "@reportlens/db";
@@ -65,6 +66,58 @@ meRoute.post("/define", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid body" }, 400);
   const definition = await defineTerm(parsed.data.term, parsed.data.context);
   return c.json({ term: parsed.data.term, definition });
+});
+
+// ===== 형광펜 하이라이트(리포트 본문) =====
+const highlightSchema = z.object({
+  startOffset: z.number().int().min(0),
+  endOffset: z.number().int().min(0),
+  color: z.enum(["yellow", "green", "blue", "pink", "purple"]),
+  text: z.string().min(1).max(2000),
+});
+
+async function ownReport(userId: string, reportId: string) {
+  const [r] = await db
+    .select({ id: reports.id })
+    .from(reports)
+    .where(and(eq(reports.id, reportId), eq(reports.userId, userId)))
+    .limit(1);
+  return r;
+}
+
+// GET /api/me/reports/:id/highlights
+meRoute.get("/reports/:id/highlights", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  if (!(await ownReport(user.id, id))) return c.json({ error: "리포트 없음" }, 404);
+  const rows = await db
+    .select()
+    .from(highlights)
+    .where(and(eq(highlights.reportId, id), eq(highlights.userId, user.id)))
+    .orderBy(highlights.startOffset);
+  return c.json({ highlights: rows });
+});
+
+// POST /api/me/reports/:id/highlights
+meRoute.post("/reports/:id/highlights", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const parsed = highlightSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  if (parsed.data.endOffset <= parsed.data.startOffset) return c.json({ error: "invalid range" }, 400);
+  if (!(await ownReport(user.id, id))) return c.json({ error: "리포트 없음" }, 404);
+  const [row] = await db
+    .insert(highlights)
+    .values({ userId: user.id, reportId: id, ...parsed.data })
+    .returning();
+  return c.json({ highlight: row });
+});
+
+// DELETE /api/me/highlights/:hid
+meRoute.delete("/highlights/:hid", async (c) => {
+  const user = c.get("user");
+  await db.delete(highlights).where(and(eq(highlights.id, c.req.param("hid")), eq(highlights.userId, user.id)));
+  return c.json({ ok: true });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
