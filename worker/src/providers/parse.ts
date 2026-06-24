@@ -26,8 +26,11 @@ export function extractJson(text: string): Record<string, unknown> {
   }
 }
 
-const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
-const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+// 문자열 정리: 마크다운 볼드(**) 마커 제거(UI 는 평문 렌더). 빈 값은 undefined.
+const clean = (s: string) => s.replace(/\*\*/g, "").trim();
+const str = (v: unknown) => (typeof v === "string" && v.trim() ? clean(v) : undefined);
+const arr = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map(clean).filter(Boolean) : [];
 
 export function parseMeta(o: Record<string, unknown>, industries: string[]): DocMeta {
   const dt = o.doc_type;
@@ -48,6 +51,7 @@ export function parseFrame(o: Record<string, unknown>, ctx: ExtractCtx): EntryFr
   const facts = (o.facts ?? {}) as Record<string, unknown>;
   const persp = (o.perspectives ?? {}) as Record<string, unknown>;
   const frame: EntryFrame = {
+    highlight: str(o.highlight),
     summary: str(o.summary),
     facts: { what: str(facts.what), numbers: str(facts.numbers), sourceDate: str(facts.sourceDate) },
     drivers: arr(o.drivers),

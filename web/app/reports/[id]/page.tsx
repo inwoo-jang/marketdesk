@@ -155,8 +155,18 @@ function TextBlock({ value, edit, onChange, rows = 2 }: { value?: string; edit: 
     );
   return <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{value?.trim() || <span className="text-ink-muted">명시 없음</span>}</p>;
 }
-// 읽기/편집 겸용 리스트(편집은 줄바꿈 구분)
-function ListBlock({ items, edit, onChange }: { items?: string[]; edit: boolean; onChange: (v: string[]) => void }) {
+// 읽기/편집 겸용 리스트(편집은 줄바꿈 구분). tone 으로 마커 색 구분(동인=파랑, 리스크=주황).
+function ListBlock({
+  items,
+  edit,
+  onChange,
+  tone = "default",
+}: {
+  items?: string[];
+  edit: boolean;
+  onChange: (v: string[]) => void;
+  tone?: "default" | "driver" | "risk";
+}) {
   if (edit)
     return (
       <textarea
@@ -168,10 +178,14 @@ function ListBlock({ items, edit, onChange }: { items?: string[]; edit: boolean;
       />
     );
   if (!items || items.length === 0) return <p className="text-sm text-ink-muted">명시 없음</p>;
+  const dot = tone === "risk" ? "bg-amber-500" : tone === "driver" ? "bg-primary" : "bg-ink-muted";
   return (
-    <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
+    <ul className="space-y-1.5 text-sm text-ink">
       {items.map((it, i) => (
-        <li key={i}>{it}</li>
+        <li key={i} className="flex gap-2">
+          <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+          <span className="leading-relaxed">{it}</span>
+        </li>
       ))}
     </ul>
   );
@@ -231,6 +245,20 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
         )}
       </div>
 
+      {/* 핵심 하이라이트 */}
+      {editing ? (
+        <Section title="⭐ 핵심 하이라이트">
+          <TextBlock value={f.highlight} edit onChange={(v) => set({ highlight: v })} rows={2} />
+        </Section>
+      ) : (
+        f.highlight?.trim() && (
+          <div className="rounded-xl border-l-4 border-primary bg-primary/5 p-4">
+            <div className="mb-0.5 text-xs font-semibold text-primary">⭐ 핵심</div>
+            <p className="text-[15px] font-semibold leading-snug text-ink">{f.highlight.replace(/\*\*/g, "")}</p>
+          </div>
+        )
+      )}
+
       <Section title="① 한 줄 요약">
         <TextBlock value={f.summary} edit={editing} onChange={(v) => set({ summary: v })} />
       </Section>
@@ -246,11 +274,11 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
       </Section>
 
       <Section title="③ 동인 · 맥락">
-        <ListBlock items={f.drivers} edit={editing} onChange={(v) => set({ drivers: v })} />
+        <ListBlock items={f.drivers} edit={editing} onChange={(v) => set({ drivers: v })} tone="driver" />
       </Section>
 
       <Section title="④ 리스크 · 쟁점">
-        <ListBlock items={f.risks} edit={editing} onChange={(v) => set({ risks: v })} />
+        <ListBlock items={f.risks} edit={editing} onChange={(v) => set({ risks: v })} tone="risk" />
       </Section>
 
       {(inv || (editing && entry.frame?.perspectives?.investment)) && (
@@ -283,20 +311,26 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
         {entry.numbers.length === 0 ? (
           <p className="text-sm text-ink-sub">추출된 숫자가 없어요.</p>
         ) : (
-          <ul className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
             {entry.numbers.map((n) => (
-              <li key={n.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-medium">{n.label}</span>
+              <span
+                key={n.id}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${
+                  n.verified ? "border-success-text/30 bg-success-bg" : "border-line bg-bg-deep"
+                }`}
+                title={n.verified ? "출처 페이지에서 확인됨" : "출처 미확인"}
+              >
+                <span className="font-semibold">{n.label}</span>
                 <span>{n.value}</span>
-                {n.pageNo != null && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-xs text-ink-muted">p.{n.pageNo}</span>}
+                {n.pageNo != null && <span className="text-xs text-ink-muted">[p.{n.pageNo}]</span>}
                 {n.verified ? (
-                  <span className="rounded-full bg-success-bg px-2 py-0.5 text-xs text-success-text">출처확인</span>
+                  <span className="text-xs font-medium text-success-text">✓</span>
                 ) : (
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-500">미확인</span>
+                  <span className="text-xs text-amber-600">미확인</span>
                 )}
-              </li>
+              </span>
             ))}
-          </ul>
+          </div>
         )}
         {(f.sources ?? []).length > 0 && (
           <ul className="mt-2 text-xs text-ink-muted">

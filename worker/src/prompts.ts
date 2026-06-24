@@ -77,14 +77,16 @@ export function buildExtractPrompt(document: string, ctx: { docType: string; len
     `아래 문서(페이지는 '=== p.N ===' 구분)를 분석해 JSON 으로만 답하라.\n` +
     `${docTypeGuide(ctx.docType)}\n\n` +
     `필드:\n` +
-    `- summary: 한 줄 요약.\n` +
-    `- facts: {what(무엇을), numbers(핵심 수치 요약), sourceDate(출처 기준일)}.\n` +
-    `- drivers: 동인·맥락 배열.\n` +
-    `- risks: 리스크·쟁점 배열.\n` +
+    `- highlight: 이 문서에서 가장 중요한 한 가지(핵심 takeaway). 한 문장, 굵게 강조할 결론.\n` +
+    `- summary: 한 줄 요약(60자 내외).\n` +
+    `- facts: {what(무엇을, 1문장), numbers(핵심 수치 요약), sourceDate(출처 기준일)}.\n` +
+    `- drivers: 동인·맥락 배열(각 항목 완결된 한 문장).\n` +
+    `- risks: 리스크·쟁점 배열(각 항목 완결된 한 문장).\n` +
     `- perspectives: 아래 관점만 채운다.\n${perspLines.join("\n")}\n` +
     `- sources: [{item, source, date}] 배열.\n` +
-    `- numbers: 핵심 수치 5~10개 [{label, value, page_no}] (page_no = '=== p.N ===' 의 N).\n\n` +
-    `출력 JSON: {"summary":"","facts":{"what":"","numbers":"","sourceDate":""},"drivers":[],"risks":[],"perspectives":{${perspJson}},"sources":[],"numbers":[]}\n\n` +
+    `- numbers: 핵심 수치 5~10개 [{label(짧은 이름), value, page_no}] (page_no = '=== p.N ===' 의 N).\n\n` +
+    `일관성 규칙: 모든 문서를 동일 틀·동일 어조(간결한 평서문)로. 배열 항목은 한 줄씩. 빈 항목은 추측하지 말고 비운다.\n` +
+    `출력 JSON: {"highlight":"","summary":"","facts":{"what":"","numbers":"","sourceDate":""},"drivers":[],"risks":[],"perspectives":{${perspJson}},"sources":[],"numbers":[]}\n\n` +
     `${GUARDRAIL}${STRICT_JSON}\n\n--- 문서 ---\n${document}`
   );
 }

@@ -82,6 +82,7 @@ export class MockProvider implements Provider {
     const oneLine = cleanNoise(document.replace(/=== p\.\d+ ===/g, " "));
     const dt = ctx.docType === "company" ? "기업" : ctx.docType === "news" ? "뉴스" : "산업";
     const frame: ExtractedEntry["frame"] = {
+      highlight: `(mock·${dt}) 핵심 한 가지: ${oneLine.slice(0, 40)}`,
       summary: `(mock·${dt}) ${oneLine.slice(0, 60)}`,
       facts: {
         what: `(mock) ${dt} 핵심 사실 요약`,

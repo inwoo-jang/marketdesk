@@ -129,6 +129,7 @@ export type Report = {
 };
 export type AnalysisSource = { item: string; source: string; date: string };
 export type EntryFrame = {
+  highlight?: string;
   summary?: string;
   facts?: { what?: string; numbers?: string; sourceDate?: string };
   drivers?: string[];

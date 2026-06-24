@@ -22,6 +22,7 @@ export type CareerPerspective = {
 };
 export type AnalysisSource = { item: string; source: string; date: string };
 export type EntryFrame = {
+  highlight?: string; // 가장 중요한 한 가지(강조용 핵심 takeaway)
   summary?: string;
   facts?: { what?: string; numbers?: string; sourceDate?: string };
   drivers?: string[];

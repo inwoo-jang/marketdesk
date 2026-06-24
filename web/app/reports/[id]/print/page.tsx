@@ -57,6 +57,12 @@ export default function ReportPrintPage() {
         <p className="mt-6 text-sm text-ink-sub">아직 분석이 완료되지 않았습니다.</p>
       ) : (
         <div className="mt-6 space-y-5 text-sm leading-relaxed">
+          {f.highlight?.trim() && (
+            <div className="rounded-lg border-l-4 border-primary bg-primary/5 p-3">
+              <span className="text-xs font-semibold text-primary">⭐ 핵심 </span>
+              <span className="font-semibold">{f.highlight.replace(/\*\*/g, "")}</span>
+            </div>
+          )}
           <Block title="① 한 줄 요약">{f.summary}</Block>
           <Block title="② 핵심 사실">
             {f.facts?.what}
