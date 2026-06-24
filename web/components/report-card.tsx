@@ -41,8 +41,7 @@ export function ReportCard({ report, onDelete }: { report: Report; onDelete?: (i
                   {i.name}
                 </span>
               ))}
-              {pub && <span>발간 {pub}</span>}
-              {added && <span>· 추가 {added}</span>}
+              {(pub ?? added) && <span>발간 {pub ?? added}</span>}
             </div>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${s.c}`}>{s.t}</span>

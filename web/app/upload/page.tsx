@@ -94,7 +94,7 @@ export default function UploadPage() {
     <main className="mx-auto max-w-lg px-6 py-12">
       <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
       <div className="mt-4 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">리포트 업로드</h1>
+        <h1 className="text-2xl font-bold">업로드</h1>
         <UsageBadge usage={usage} />
       </div>
       <p className="mt-2 text-sm text-ink-sub">산업·기업 리포트나 경제뉴스를 올리면 선택한 렌즈로 정리됩니다.</p>

@@ -150,7 +150,7 @@ export default function Home() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink-muted">내 산업 ({myIndustries.length})</h2>
           <a href="/upload" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white">
-            + 리포트 업로드
+            + 업로드
           </a>
         </div>
 
@@ -238,7 +238,7 @@ export default function Home() {
         <h2 className="mb-3 text-sm font-semibold text-ink-muted">최근 리포트 ({recent.length})</h2>
         {recent.length === 0 ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            업로드한 리포트가 없어요. 우측 상단 &quot;+ 리포트 업로드&quot;로 PDF·텍스트를 올려보세요.
+            업로드한 자료가 없어요. 우측 상단 &quot;+ 업로드&quot;로 리포트·뉴스(PDF·텍스트)를 올려보세요.
           </p>
         ) : (
           <div className="space-y-2">
