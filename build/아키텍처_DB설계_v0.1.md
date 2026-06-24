@@ -196,7 +196,21 @@ file_key  text   -- S3
 created_at timestamptz DEFAULT now()
 ```
 
-관계 요약: users 1—N industries(커스텀)/reports/entries/rollups. reports 1—N report_pages/entries. entries 1—N entry_numbers. rollups 1—N rollup_facts, N—N entries(rollup_sources). 멀티렌즈 = entries가 (report, lens)별로 분리 → 시간뷰·롤업이 lens_key로 자연 분리.
+### highlights  (형광펜 하이라이트, 리포트 본문 직접 칠하기)
+```
+id           uuid PK
+user_id      uuid FK->users ON DELETE CASCADE
+report_id    uuid FK->reports ON DELETE CASCADE
+start_offset int    -- 분석 본문(data-highlight-root) textContent 기준 시작 문자 위치
+end_offset   int    -- 끝 위치
+color        text   -- 'yellow'|'green'|'blue'|'pink'|'purple' (연한 5색)
+text         text   -- 칠한 텍스트 스냅샷(콘텐츠 드리프트 시 복원 검증·스킵용)
+created_at   timestamptz DEFAULT now()
+INDEX (report_id, user_id)
+```
+> 위치를 DOM 경로가 아닌 결정적 textContent offset 으로 저장 → 새로고침 시 본문 재렌더 후 재적용. 저장 당시 text 와 현재 슬라이스가 다르면(편집 등) 해당 하이라이트는 조용히 스킵.
+
+관계 요약: users 1—N industries(커스텀)/reports/entries/rollups/highlights. reports 1—N report_pages/entries/highlights. entries 1—N entry_numbers. rollups 1—N rollup_facts, N—N entries(rollup_sources). 멀티렌즈 = entries가 (report, lens)별로 분리 → 시간뷰·롤업이 lens_key로 자연 분리.
 
 ---
 

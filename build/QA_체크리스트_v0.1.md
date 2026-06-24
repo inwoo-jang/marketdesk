@@ -20,6 +20,9 @@
 | 12 | 요금 한도 | 무료 하루 3회, 초과 시 402(Pro/BYO 안내) | ✅ |
 | 13 | PDF 내보내기 | 검토→인쇄 뷰(①~⑥+관점+면책), 브라우저 PDF 저장 | ✅ (라우트 200) |
 | 14 | LLM 라우터 | mock(키 불필요)/claude(CLI)/gemini 전환 | ✅ (mock·claude 검증) |
+| 15 | 단어 풀이 | 단어 클릭/검색 → AI 100자 설명, 약어 정식명 병기, 맥락 다의어 식별, 조사 분리 | ✅ (PBR·루닛·증산 검증, 17s→6s) |
+| 16 | 형광펜 | 본문 선택→5색 칠하기, 클릭→삭제, 새로고침 복원 | ✅ (CRUD E2E) |
+| 17 | 랜딩/한도표시 | 로그아웃=랜딩+로그인, 잔여 무료 N/3 표시, 소진 시 업로드 차단 | ✅ |
 
 ## 라우트 점검 (HTTP 200)
 `/` · `/login` · `/upload` · `/settings` · `/docs/industry|company|news` · `/industry/[id]` · `/reports/[id]` · `/reports/[id]/print`
