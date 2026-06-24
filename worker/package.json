@@ -11,15 +11,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@google/genai": "^0.3.0",
     "@reportlens/db": "workspace:*",
     "drizzle-orm": "^0.38.3",
+    "jsonrepair": "^3.14.0",
     "unpdf": "^0.12.1",
-    "@google/genai": "^0.3.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.5",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "@types/node": "^22.10.5"
+    "typescript": "^5.7.2"
   }
 }

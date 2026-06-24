@@ -1,3 +1,4 @@
+import { jsonrepair } from "jsonrepair";
 import type { EntryFrame } from "@reportlens/db";
 import type { DocMeta, DocType, ExtractCtx, ExtractedNumber, RollupResult, RollupFact } from "./types.js";
 
@@ -11,11 +12,16 @@ export function extractJson(text: string): Record<string, unknown> {
   try {
     return JSON.parse(body) as Record<string, unknown>;
   } catch {
-    // 폴백: 문자열 값 안의 실제 줄바꿈/탭을 공백으로 치환해 재시도(모델이 멀티라인 string 을 낸 경우)
+    // 폴백1: 줄바꿈/탭 공백화 후 재시도
     try {
       return JSON.parse(body.replace(/[\r\n\t]+/g, " ")) as Record<string, unknown>;
     } catch {
-      return {};
+      // 폴백2: jsonrepair 로 견고 복구(문자열 내 따옴표·trailing comma 등 LLM 흔한 깨짐)
+      try {
+        return JSON.parse(jsonrepair(body)) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
     }
   }
 }
