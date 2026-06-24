@@ -94,19 +94,27 @@ export default function BoardPage() {
           ))}
         </div>
 
-        {dim === "industry" && (
-          <select
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            className="rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-primary"
-          >
-            {scopes.industries.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
-        )}
+        {dim === "industry" &&
+          (scopes.industries.length > 0 ? (
+            <select
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              className="rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+            >
+              {scopes.industries.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-sm text-ink-muted">
+              관심 산업(★)이 없어요.{" "}
+              <a href="/" className="text-primary hover:underline">
+                대시보드에서 ★ 추가
+              </a>
+            </span>
+          ))}
         {dim === "company" &&
           (scopes.companies.length > 0 ? (
             <select

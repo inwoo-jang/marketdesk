@@ -363,13 +363,15 @@ meRoute.post("/board/generate", async (c) => {
   return c.json({ rollup });
 });
 
-// GET /api/me/board/scopes - 보드 선택지(산업 + 내 기업 목록)
+// GET /api/me/board/scopes - 보드 선택지(★ 관심 산업 + 내 기업 목록)
 meRoute.get("/board/scopes", async (c) => {
   const user = c.get("user");
   const inds = await db
     .select({ id: industries.id, name: industries.name })
-    .from(industries)
-    .where(isNull(industries.userId));
+    .from(userIndustries)
+    .innerJoin(industries, eq(industries.id, userIndustries.industryId))
+    .where(eq(userIndustries.userId, user.id))
+    .orderBy(industries.sort, industries.name);
   const companyRows = await db
     .selectDistinct({ company: reports.company })
     .from(reports)
