@@ -43,6 +43,13 @@
       "when": 1782203883678,
       "tag": "0005_rollup_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782280028748,
+      "tag": "0006_fancy_sphinx",
+      "breakpoints": true
     }
   ]
 }

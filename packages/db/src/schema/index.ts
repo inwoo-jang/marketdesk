@@ -6,3 +6,4 @@ export * from "./reports";
 export * from "./entries";
 export * from "./rollups";
 export * from "./settings";
+export * from "./highlights";
