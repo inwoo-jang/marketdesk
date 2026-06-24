@@ -26,9 +26,22 @@ export function extractJson(text: string): Record<string, unknown> {
   }
 }
 
-// 문자열 정리: 마크다운 볼드(**) 마커 제거(UI 는 평문 렌더). 빈 값은 undefined.
-const clean = (s: string) => s.replace(/\*\*/g, "").trim();
-const str = (v: unknown) => (typeof v === "string" && v.trim() ? clean(v) : undefined);
+// 채움 문구(명시 없음/해당 없음/N/A 등)를 담은 절을 제거. UI 가 빈 값에 placeholder 를 따로 표시하므로 본문엔 불필요.
+const FILLER = /\s*[^.,;:·()]*?(?:명시\s*없음|해당\s*없음|정보\s*없음|언급\s*없음|확인\s*불가|N\s*\/?\s*A)\.?/gi;
+// 문자열 정리: 마크다운 볼드(**) 제거 + 채움 문구 절 제거 + 양끝 구분자 정리. 결과가 비면 undefined.
+const clean = (s: string) =>
+  s
+    .replace(/\*\*/g, "")
+    .replace(FILLER, "")
+    .replace(/([,;·])(?:\s*[,;·])+/g, "$1") // 연속 구분자 정리(절 제거 후 남는 ,, 등)
+    .replace(/^[\s,.;·]+|[\s,.;·]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+const str = (v: unknown) => {
+  if (typeof v !== "string") return undefined;
+  const c = clean(v);
+  return c ? c : undefined;
+};
 const arr = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map(clean).filter(Boolean) : [];
 
