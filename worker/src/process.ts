@@ -33,7 +33,7 @@ export async function processReport(report: Report): Promise<void> {
     await db.update(reports).set({ pageCount }).where(eq(reports.id, report.id));
 
     const document = buildDocument(pages);
-    const provider = getProvider();
+    const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=claude 가능)
 
     // AI 메타 추출(제목·발간일·요약·타입·멀티산업) + 카탈로그 매칭. 확인된 산업은 덮지 않음.
     const catalog = await db

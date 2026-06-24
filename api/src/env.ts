@@ -29,4 +29,9 @@ export const env = {
   defineProvider: process.env.DEFINE_PROVIDER ?? "claude",
   // 개발자 모드: 분석 무제한(무료 한도 게이팅 우회). 로컬 Claude CLI(무제한)와 함께 쓰는 본인 테스트용. 운영에서는 false.
   devUnlimited: process.env.DEV_UNLIMITED === "true",
+  // 개발자 계정 이메일(쉼표 구분). 이 계정만 설정에서 분석 엔진(로컬 Claude CLI) 선택 가능.
+  devEmails: (process.env.DEV_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
 };

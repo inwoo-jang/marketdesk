@@ -14,6 +14,7 @@ import {
   rollupFacts,
   usageDaily,
   highlights,
+  userLlmSettings,
   JOB_ROLES,
   type EntryFrame,
 } from "@reportlens/db";
@@ -120,6 +121,43 @@ meRoute.delete("/highlights/:hid", async (c) => {
   const user = c.get("user");
   await db.delete(highlights).where(and(eq(highlights.id, c.req.param("hid")), eq(highlights.userId, user.id)));
   return c.json({ ok: true });
+});
+
+// ===== 분석 엔진(LLM) 설정 — 개발자 계정만 로컬 Claude CLI 선택 가능 =====
+const isDeveloper = (user: AppUser) => !!user.email && env.devEmails.includes(user.email.toLowerCase());
+
+// 이 사용자의 리포트에 적용할 분석 엔진 결정. 개발자가 claude 선택 시에만 claude, 그 외 gemini(기본).
+async function resolveProvider(user: AppUser): Promise<"claude" | "gemini"> {
+  if (!isDeveloper(user)) return "gemini";
+  const [s] = await db
+    .select({ p: userLlmSettings.analysisProvider })
+    .from(userLlmSettings)
+    .where(eq(userLlmSettings.userId, user.id))
+    .limit(1);
+  return s?.p === "claude" ? "claude" : "gemini";
+}
+
+// GET /api/me/llm - 분석 엔진 설정(개발자 여부 + 현재 선택)
+meRoute.get("/llm", async (c) => {
+  const user = c.get("user");
+  const provider = await resolveProvider(user);
+  return c.json({ isDeveloper: isDeveloper(user), provider });
+});
+
+// PUT /api/me/llm - 분석 엔진 변경(개발자만). { provider: 'claude'|'gemini' }
+meRoute.put("/llm", async (c) => {
+  const user = c.get("user");
+  if (!isDeveloper(user)) return c.json({ error: "개발자 계정만 변경할 수 있어요." }, 403);
+  const parsed = z.object({ provider: z.enum(["claude", "gemini"]) }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  await db
+    .insert(userLlmSettings)
+    .values({ userId: user.id, analysisProvider: parsed.data.provider })
+    .onConflictDoUpdate({
+      target: userLlmSettings.userId,
+      set: { analysisProvider: parsed.data.provider, updatedAt: new Date() },
+    });
+  return c.json({ isDeveloper: true, provider: parsed.data.provider });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
@@ -426,6 +464,7 @@ meRoute.post("/reports", async (c) => {
 
   const filename = inputFormat === "pdf" ? baseName + ".pdf" : baseName + ".txt";
   const { fileKey, size } = await storage.save(user.id, filename, bytes);
+  const llmProvider = await resolveProvider(user); // 개발자=설정값(claude 가능), 일반=gemini
 
   const [report] = await db
     .insert(reports)
@@ -438,6 +477,7 @@ meRoute.post("/reports", async (c) => {
       fileKey,
       fileSize: size,
       requestedLenses: requested,
+      llmProvider,
       parseStatus: "pending",
     })
     .returning();
@@ -525,7 +565,10 @@ meRoute.post("/reports/:id/extract", async (c) => {
   const quota = await consumeAnalysis(user);
   if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
 
-  await db.update(reports).set({ parseStatus: "pending" }).where(eq(reports.id, id));
+  await db
+    .update(reports)
+    .set({ parseStatus: "pending", llmProvider: await resolveProvider(user) })
+    .where(eq(reports.id, id));
   return c.json({ ok: true, parseStatus: "pending" });
 });
 

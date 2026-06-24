@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [myJobRole, setMyJobRole] = useState<string | undefined>();
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [llm, setLlm] = useState<{ isDeveloper: boolean; provider: "claude" | "gemini" } | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -21,17 +22,19 @@ export default function SettingsPage() {
         return;
       }
       setUser(me.user);
-      const [{ lenses }, { enabled, jobRole }, { jobRoles }, usage] = await Promise.all([
+      const [{ lenses }, { enabled, jobRole }, { jobRoles }, usage, llm] = await Promise.all([
         api.lenses(),
         api.myLenses(),
         api.jobRoles(),
         api.usage(),
+        api.llmSetting().catch(() => null),
       ]);
       setLenses(lenses);
       setMyLensKeys(enabled);
       setMyJobRole(jobRole);
       setJobRoles(jobRoles);
       setUsage(usage);
+      setLlm(llm);
       setLoaded(true);
     })();
   }, []);
@@ -108,6 +111,43 @@ export default function SettingsPage() {
           무료는 하루 3회 분석. 초과 시 Pro(무제한) 또는 본인 API 키로 계속할 수 있어요. (결제는 출시 단계)
         </p>
       </section>
+
+      {/* 분석 엔진 — 개발자 계정만 노출 */}
+      {llm?.isDeveloper && (
+        <section className="mt-4 rounded-card bg-card p-6 shadow-card">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink-muted">분석 엔진</h2>
+            <span className="rounded-full bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink-muted">DEV</span>
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">개발자 계정 전용. 새로 업로드/재분석하는 리포트에 적용됩니다.</p>
+          <div className="mt-3 flex gap-2">
+            {([
+              { key: "gemini", label: "Gemini (무료)", desc: "기본·일반 사용자용" },
+              { key: "claude", label: "로컬 Claude CLI (무제한)", desc: "내 구독 직접 호출" },
+            ] as const).map((opt) => {
+              const on = llm.provider === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={async () => {
+                    const r = await api.setLlmProvider(opt.key).catch(() => null);
+                    if (r) setLlm(r);
+                  }}
+                  className={`flex-1 rounded-xl border px-4 py-3 text-left ${
+                    on ? "border-primary bg-primary/10" : "border-line hover:bg-bg-deep"
+                  }`}
+                >
+                  <div className={`text-sm font-semibold ${on ? "text-primary" : "text-ink"}`}>
+                    {on ? "● " : "○ "}
+                    {opt.label}
+                  </div>
+                  <div className="mt-0.5 text-xs text-ink-muted">{opt.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

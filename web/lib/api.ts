@@ -89,6 +89,9 @@ export const api = {
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
   deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
   usage: () => get<Usage>("/api/me/usage"),
+  llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm"),
+  setLlmProvider: (provider: "claude" | "gemini") =>
+    put<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm", { provider }),
   define: (term: string, context?: string) =>
     post<{ term: string; definition: string }>("/api/me/define", { term, context }),
   highlights: (reportId: string) => get<{ highlights: Highlight[] }>(`/api/me/reports/${reportId}/highlights`),
