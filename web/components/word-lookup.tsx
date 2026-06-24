@@ -6,6 +6,20 @@ import { api } from "@/lib/api";
 // 떠다니는 용어 풀이 패널(스크롤 따라 고정). 단어 클릭 모드 ON 시 본문 아무 단어나 클릭 → AI 100자 설명.
 const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
 
+// 한국어 조사·어미 제거(클릭 단어용). "로드맵과"→"로드맵". 어간 2자 이상 유지, 한글 끝일 때만.
+const JOSA = [
+  "으로부터", "에서부터", "에게서", "으로서", "으로써", "이라는", "에서", "에게", "께서", "으로",
+  "처럼", "만큼", "보다", "까지", "부터", "조차", "마저", "이나", "에는", "로서", "로써", "라고",
+  "이라", "에", "의", "을", "를", "은", "는", "이", "가", "와", "과", "로", "도", "만", "랑", "나", "며",
+].sort((a, b) => b.length - a.length);
+function stripJosa(w: string): string {
+  if (!/[가-힣]$/.test(w)) return w; // 한글로 끝날 때만(영문 약어 등은 그대로)
+  for (const j of JOSA) {
+    if (w.endsWith(j) && w.length - j.length >= 2) return w.slice(0, w.length - j.length);
+  }
+  return w;
+}
+
 // 클릭 좌표의 단어 추출(브라우저 caret API)
 function wordAtPoint(x: number, y: number): string | null {
   const doc = document as Document & {
@@ -89,7 +103,7 @@ export function WordLookup({
     if (!clickMode || !el) return;
     const onClick = (e: MouseEvent) => {
       const w = wordAtPoint(e.clientX, e.clientY);
-      if (w) lookup(w);
+      if (w) lookup(stripJosa(w));
     };
     el.addEventListener("click", onClick);
     el.classList.add("cursor-help");

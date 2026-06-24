@@ -3,9 +3,14 @@ import { tmpdir } from "node:os";
 import { env } from "./env.js";
 
 // 용어 풀이(짧은 동기 호출). 워커와 동일하게 claude CLI 직접 호출(키 불필요), 실패/미설정 시 mock.
-function runClaude(prompt: string, timeoutMs = 60_000): Promise<string> {
+function runClaude(prompt: string, timeoutMs = 30_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const cp = spawn("claude", ["-p"], { stdio: ["pipe", "pipe", "pipe"], cwd: tmpdir() });
+    // 용어 풀이는 짧은 작업 → 빠른 Haiku + 전역 MCP 로딩 차단(시작 지연 최소화).
+    const cp = spawn(
+      "claude",
+      ["-p", "--model", "haiku", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'],
+      { stdio: ["pipe", "pipe", "pipe"], cwd: tmpdir() },
+    );
     let out = "";
     let err = "";
     const timer = setTimeout(() => {
