@@ -25,7 +25,7 @@
 
 핵심 설계 결정:
 - **추출은 비동기**(SQS+워커, 로컬은 DB 폴링). 파싱+LLM은 길어서 동기 요청 타임아웃 회피. 멀티 렌즈는 워커에서 렌즈별 처리(파싱 1회 캐싱).
-- **AI 자동 분류**: 워커가 문서 타입(산업/기업/뉴스)과 산업(표준 22 세트)을 분류해 `reports.doc_type`/`industry_id` 에 기록(사용자 확인·수정). 취업 렌즈는 사용자 직무(`user_lenses.config.jobRole`)에 따라 추출 관점을 조정.
+- **AI 자동 분류**: 워커가 문서 타입(산업/기업/뉴스)과 산업(표준 23 세트)을 분류해 `reports.doc_type`/`industry_id` 에 기록(사용자 확인·수정). 취업 렌즈는 사용자 직무(`user_lenses.config.jobRole`)에 따라 추출 관점을 조정.
 - **멀티테넌트 스코핑은 API 계층에서** 강제(모든 쿼리에 Cognito JWT의 user_id 필터). RDS는 Supabase식 RLS가 없으므로 애플리케이션에서 보장 + DB FK/제약으로 무결성.
 - **BYO**: 외부 수집 없음. 업로드는 presigned URL로 S3 직접, 사용자별 prefix로 격리.
 
@@ -76,7 +76,7 @@ icon_color text
 sort      int
 UNIQUE (user_id, slug)
 ```
-> 글로벌 카탈로그 = 네이버 증권 업종을 계열 통합한 표준 **22개 세트**(반도체·AI·IT·소프트웨어·디스플레이·전기전자·게임·미디어·광고·통신·자동차·조선·기계·운송·물류·철강·금속·석유·화학·에너지·유틸리티·건설·섬유·의류·화장품·음식료·제약·바이오·유통·여행·교육·금융·기타). 업로드 문서의 산업은 워커가 이 세트 중 하나로 AI 매칭.
+> 글로벌 카탈로그 = 네이버 증권 업종을 계열 통합한 표준 **23개 세트**(반도체·AI·IT·소프트웨어·디스플레이·전기전자·게임·미디어·광고·통신·자동차·조선·기계·운송·물류·철강·금속·석유·화학·에너지·유틸리티·환경·기후·건설·섬유·의류·화장품·음식료·제약·바이오·유통·여행·교육·금융·기타). 업로드 문서의 산업은 워커가 이 세트 중 하나로 AI 매칭.
 
 ### user_industries  (관심 산업 팔로우/정렬)
 ```
@@ -210,7 +210,27 @@ INDEX (report_id, user_id)
 ```
 > 위치를 DOM 경로가 아닌 결정적 textContent offset 으로 저장 → 새로고침 시 본문 재렌더 후 재적용. 저장 당시 text 와 현재 슬라이스가 다르면(편집 등) 해당 하이라이트는 조용히 스킵.
 
-관계 요약: users 1—N industries(커스텀)/reports/entries/rollups/highlights. reports 1—N report_pages/entries/highlights. entries 1—N entry_numbers. rollups 1—N rollup_facts, N—N entries(rollup_sources). 멀티렌즈 = entries가 (report, lens)별로 분리 → 시간뷰·롤업이 lens_key로 자연 분리.
+### public_contents  (공개소스 핵심 콘텐츠, 전역 공유)
+```
+id          uuid PK
+source      text   -- 'korea.kr' 등
+source_url  text UNIQUE  -- 원문 링크(중복 방지). 원문 재호스팅 X, 링크만
+title       text
+summary     text   -- 우리 AI 한줄요약
+industry_id uuid FK->industries  -- AI 매칭(핵심만 적재, 무관하면 미적재)
+doc_type    text   -- industry|company|news
+pub_date    date   -- 발간일(= 추가일)
+created_at  timestamptz DEFAULT now()
+```
+> 수집(worker ingest): 허용 공개 피드(정책브리핑 등) RSS → 로컬 Claude CLI 로 산업 배치 매칭 → 핵심만 적재. 저작권: 제목+요약+링크만(전문 재호스팅 금지).
+
+### user_public_hidden / user_public_bookmark  (유저별 오버레이)
+```
+user_public_hidden:   user_id FK, content_id FK->public_contents, PK(user_id, content_id)  -- 숨김/다시공개
+user_public_bookmark: user_id FK, content_id FK->public_contents, created_at, PK(user_id, content_id)  -- 즐겨찾기(책갈피)
+```
+
+관계 요약: users 1—N industries(커스텀)/reports/entries/rollups/highlights. 공개 콘텐츠는 전역(public_contents) + 유저별 숨김/즐겨찾기 오버레이. reports 1—N report_pages/entries/highlights. entries 1—N entry_numbers. rollups 1—N rollup_facts, N—N entries(rollup_sources). 멀티렌즈 = entries가 (report, lens)별로 분리 → 시간뷰·롤업이 lens_key로 자연 분리.
 
 ---
 

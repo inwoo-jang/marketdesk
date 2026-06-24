@@ -36,6 +36,7 @@ export const STANDARD_INDUSTRIES = [
   { name: "철강·금속", slug: "steel-metal", iconColor: "#78716C" },
   { name: "석유·화학", slug: "chemical", iconColor: "#A855F7" },
   { name: "에너지·유틸리티", slug: "energy-utility", iconColor: "#F59E0B" },
+  { name: "환경·기후", slug: "environment-climate", iconColor: "#22C55E" },
   { name: "건설·건자재", slug: "construction", iconColor: "#D97706" },
   { name: "섬유·의류", slug: "textile-apparel", iconColor: "#F43F5E" },
   { name: "화장품", slug: "cosmetics", iconColor: "#FB7185" },
