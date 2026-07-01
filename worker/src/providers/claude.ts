@@ -8,9 +8,9 @@ import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from ".
 // 프롬프트는 stdin 으로 전달(긴 문서 대응), 응답 텍스트(JSON) 를 받아 파싱.
 function runClaude(prompt: string, model: string | undefined, timeoutMs = 180_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const args = ["-p"];
+    // 전역 MCP 로딩 차단(시작 지연 대폭 감소) + cwd 중립 → 순수 JSON 응답·속도 확보.
+    const args = ["-p", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'];
     if (model) args.push("--model", model);
-    // cwd 를 중립 디렉터리로: 프로젝트 CLAUDE.md/AGENTS.md·MCP 컨텍스트 로드를 피해 순수 JSON 응답 확보.
     const cp = spawn("claude", args, { stdio: ["pipe", "pipe", "pipe"], cwd: tmpdir() });
     let out = "";
     let err = "";

@@ -78,7 +78,9 @@ export async function processReport(report: Report): Promise<void> {
     const industryId = primaryId;
 
     // 리포트당 1개 분석(공통 틀 + 켠 렌즈 관점). 가드레일용 numbers 동반.
-    const extracted = await provider.extract(document, { docType: meta.docType, lenses: lensKeys, jobRole });
+    // 대형 PDF(수십 페이지)는 원문 전체 전송 시 LLM 지연·타임아웃 → 상한(앞부분=핵심). 페이지 마커 유지.
+    const extractDoc = document.length > 24000 ? document.slice(0, 24000) : document;
+    const extracted = await provider.extract(extractDoc, { docType: meta.docType, lenses: lensKeys, jobRole });
     const numbers = verifyNumbers(extracted.numbers, pages);
 
     await db.delete(entries).where(eq(entries.reportId, report.id)); // 재추출 시 교체(엔트리 삭제 시 numbers cascade)
