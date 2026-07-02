@@ -113,7 +113,12 @@ export async function processReport(report: Report): Promise<void> {
     }
 
     // 흐름 자동 갱신: 이 자료가 속한 산업/기업/뉴스의 월·년 롤업을 pending 으로(워커가 이어서 처리).
-    await enqueueFlowRollups(report, entryDate, meta.docType, meta.company);
+    // 비치명적: 롤업 큐잉 실패가 리포트 분석 성공을 무효화하지 않도록 격리.
+    try {
+      await enqueueFlowRollups(report, entryDate, meta.docType, meta.company);
+    } catch (e) {
+      console.error(`흐름 큐잉 실패(분석은 성공) ${report.id}:`, e instanceof Error ? e.message : e);
+    }
 
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));
     console.log(
