@@ -44,11 +44,25 @@ export default function DocsFeed() {
   useEffect(() => {
     load().catch(() => setLoaded(true));
   }, [load]);
+  // 필터 URL 복원(리포트 클릭 → 뒤로가기 시 유지)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
+    if (q.get("by") === "industry" || q.get("by") === "group") setCompanyBy(q.get("by") as "group" | "industry");
     if (q.get("c")) setCompany(q.get("c"));
     if (q.get("i")) setIndFilter(q.get("i"));
+    if (q.get("g")) setGroupFilter(q.get("g"));
   }, []);
+  // 필터 변경 시 URL 저장
+  useEffect(() => {
+    if (!loaded) return;
+    const q = new URLSearchParams();
+    if (type === "company") q.set("by", companyBy);
+    if (indFilter) q.set("i", indFilter);
+    if (groupFilter) q.set("g", groupFilter);
+    if (company) q.set("c", company);
+    const qs = q.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [loaded, type, companyBy, indFilter, groupFilter, company]);
   useEffect(() => {
     if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
       const t = setInterval(() => load().catch(() => {}), 2500);
@@ -201,7 +215,12 @@ export default function DocsFeed() {
       {/* tier2: 기업 칩 */}
       {type === "company" && cFilter && companyChips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 border-l-2 border-line pl-2">
-          <Chip label={`${cFilter} 전체`} active={!company} onClick={() => setCompany(null)} small />
+          <Chip
+            label={`${companyBy === "group" ? cFilter : (indChips.find((ch) => ch.key === cFilter)?.label ?? "산업")} 전체`}
+            active={!company}
+            onClick={() => setCompany(null)}
+            small
+          />
           {companyChips.map((c) => (
             <Chip key={c} label={c} active={company === c} onClick={() => setCompany(c)} small />
           ))}

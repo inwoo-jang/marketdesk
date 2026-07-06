@@ -78,19 +78,32 @@ export function MemoLayer({
   const [positions, setPositions] = useState<Record<string, { top: number; left: number }>>({});
 
   // 각 메모를 앵커 오른쪽 여백에 배치(문서 절대좌표 → 스크롤 동행). 리플로우/리사이즈 시 재계산.
+  // 같은 줄(비슷한 top)의 여러 메모는 실제 카드 높이만큼 아래로 밀어 겹치지 않게 쌓는다.
   const recompute = useCallback(() => {
     const root = getRoot(rootRef);
     const contentEl = rootRef.current;
     if (!root || !contentEl) return;
     const cr = contentEl.getBoundingClientRect();
     const left = cr.right + window.scrollX + 12;
-    const pos: Record<string, { top: number; left: number }> = {};
+    const anchors: { id: string; top: number }[] = [];
+    const seen = new Set<string>();
     root.querySelectorAll("mark[data-memo-id]").forEach((el) => {
       const id = (el as HTMLElement).dataset.memoId!;
-      if (pos[id]) return;
+      if (seen.has(id)) return;
+      seen.add(id);
       const r = el.getBoundingClientRect();
-      pos[id] = { top: r.top + window.scrollY, left };
+      anchors.push({ id, top: r.top + window.scrollY });
     });
+    anchors.sort((a, b) => a.top - b.top);
+    const GAP = 8;
+    const pos: Record<string, { top: number; left: number }> = {};
+    let prevBottom = -Infinity;
+    for (const a of anchors) {
+      const h = (document.querySelector(`[data-memo-note="${a.id}"]`) as HTMLElement | null)?.offsetHeight ?? 64;
+      const top = Math.max(a.top, prevBottom + GAP);
+      pos[a.id] = { top, left };
+      prevBottom = top + h;
+    }
     setPositions(pos);
   }, [rootRef]);
 
@@ -113,10 +126,13 @@ export function MemoLayer({
   // 메모/레이아웃 변화 시 여백 노트 위치 재계산
   useEffect(() => {
     const t = setTimeout(recompute, 80);
+    // 노트가 실제로 렌더된 뒤 높이를 반영해 한 번 더 쌓기(겹침 정확도)
+    const raf = requestAnimationFrame(() => requestAnimationFrame(recompute));
     const on = () => recompute();
     window.addEventListener("resize", on);
     return () => {
       clearTimeout(t);
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", on);
     };
   }, [memos, recompute]);
@@ -255,6 +271,7 @@ export function MemoLayer({
               return (
                 <div
                   key={m.id}
+                  data-memo-note={m.id}
                   onMouseEnter={() => setActiveId(m.id)}
                   style={{ position: "absolute", top: p.top, left: p.left, width: 220 }}
                   className={`group/memo z-10 rounded-lg border bg-card p-2 text-xs shadow-sm transition print:hidden ${

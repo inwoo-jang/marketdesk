@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Report, type EntryFull, type EntryFrame, type Industry } from "@/lib/api";
+import { api, type Report, type EntryFull, type EntryFrame, type Industry, type Lens, type JobRole } from "@/lib/api";
 import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
 import { MemoLayer } from "@/components/memo";
@@ -80,6 +80,8 @@ export default function ReportReviewPage() {
 
       <IndustryRow report={report} catalog={catalog} onSaved={load} />
 
+      {report.parseStatus !== "parsing" && <LensEditor report={report} onReanalyze={load} />}
+
       {report.parseStatus !== "parsed" ? (
         <div className="mt-6 rounded-card bg-card p-8 text-center shadow-card">
           <p className="text-ink-sub">
@@ -105,6 +107,101 @@ export default function ReportReviewPage() {
         </>
       )}
     </main>
+  );
+}
+
+// 렌즈 편집 + 다시 분석: 원문이 서버에 보존되므로 렌즈(취업/투자)·직무를 바꿔 재요약 가능.
+function LensEditor({ report, onReanalyze }: { report: Report; onReanalyze: () => Promise<void> | void }) {
+  const [open, setOpen] = useState(false);
+  const [catalog, setCatalog] = useState<Lens[]>([]);
+  const [enabled, setEnabled] = useState<string[]>([]);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [sel, setSel] = useState<string[]>(report.requestedLenses ?? []);
+  const [job, setJob] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([api.lenses(), api.jobRoles(), api.myLenses()])
+      .then(([{ lenses }, { jobRoles }, { enabled, jobRole }]) => {
+        setCatalog(lenses);
+        setEnabled(enabled);
+        setJobRoles(jobRoles);
+        setJob(jobRole ?? "");
+        setSel((report.requestedLenses ?? []).filter((k) => enabled.includes(k)));
+      })
+      .catch(() => {});
+  }, [open, report.requestedLenses]);
+
+  const options = catalog.filter((l) => enabled.includes(l.key));
+  const toggle = (k: string) => setSel((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+
+  async function run() {
+    if (sel.length === 0) return alert("최소 1개 렌즈를 선택하세요.");
+    setBusy(true);
+    try {
+      await api.reExtract(report.id, { lensKeys: sel, jobRole: sel.includes("job") ? job || undefined : undefined });
+      setOpen(false);
+      await onReanalyze();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "다시 분석 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const curLabels = (report.requestedLenses ?? []).map((k) => (k === "job" ? "취업" : k === "invest" ? "투자" : k)).join(" · ") || "없음";
+
+  return (
+    <div className="mt-4 rounded-card bg-card p-4 shadow-card">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between text-left">
+        <span className="text-sm">
+          <span className="font-medium">렌즈</span> <span className="text-ink-muted">{curLabels}</span>
+        </span>
+        <span className="text-xs text-primary">{open ? "닫기" : "렌즈 편집 · 다시 분석"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-xs text-ink-muted">원문이 서버에 보존돼 있어 렌즈·직무를 바꿔 다시 요약할 수 있어요. (분석 1건 차감)</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {options.map((l) => (
+              <button
+                key={l.key}
+                onClick={() => toggle(l.key)}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  sel.includes(l.key) ? "bg-primary text-white" : "border border-line text-ink-sub hover:bg-bg-deep"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          {sel.includes("job") && jobRoles.length > 0 && (
+            <div className="mt-3">
+              <label className="text-xs text-ink-muted">취업 직무</label>
+              <select
+                value={job}
+                onChange={(e) => setJob(e.target.value)}
+                className="ml-2 rounded-lg border border-line bg-card px-2 py-1 text-sm outline-none focus:border-primary"
+              >
+                <option value="">직무 선택</option>
+                {jobRoles.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <span className="ml-2 text-[11px] text-ink-muted">계정 직무로 저장돼 이후 분석에도 적용돼요.</span>
+            </div>
+          )}
+          <div className="mt-3 flex justify-end">
+            <button onClick={run} disabled={busy} className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+              {busy ? "요청 중..." : "이 렌즈로 다시 분석"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

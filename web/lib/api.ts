@@ -70,7 +70,8 @@ export const api = {
   unhideReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/hide`),
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
   reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
-  reExtract: (id: string) => post<{ ok: true; parseStatus: string }>(`/api/me/reports/${id}/extract`),
+  reExtract: (id: string, opts?: { lensKeys?: string[]; jobRole?: string }) =>
+    post<{ ok: true; parseStatus: string; requestedLenses?: string[]; jobRole?: string }>(`/api/me/reports/${id}/extract`, opts ?? {}),
   saveEntry: (id: string, input: { frame?: Partial<EntryFrame>; status?: "draft" | "saved" }) =>
     put<{ entry: EntryFull }>(`/api/me/entries/${id}`, input),
   uploadReport: async (input: {
@@ -112,6 +113,7 @@ export const api = {
   companyGroups: () => get<{ map: Record<string, string> }>("/api/me/company-groups"),
   hiddenContents: () => get<{ contents: PublicContent[] }>("/api/me/public/hidden"),
   bookmarkedContents: () => get<{ contents: PublicContent[] }>("/api/me/public/bookmarks"),
+  ingestPublic: () => post<{ ok: true; started?: boolean; already?: boolean }>("/api/me/public/ingest"),
   hidePublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/hide`),
   unhidePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/hide`),
   bookmarkPublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/bookmark`),

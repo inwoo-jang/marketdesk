@@ -211,6 +211,24 @@ meRoute.put("/llm", async (c) => {
   return c.json({ isDeveloper: true, provider: parsed.data.provider });
 });
 
+// POST /api/me/public/ingest - 공공 콘텐츠 온디맨드 수집(개발자만). worker 의 ingest 스크립트를 백그라운드 실행.
+// 로컬 개발용: korea.kr RSS(최신분) → AI 산업 매칭 → public_contents 적재. 완료까지 1~2분.
+let publicIngestRunning = false;
+meRoute.post("/public/ingest", async (c) => {
+  const user = c.get("user");
+  if (!isDeveloper(user)) return c.json({ error: "개발자 계정만 실행할 수 있어요." }, 403);
+  if (publicIngestRunning) return c.json({ ok: true, already: true });
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const root = fileURLToPath(new URL("../../../", import.meta.url)); // 레포 루트(dev: tsx 소스 기준)
+  publicIngestRunning = true;
+  const cp = spawn("pnpm", ["--filter", "@reportlens/worker", "ingest"], { cwd: root, stdio: "ignore", detached: true });
+  cp.on("exit", () => (publicIngestRunning = false));
+  cp.on("error", () => (publicIngestRunning = false));
+  cp.unref();
+  return c.json({ ok: true, started: true });
+});
+
 // ===== 공개소스 콘텐츠(전역 공유) + 유저별 숨김/즐겨찾기 =====
 async function myPublicSets(userId: string) {
   const [hidden, marks] = await Promise.all([
@@ -1018,9 +1036,11 @@ meRoute.get("/reports/:id", async (c) => {
 
 // POST /api/me/reports/:id/extract - 추출 재요청(AI 요약 생성 요청). parse_status=pending 으로 큐잉.
 // 운영(SQS)에서는 여기서 메시지 enqueue. 로컬은 워커가 pending 을 폴링.
+// body(선택): { lensKeys?: string[], jobRole?: string } - 렌즈 편집 + 직무 변경 후 원문으로 재분석.
 meRoute.post("/reports/:id/extract", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
   const [report] = await db
     .select()
     .from(reports)
@@ -1028,8 +1048,29 @@ meRoute.post("/reports/:id/extract", async (c) => {
     .limit(1);
   if (!report) return c.json({ error: "리포트 없음" }, 404);
   if (report.parseStatus === "parsing") return c.json({ error: "이미 처리 중입니다" }, 409);
-  if (!report.requestedLenses || report.requestedLenses.length === 0)
-    return c.json({ error: "추출할 렌즈가 없습니다" }, 400);
+
+  // 렌즈 편집(선택): 요청 렌즈를 내가 켠 렌즈로 한정해 리포트에 저장. 미지정이면 기존 유지.
+  let requested = report.requestedLenses ?? [];
+  const rawLens = body["lensKeys"];
+  if (Array.isArray(rawLens)) {
+    const enabledRows = await db
+      .select({ lensKey: userLenses.lensKey })
+      .from(userLenses)
+      .where(and(eq(userLenses.userId, user.id), eq(userLenses.enabled, true)));
+    const enabled = enabledRows.map((r) => r.lensKey);
+    requested = rawLens.filter((k): k is string => typeof k === "string" && enabled.includes(k));
+  }
+  if (requested.length === 0) return c.json({ error: "추출할 렌즈가 없습니다" }, 400);
+
+  // 직무 변경(선택): 취업 렌즈의 계정 직무(config.jobRole) 갱신 → 워커가 재분석 시 반영.
+  const rawJob = body["jobRole"];
+  const jobRole = typeof rawJob === "string" && JOB_ROLE_KEYS.includes(rawJob) ? rawJob : undefined;
+  if (jobRole && requested.includes("job")) {
+    await db
+      .update(userLenses)
+      .set({ config: { jobRole } })
+      .where(and(eq(userLenses.userId, user.id), eq(userLenses.lensKey, "job")));
+  }
 
   // 재추출도 분석 1건으로 게이팅
   const quota = await consumeAnalysis(user);
@@ -1037,9 +1078,9 @@ meRoute.post("/reports/:id/extract", async (c) => {
 
   await db
     .update(reports)
-    .set({ parseStatus: "pending", llmProvider: await resolveProvider(user) })
+    .set({ parseStatus: "pending", requestedLenses: requested, llmProvider: await resolveProvider(user) })
     .where(eq(reports.id, id));
-  return c.json({ ok: true, parseStatus: "pending" });
+  return c.json({ ok: true, parseStatus: "pending", requestedLenses: requested, jobRole });
 });
 
 // GET /api/me/usage - 오늘 분석 사용량/한도(UI 표시용)

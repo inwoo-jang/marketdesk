@@ -29,6 +29,38 @@ const DOC_FILTERS = [
 ] as const;
 type DocFilter = (typeof DOC_FILTERS)[number]["k"];
 
+// 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
+type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean };
+function readFeedUrl(): FeedState {
+  const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: false };
+  if (typeof window === "undefined") return def;
+  const q = new URLSearchParams(window.location.search);
+  const v = q.get("view");
+  const df = q.get("doc");
+  const num = (x: string | null) => (x && Number.isFinite(Number(x)) ? Number(x) : null);
+  const p = num(q.get("page"));
+  return {
+    view: v === "bookmarks" || v === "hidden" ? v : "all",
+    docFilter: (DOC_FILTERS.some((f) => f.k === df) ? df : "all") as DocFilter,
+    dateSel: { year: num(q.get("y")), month: num(q.get("m")), day: num(q.get("d")) },
+    page: p && p > 0 ? p : 1,
+    hidePublic: q.get("hp") === "1",
+  };
+}
+function writeFeedUrl(s: FeedState) {
+  if (typeof window === "undefined") return;
+  const q = new URLSearchParams();
+  if (s.view !== "all") q.set("view", s.view);
+  if (s.docFilter !== "all") q.set("doc", s.docFilter);
+  if (s.dateSel.year) q.set("y", String(s.dateSel.year));
+  if (s.dateSel.month) q.set("m", String(s.dateSel.month));
+  if (s.dateSel.day) q.set("d", String(s.dateSel.day));
+  if (s.page !== 1) q.set("page", String(s.page));
+  if (s.hidePublic) q.set("hp", "1");
+  const qs = q.toString();
+  window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+}
+
 // 기간 선택 UI: 연도 → 월 → 일 (미선택=최근 3개월)
 function DateRange({ sel, onChange }: { sel: DateSel; onChange: (d: DateSel) => void }) {
   const nowY = new Date().getFullYear();
@@ -83,23 +115,27 @@ export default function Home() {
   const [dateSel, setDateSel] = useState<DateSel>({ year: null, month: null, day: null });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [hidePublic, setHidePublic] = useState(false);
+  const [isDev, setIsDev] = useState(false);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
 
-  // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드
-  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel) => {
+  // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드. hp=공공 숨기기(전체 뷰에서만 적용).
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel, hp: boolean) => {
     const { from, to } = computeRange(ds);
     const dt = df === "industry" || df === "company" || df === "news" ? df : undefined;
     const repP =
       df === "public"
         ? Promise.resolve({ reports: [] as Report[], total: 0 })
         : api.myReports({ view: v, docType: dt, from, to, page: p });
+    // 공공: 전체 뷰(all)에서 df=all(숨기기 아닐 때) 또는 df=public 일 때 로드. 저장/숨김 탭은 각 목록.
+    const wantPublic = v === "all" && (df === "public" || (df === "all" && !hp));
     const pubP =
       p !== 1
         ? Promise.resolve({ contents: [] as PublicContent[] })
         : v === "all"
-          ? df === "all" || df === "public"
+          ? wantPublic
             ? api.publicContents({ from, to })
             : Promise.resolve({ contents: [] as PublicContent[] })
           : v === "bookmarks"
@@ -127,14 +163,25 @@ export default function Home() {
     setMyIndustries(mi.industries);
     setCatalog(industries);
     setUsage(u);
+    api.llmSetting().then((s) => setIsDev(s.isDeveloper)).catch(() => {});
   }, []);
 
   useEffect(() => {
     (async () => {
       const me = await api.me().catch(() => ({ user: null }));
       setUser(me.user);
-      if (me.user)
-        await Promise.all([loadData().catch(() => {}), loadFeed("all", 1, "all", { year: null, month: null, day: null }).catch(() => {})]);
+      if (me.user) {
+        const init = readFeedUrl(); // URL 에 저장된 필터 복원(뒤로가기)
+        setView(init.view);
+        setDocFilter(init.docFilter);
+        setDateSel(init.dateSel);
+        setPage(init.page);
+        setHidePublic(init.hidePublic);
+        await Promise.all([
+          loadData().catch(() => {}),
+          loadFeed(init.view, init.page, init.docFilter, init.dateSel, init.hidePublic).catch(() => {}),
+        ]);
+      }
       setLoaded(true);
     })();
   }, [loadData, loadFeed]);
@@ -142,31 +189,50 @@ export default function Home() {
   function switchView(v: "all" | "bookmarks" | "hidden") {
     setView(v);
     setPage(1);
-    loadFeed(v, 1, docFilter, dateSel).catch(() => {});
+    writeFeedUrl({ view: v, docFilter, dateSel, page: 1, hidePublic });
+    loadFeed(v, 1, docFilter, dateSel, hidePublic).catch(() => {});
   }
   function goPage(p: number) {
     setPage(p);
-    loadFeed(view, p, docFilter, dateSel).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: p, hidePublic });
+    loadFeed(view, p, docFilter, dateSel, hidePublic).catch(() => {});
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function applyDoc(df: DocFilter) {
     setDocFilter(df);
     setPage(1);
-    loadFeed(view, 1, df, dateSel).catch(() => {});
+    writeFeedUrl({ view, docFilter: df, dateSel, page: 1, hidePublic });
+    loadFeed(view, 1, df, dateSel, hidePublic).catch(() => {});
   }
   function applyDate(ds: DateSel) {
     setDateSel(ds);
     setPage(1);
-    loadFeed(view, 1, docFilter, ds).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel: ds, page: 1, hidePublic });
+    loadFeed(view, 1, docFilter, ds, hidePublic).catch(() => {});
+  }
+  function toggleHidePublic() {
+    const hp = !hidePublic;
+    setHidePublic(hp);
+    setPage(1);
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic: hp });
+    loadFeed(view, 1, docFilter, dateSel, hp).catch(() => {});
+  }
+  async function runIngestPublic() {
+    try {
+      await api.ingestPublic();
+      alert("공공 콘텐츠를 불러오는 중이에요. 1~2분 후 새로고침하면 반영됩니다.");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "실행 실패");
+    }
   }
 
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel).catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadFeed, view, page, docFilter, dateSel]);
+  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -376,7 +442,29 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <DateRange sel={dateSel} onChange={applyDate} />
+          <div className="flex items-center gap-2">
+            {view === "all" && docFilter === "all" && (
+              <button
+                onClick={toggleHidePublic}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  hidePublic ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                }`}
+                title="전체 목록에서 공공 콘텐츠를 감춰요"
+              >
+                {hidePublic ? "공공 보기" : "공공 숨기기"}
+              </button>
+            )}
+            {isDev && view === "all" && (docFilter === "all" || docFilter === "public") && (
+              <button
+                onClick={runIngestPublic}
+                className="rounded-full border border-line px-3 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+                title="공개 소스(정책브리핑 등)에서 최신 공공 콘텐츠를 불러와요 (개발자)"
+              >
+                공공 불러오기
+              </button>
+            )}
+            <DateRange sel={dateSel} onChange={applyDate} />
+          </div>
         </div>
 
         {(() => {
