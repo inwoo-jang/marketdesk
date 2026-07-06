@@ -76,6 +76,26 @@ function writeFeedUrl(s: FeedState) {
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
 
+// 순서변경(크로스 화살표) 아이콘
+function ReorderIcon({ active }: { active?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={active ? "text-primary" : ""}
+    >
+      <path d="M7 4v16M7 4 4 7M7 4l3 3" />
+      <path d="M17 20V4M17 20l3-3M17 20l-3-3" />
+    </svg>
+  );
+}
+
 // 눈 아이콘(off=감김 = 공공 숨김 상태)
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
@@ -150,8 +170,8 @@ export default function Home() {
   const [isDev, setIsDev] = useState(false);
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
-  const [favEdit, setFavEdit] = useState(false);
-  const [indEdit, setIndEdit] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false); // 내 산업·관심 기업 순서변경 통합 모드
+  const [drag, setDrag] = useState<{ kind: "ind" | "group" | "company"; idx: number } | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
@@ -351,27 +371,32 @@ export default function Home() {
     await api.deleteReport(rid);
     setRecent((r) => r.filter((x) => x.id !== rid));
   }
-  async function moveFav(kind: "group" | "company", idx: number, dir: -1 | 1) {
-    const list = kind === "group" ? [...favGroups] : [...favCompanies];
-    const j = idx + dir;
-    if (j < 0 || j >= list.length) return;
-    [list[idx], list[j]] = [list[j], list[idx]];
-    if (kind === "group") setFavGroups(list);
-    else setFavCompanies(list);
-    await api.reorderCompanyFavorites(kind, list).catch(() => {});
-  }
   async function unstarFav(kind: "group" | "company", value: string) {
     if (kind === "group") setFavGroups((g) => g.filter((x) => x !== value));
     else setFavCompanies((c) => c.filter((x) => x !== value));
     await api.removeCompanyFavorite(kind, value).catch(() => {});
   }
-  async function moveInd(idx: number, dir: -1 | 1) {
-    const list = [...myIndustries];
-    const j = idx + dir;
-    if (j < 0 || j >= list.length) return;
-    [list[idx], list[j]] = [list[j], list[idx]];
-    setMyIndustries(list);
-    await api.reorderIndustries(list.map((i) => i.id)).catch(() => {});
+  // 드래그하는 동안 실시간 재배치(대상 위로 오면 즉시 그 자리로 이동)
+  function liveMove(kind: "ind" | "group" | "company", to: number) {
+    if (!drag || drag.kind !== kind || drag.idx === to) return;
+    const from = drag.idx;
+    const reorder = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      const [x] = a.splice(from, 1);
+      a.splice(to, 0, x);
+      return a;
+    };
+    if (kind === "ind") setMyIndustries(reorder);
+    else if (kind === "group") setFavGroups(reorder);
+    else setFavCompanies(reorder);
+    setDrag({ kind, idx: to });
+  }
+  // 드래그 종료 시 현재 순서 저장
+  async function persistOrder(kind: "ind" | "group" | "company") {
+    setDrag(null);
+    if (kind === "ind") await api.reorderIndustries(myIndustries.map((i) => i.id)).catch(() => {});
+    else if (kind === "group") await api.reorderCompanyFavorites("group", favGroups).catch(() => {});
+    else await api.reorderCompanyFavorites("company", favCompanies).catch(() => {});
   }
 
   return (
@@ -399,9 +424,14 @@ export default function Home() {
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-ink-muted">내 산업 ({myIndustries.length})</h2>
-            {myIndustries.length > 1 && (
-              <button onClick={() => setIndEdit((v) => !v)} className="text-xs font-medium text-primary hover:underline">
-                {indEdit ? "완료" : "순서변경"}
+            {(myIndustries.length > 1 || favGroups.length + favCompanies.length > 1) && (
+              <button
+                onClick={() => setReorderMode((v) => !v)}
+                title={reorderMode ? "순서변경 완료" : "순서변경(드래그)"}
+                className={`flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium hover:bg-bg-deep ${reorderMode ? "bg-primary/10 text-primary" : "text-ink-muted"}`}
+              >
+                <ReorderIcon active={reorderMode} />
+                {reorderMode ? "완료" : "순서"}
               </button>
             )}
           </div>
@@ -417,8 +447,24 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {myIndustries.map((ind, i) => (
-              <div key={ind.id} className="group relative rounded-card bg-card p-5 shadow-card hover:ring-1 hover:ring-primary/30">
-                <a href={`/industry/${ind.id}`} className="block">
+              <div
+                key={ind.id}
+                draggable={reorderMode}
+                onDragStart={() => reorderMode && setDrag({ kind: "ind", idx: i })}
+                onDragEnter={() => reorderMode && liveMove("ind", i)}
+                onDragOver={(e) => reorderMode && e.preventDefault()}
+                onDragEnd={() => reorderMode && persistOrder("ind")}
+                onDrop={() => reorderMode && persistOrder("ind")}
+                className={`group relative rounded-card bg-card p-5 shadow-card transition hover:ring-1 hover:ring-primary/30 ${
+                  reorderMode ? "cursor-grab active:cursor-grabbing ring-1 ring-primary/30" : ""
+                } ${drag?.kind === "ind" && drag.idx === i ? "opacity-50 ring-2 ring-primary" : ""}`}
+              >
+                {reorderMode && (
+                  <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
+                    {i + 1}
+                  </span>
+                )}
+                <a href={`/industry/${ind.id}`} className={reorderMode ? "pointer-events-none block" : "block"}>
                   <div
                     className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
                     style={{ backgroundColor: ind.iconColor ?? "#8A93A8" }}
@@ -428,12 +474,7 @@ export default function Home() {
                   <div className="font-semibold">{ind.name}</div>
                   {ind.isCustom && <span className="text-xs text-ink-muted">커스텀</span>}
                 </a>
-                {indEdit ? (
-                  <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-bg-deep/80 px-1 py-0.5 text-xs backdrop-blur">
-                    <button onClick={() => moveInd(i, -1)} disabled={i === 0} className="px-1 disabled:opacity-30" title="앞으로">◀</button>
-                    <button onClick={() => moveInd(i, 1)} disabled={i === myIndustries.length - 1} className="px-1 disabled:opacity-30" title="뒤로">▶</button>
-                  </div>
-                ) : (
+                {!reorderMode && (
                   <button onClick={() => togglePin(ind.id, true)} className="absolute right-3 top-3 text-primary" title="관심 해제">
                     ★
                   </button>
@@ -444,61 +485,78 @@ export default function Home() {
         )}
       </section>
 
-      {/* 관심 기업(별표) = 산업보다 작게. 순서변경/편집 모드 지원 */}
+      {/* 관심 기업(별표) = 산업보다 작게. 위 '순서' 버튼과 같은 모드에서 드래그로 순서변경 */}
       {(favGroups.length > 0 || favCompanies.length > 0) && (
         <section className="mb-8">
-          <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + favCompanies.length})</h2>
-            <button onClick={() => setFavEdit((v) => !v)} className="text-xs font-medium text-primary hover:underline">
-              {favEdit ? "완료" : "순서변경"}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {favGroups.map((g, i) =>
-              favEdit ? (
-                <span
-                  key={`g-${g}`}
-                  className="inline-flex items-center gap-0.5 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs font-medium text-amber-700"
-                >
-                  <button onClick={() => moveFav("group", i, -1)} disabled={i === 0} className="px-0.5 disabled:opacity-30" title="앞으로">◀</button>
-                  <span className="px-0.5">★ {g} 계열</span>
-                  <button onClick={() => moveFav("group", i, 1)} disabled={i === favGroups.length - 1} className="px-0.5 disabled:opacity-30" title="뒤로">▶</button>
-                  <button onClick={() => unstarFav("group", g)} className="px-0.5 text-amber-500 hover:text-red-500" title="별표 해제">✕</button>
-                </span>
-              ) : (
-                <a
-                  key={`g-${g}`}
-                  href={`/docs/company?by=group&g=${encodeURIComponent(g)}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                >
-                  <span className="text-amber-500">★</span>
-                  {g} <span className="text-amber-500/70">계열</span>
-                </a>
-              ),
-            )}
-            {favCompanies.map((c, i) =>
-              favEdit ? (
-                <span
-                  key={`c-${c}`}
-                  className="inline-flex items-center gap-0.5 rounded-full border border-line bg-card px-1.5 py-1 text-xs font-medium text-ink-sub"
-                >
-                  <button onClick={() => moveFav("company", i, -1)} disabled={i === 0} className="px-0.5 disabled:opacity-30" title="앞으로">◀</button>
-                  <span className="px-0.5">★ {c}</span>
-                  <button onClick={() => moveFav("company", i, 1)} disabled={i === favCompanies.length - 1} className="px-0.5 disabled:opacity-30" title="뒤로">▶</button>
-                  <button onClick={() => unstarFav("company", c)} className="px-0.5 text-ink-muted hover:text-red-500" title="별표 해제">✕</button>
-                </span>
-              ) : (
-                <a
-                  key={`c-${c}`}
-                  href={`/docs/company?c=${encodeURIComponent(c)}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
-                >
-                  <span className="text-amber-400">★</span>
-                  {c}
-                </a>
-              ),
-            )}
-          </div>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">
+            관심 기업 ({favGroups.length + favCompanies.length}){reorderMode && <span className="ml-1 font-normal text-primary">드래그로 순서변경</span>}
+          </h2>
+          {favGroups.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {favGroups.map((g, i) =>
+                reorderMode ? (
+                  <span
+                    key={`g-${g}`}
+                    draggable
+                    onDragStart={() => setDrag({ kind: "group", idx: i })}
+                    onDragEnter={() => liveMove("group", i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnd={() => persistOrder("group")}
+                    onDrop={() => persistOrder("group")}
+                    className={`inline-flex cursor-grab items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 active:cursor-grabbing ${
+                      drag?.kind === "group" && drag.idx === i ? "ring-2 ring-primary" : ""
+                    }`}
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">{i + 1}</span>
+                    {g} 계열
+                    <button onClick={() => unstarFav("group", g)} className="text-amber-500 hover:text-red-500" title="별표 해제">✕</button>
+                  </span>
+                ) : (
+                  <a
+                    key={`g-${g}`}
+                    href={`/docs/company?by=group&g=${encodeURIComponent(g)}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                  >
+                    <span className="text-amber-500">★</span>
+                    {g} <span className="text-amber-500/70">계열</span>
+                  </a>
+                ),
+              )}
+            </div>
+          )}
+          {favCompanies.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {favCompanies.map((c, i) =>
+                reorderMode ? (
+                  <span
+                    key={`c-${c}`}
+                    draggable
+                    onDragStart={() => setDrag({ kind: "company", idx: i })}
+                    onDragEnter={() => liveMove("company", i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnd={() => persistOrder("company")}
+                    onDrop={() => persistOrder("company")}
+                    className={`inline-flex cursor-grab items-center gap-1 rounded-full border border-line bg-card px-2 py-1 text-xs font-medium text-ink-sub active:cursor-grabbing ${
+                      drag?.kind === "company" && drag.idx === i ? "ring-2 ring-primary" : ""
+                    }`}
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">{i + 1}</span>
+                    {c}
+                    <button onClick={() => unstarFav("company", c)} className="text-ink-muted hover:text-red-500" title="별표 해제">✕</button>
+                  </span>
+                ) : (
+                  <a
+                    key={`c-${c}`}
+                    href={`/docs/company?c=${encodeURIComponent(c)}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+                  >
+                    <span className="text-amber-400">★</span>
+                    {c}
+                  </a>
+                ),
+              )}
+            </div>
+          )}
         </section>
       )}
 
