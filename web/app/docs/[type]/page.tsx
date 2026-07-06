@@ -45,30 +45,75 @@ export default function DocsFeed() {
       </main>
     );
 
+  const onDelete = async (rid: string) => {
+    await api.deleteReport(rid);
+    load();
+  };
+
+  // 산업리포트=산업별, 기업리포트=기업별로 묶기. 뉴스는 단일 그룹.
+  const groups = groupReports(type, reports);
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-2xl font-bold">{label}</h1>
-      <p className="mt-1 text-sm text-ink-sub">AI 가 {label}로 분류한 문서입니다.</p>
+      <p className="mt-1 text-sm text-ink-sub">
+        {type === "industry"
+          ? "산업별로 모아 봤어요."
+          : type === "company"
+            ? "기업별로 모아 봤어요."
+            : `AI 가 ${label}로 분류한 문서입니다.`}
+      </p>
 
-      <div className="mt-6 space-y-2">
-        {reports.length === 0 ? (
-          <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            아직 {label}로 분류된 문서가 없어요.{" "}
-            <a href="/upload" className="text-primary">업로드</a> 하면 AI 가 자동 분류합니다.
-          </p>
-        ) : (
-          reports.map((r) => (
-            <ReportCard
-              key={r.id}
-              report={r}
-              onDelete={async (rid) => {
-                await api.deleteReport(rid);
-                load();
-              }}
-            />
-          ))
-        )}
-      </div>
+      {reports.length === 0 ? (
+        <p className="mt-6 rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
+          아직 {label}로 분류된 문서가 없어요.{" "}
+          <a href="/upload" className="text-primary">업로드</a> 하면 AI 가 자동 분류합니다.
+        </p>
+      ) : (
+        <div className="mt-6 space-y-7">
+          {groups.map((g) => (
+            <section key={g.key}>
+              {type !== "news" && (
+                <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-muted">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-primary">{g.label}</span>
+                  <span className="text-xs text-ink-muted">{g.reports.length}</span>
+                </h2>
+              )}
+              <div className="space-y-2">
+                {g.reports.map((r) => (
+                  <ReportCard key={r.id} report={r} onDelete={onDelete} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </main>
   );
+}
+
+// 타입별 그룹핑. industry=산업(멀티 태그면 각 산업에 중복 노출), company=회사명, news=단일.
+function groupReports(type: string, reports: Report[]): { key: string; label: string; reports: Report[] }[] {
+  if (type === "news") return [{ key: "all", label: "전체", reports }];
+
+  const map = new Map<string, { label: string; reports: Report[] }>();
+  const push = (key: string, label: string, r: Report) => {
+    const g = map.get(key) ?? { label, reports: [] };
+    g.reports.push(r);
+    map.set(key, g);
+  };
+  for (const r of reports) {
+    if (type === "industry") {
+      const inds = r.industries ?? [];
+      if (inds.length === 0) push("_none", "미분류", r);
+      else for (const i of inds) push(i.id, i.name, r);
+    } else {
+      const c = r.company?.trim();
+      push(c || "_none", c || "회사 미지정", r);
+    }
+  }
+  // 그룹 정렬: 항목 많은 순, 미지정은 뒤로
+  return [...map.entries()]
+    .map(([key, v]) => ({ key, label: v.label, reports: v.reports }))
+    .sort((a, b) => (a.key === "_none" ? 1 : b.key === "_none" ? -1 : b.reports.length - a.reports.length));
 }

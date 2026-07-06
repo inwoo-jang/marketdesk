@@ -190,6 +190,7 @@ export type Report = {
   industryId: string | null;
   industryConfirmed?: boolean;
   docType: "industry" | "company" | "news" | null;
+  company?: string | null;
   pubDate: string | null;
   fileSize: number | null;
   pageCount: number | null;
