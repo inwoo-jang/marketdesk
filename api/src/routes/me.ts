@@ -250,6 +250,7 @@ const shapePublic = (r: typeof publicContents.$inferSelect & { industryName: str
   industryName: r.industryName,
   docType: r.docType,
   pubDate: r.pubDate,
+  createdAt: r.createdAt,
   isBookmarked: bookmarked,
 });
 

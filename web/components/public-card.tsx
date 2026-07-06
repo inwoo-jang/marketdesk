@@ -62,26 +62,33 @@ export function PublicCard({
 
   return (
     <div className="group relative rounded-card bg-card p-4 pr-12 shadow-card transition hover:ring-1 hover:ring-primary/30">
-      <div>
-        <a href={content.sourceUrl} target="_blank" rel="noopener noreferrer" className="block min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="rounded bg-success-bg px-1.5 py-0.5 text-[11px] font-medium text-success-text">공공</span>
-            {content.docType && (
-              <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
-                {DOC_TYPE[content.docType] ?? content.docType}
-              </span>
-            )}
-            {content.industryName && (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">{content.industryName}</span>
-            )}
-          </div>
-          <div className="mt-1.5 font-semibold leading-snug hover:text-primary">{content.title} ↗</div>
-          {content.summary && <p className="mt-1 line-clamp-2 text-sm text-ink-sub">{content.summary}</p>}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
-            {date && <span>발간 {date}</span>}
-            <span>· 출처 {content.source}</span>
-          </div>
-        </a>
+      {/* 뉴스처럼 요약을 앱 안에서 보여주고, 원문은 하단 링크로(저작권상 원문 미재호스팅) */}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded bg-success-bg px-1.5 py-0.5 text-[11px] font-medium text-success-text">공공</span>
+          {content.docType && (
+            <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
+              {DOC_TYPE[content.docType] ?? content.docType}
+            </span>
+          )}
+          {content.industryName && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">{content.industryName}</span>
+          )}
+        </div>
+        <div className="mt-1.5 font-semibold leading-snug">{content.title}</div>
+        {content.summary && <p className="mt-1 text-sm leading-relaxed text-ink-sub">{content.summary}</p>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
+          {date && <span>발간 {date}</span>}
+          <span>· 출처 {content.source}</span>
+          <a
+            href={content.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
+            원문 보기 ↗
+          </a>
+        </div>
       </div>
 
       {/* 저장(책갈피): 우상단 */}

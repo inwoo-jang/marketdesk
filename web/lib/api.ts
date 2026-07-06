@@ -199,6 +199,7 @@ export type PublicContent = {
   industryName: string | null;
   docType: "industry" | "company" | "news" | null;
   pubDate: string | null;
+  createdAt?: string | null;
   isBookmarked: boolean;
 };
 

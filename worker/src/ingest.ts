@@ -99,7 +99,7 @@ async function batchClassify(items: RssItem[], names: string[]): Promise<Classif
   const prompt =
     `다음 뉴스 항목들을 우리 산업 분류에 매칭하라. 명확히 해당하는 산업이 없으면 industry=null(일반 행정·복지·생활 뉴스 등은 제외).\n` +
     `산업 후보(정확한 이름만): [${names.join(", ")}]\n` +
-    `각 항목: i(번호), industry(후보 중 하나 또는 null), summary(40자 내외 한 줄), docType("news").\n` +
+    `각 항목: i(번호), industry(후보 중 하나 또는 null), summary(뉴스처럼 핵심만 한두 문장, 60~90자 한국어), docType("news").\n` +
     `출력 JSON 하나만(코드펜스·머리말 금지): {"results":[{"i":0,"industry":"","summary":"","docType":"news"}]}\n\n항목:\n${list}`;
   const o = extractJson(await runClaude(prompt));
   return Array.isArray(o.results) ? (o.results as Classified[]) : [];
@@ -116,28 +116,37 @@ async function run() {
   let kept = 0;
   let skipped = 0;
 
-  // 최근 LOOKBACK_DAYS 일 정책뉴스를 페이지 순회로 수집(중복 링크 나오면 종료)
+  // 정책뉴스 API 는 조회 기간 최대 3일 → 3일 window 로 나눠 최근 LOOKBACK_DAYS 일 순회
   const now = new Date();
-  const endDate = ymd8(now);
-  const startDate = ymd8(new Date(now.getTime() - LOOKBACK_DAYS * 864e5));
+  const WINDOW = 3;
   const items: RssItem[] = [];
   const seen = new Set<string>();
-  try {
-    for (let page = 1; page <= 15; page++) {
-      const pageItems = await fetchPolicyNews(startDate, endDate, page);
-      if (pageItems.length === 0) break;
-      const before = seen.size;
-      for (const it of pageItems) {
-        if (seen.has(it.link)) continue;
-        seen.add(it.link);
-        items.push(it);
+  let apiOk = false;
+  for (let d = 0; d < LOOKBACK_DAYS; d += WINDOW) {
+    const winEnd = new Date(now.getTime() - d * 864e5);
+    const winStart = new Date(now.getTime() - Math.min(d + WINDOW - 1, LOOKBACK_DAYS - 1) * 864e5);
+    const sd = ymd8(winStart);
+    const ed = ymd8(winEnd);
+    try {
+      for (let page = 1; page <= 10; page++) {
+        const pageItems = await fetchPolicyNews(sd, ed, page);
+        apiOk = true;
+        if (pageItems.length === 0) break;
+        let added = 0;
+        for (const it of pageItems) {
+          if (seen.has(it.link)) continue;
+          seen.add(it.link);
+          items.push(it);
+          added++;
+        }
+        if (added === 0 || pageItems.length < 100) break; // 새 링크 없음/마지막 페이지
       }
-      if (seen.size === before) break; // 새 링크 없음(페이지네이션 미지원 등) → 종료
-      if (pageItems.length < 100) break;
+    } catch (e) {
+      console.error(`[${SOURCE}] ${sd}~${ed} 실패:`, e instanceof Error ? e.message : e);
     }
-  } catch (e) {
-    console.error(`[${SOURCE}] 정책뉴스 API 실패:`, e instanceof Error ? e.message : e);
-    console.log(`\n완료: 신규 0건(소스 접근 실패). data.go.kr 에서 정책뉴스 API(15095335) 활용신청 후 다시 실행하세요.`);
+  }
+  if (!apiOk) {
+    console.log(`\n완료: 신규 0건(소스 접근 실패). data.go.kr 정책뉴스 API(15095335) 활용신청·권한 반영을 확인하세요.`);
     process.exit(0);
   }
 

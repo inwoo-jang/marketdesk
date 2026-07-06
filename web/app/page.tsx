@@ -139,6 +139,7 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hidePublic, setHidePublic] = useState(true);
+  const [sortBy, setSortBy] = useState<"pub" | "created">("pub");
   const [isDev, setIsDev] = useState(false);
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
@@ -517,15 +518,31 @@ export default function Home() {
                 공공 불러오기
               </button>
             )}
+            {/* 정렬: 발간일순 / 최신 업로드순 */}
+            <div className="flex gap-1 rounded-lg border border-line p-0.5">
+              {([
+                { k: "pub", label: "발간일순" },
+                { k: "created", label: "업로드순" },
+              ] as const).map((s) => (
+                <button
+                  key={s.k}
+                  onClick={() => setSortBy(s.k)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${sortBy === s.k ? "bg-primary/10 text-primary" : "text-ink-sub hover:bg-bg-deep"}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <DateRange sel={dateSel} onChange={applyDate} />
           </div>
         </div>
 
         {(() => {
+          // 정렬 키: 발간일순=pubDate(없으면 생성일), 업로드순=생성일(createdAt)
           const items = [
             ...recent.map((r) => ({
               k: `r-${r.id}`,
-              d: r.pubDate ?? r.createdAt,
+              d: sortBy === "created" ? r.createdAt : (r.pubDate ?? r.createdAt),
               n: (
                 <ReportCard report={r} variant={view} onDelete={deleteReport} onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))} />
               ),
@@ -533,7 +550,7 @@ export default function Home() {
             ...(page === 1
               ? pub.map((c) => ({
                   k: `p-${c.id}`,
-                  d: c.pubDate ?? "",
+                  d: sortBy === "created" ? (c.createdAt ?? c.pubDate ?? "") : (c.pubDate ?? c.createdAt ?? ""),
                   n: <PublicCard content={c} variant={view === "all" ? "feed" : view} onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))} />,
                 }))
               : []),
