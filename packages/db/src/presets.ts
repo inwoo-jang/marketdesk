@@ -31,6 +31,7 @@ export const STANDARD_INDUSTRIES = [
   { name: "미디어·광고", slug: "media-ad", iconColor: "#EC4899" },
   { name: "통신", slug: "telecom", iconColor: "#14B8A6" },
   { name: "자동차", slug: "auto", iconColor: "#4F46E5" },
+  { name: "로봇", slug: "robotics", iconColor: "#0EA5E9" },
   { name: "조선·기계", slug: "ship-machinery", iconColor: "#64748B" },
   { name: "운송·물류", slug: "logistics", iconColor: "#0D9488" },
   { name: "철강·금속", slug: "steel-metal", iconColor: "#78716C" },
