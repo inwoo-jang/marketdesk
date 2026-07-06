@@ -19,6 +19,7 @@ export default function BoardPage() {
   const [dim, setDim] = useState<BoardDim>("industry");
   const [period, setPeriod] = useState<"month" | "year">("month");
   const [rows, setRows] = useState<BoardRow[] | null>(null);
+  const [rowFilter, setRowFilter] = useState<string | null>(null); // 특정 산업/기업만 보기
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -75,7 +76,10 @@ export default function BoardPage() {
           {DIMS.map((d) => (
             <button
               key={d.k}
-              onClick={() => setDim(d.k)}
+              onClick={() => {
+                setDim(d.k);
+                setRowFilter(null);
+              }}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 dim === d.k ? "bg-primary text-white" : "text-ink-sub hover:bg-bg-deep"
               }`}
@@ -106,6 +110,31 @@ export default function BoardPage() {
         </button>
       </div>
 
+      {/* 행 필터(특정 산업/기업만) */}
+      {rows && rows.length > 1 && dim !== "news" && (
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setRowFilter(null)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              !rowFilter ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+            }`}
+          >
+            전체
+          </button>
+          {rows.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setRowFilter(r.key)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                rowFilter === r.key ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 행(타임라인) */}
       {rows === null ? (
         <p className="mt-6 text-ink-muted">불러오는 중...</p>
@@ -124,7 +153,7 @@ export default function BoardPage() {
         </p>
       ) : (
         <div className="mt-6 space-y-6">
-          {rows.map((row) => (
+          {rows.filter((row) => !rowFilter || row.key === rowFilter).map((row) => (
             <div key={row.key}>
               <div className="mb-2 text-sm font-semibold text-primary">{row.label}</div>
               <div className="flex gap-3 overflow-x-auto pb-2">
