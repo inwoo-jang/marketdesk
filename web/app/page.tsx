@@ -142,7 +142,6 @@ export default function Home() {
   const [isDev, setIsDev] = useState(false);
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
-  const [groupMap, setGroupMap] = useState<Record<string, string>>({});
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
@@ -191,7 +190,6 @@ export default function Home() {
     setUsage(u);
     api.llmSetting().then((s) => setIsDev(s.isDeveloper)).catch(() => {});
     api.companyFavorites().then((f) => { setFavGroups(f.groups); setFavCompanies(f.companies); }).catch(() => {});
-    api.companyGroups().then((r) => setGroupMap(r.map)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -387,14 +385,10 @@ export default function Home() {
         )}
       </section>
 
-      {/* 관심 기업(별표) = 산업보다 작게. 계열이 별표면 그 소속 기업은 중복이라 숨김 */}
-      {(() => {
-        const favGroupSet = new Set(favGroups);
-        const shownCompanies = favCompanies.filter((c) => !favGroupSet.has(groupMap[c] ?? ""));
-        if (favGroups.length === 0 && shownCompanies.length === 0) return null;
-        return (
+      {/* 관심 기업(별표) = 산업보다 작게. 계열·개별 기업 각각 별표한 대로 표시 */}
+      {(favGroups.length > 0 || favCompanies.length > 0) && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + shownCompanies.length})</h2>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + favCompanies.length})</h2>
           <div className="flex flex-wrap gap-1.5">
             {favGroups.map((g) => (
               <a
@@ -406,7 +400,7 @@ export default function Home() {
                 {g} <span className="text-amber-500/70">계열</span>
               </a>
             ))}
-            {shownCompanies.map((c) => (
+            {favCompanies.map((c) => (
               <a
                 key={`c-${c}`}
                 href={`/docs/company?c=${encodeURIComponent(c)}`}
@@ -418,8 +412,7 @@ export default function Home() {
             ))}
           </div>
         </section>
-        );
-      })()}
+      )}
 
       {/* 전체 산업: 다 볼 수 있고, ★ 로 핀 선택 */}
       <section>
