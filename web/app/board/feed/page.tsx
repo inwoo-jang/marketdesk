@@ -78,6 +78,30 @@ export default function BoardFeedPage() {
       <h2 className="mb-2 mt-8 text-sm font-semibold text-ink-muted">원문 ({data.reports.length})</h2>
       {data.reports.length === 0 ? (
         <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">이 기간 분석된 자료가 없어요.</p>
+      ) : data.dim === "industry" ? (
+        // 산업 흐름: 산업/기업/경제흐름(뉴스)으로 구분해 노출
+        <div className="space-y-5">
+          {([
+            { key: "industry", label: "산업 리포트" },
+            { key: "company", label: "기업 리포트" },
+            { key: "news", label: "경제흐름 (뉴스)" },
+          ] as const).map((g) => {
+            const list = data.reports.filter((r) => (r.docType ?? "industry") === g.key);
+            if (list.length === 0) return null;
+            return (
+              <div key={g.key}>
+                <div className="mb-2 text-xs font-semibold text-ink-muted">
+                  {g.label} ({list.length})
+                </div>
+                <div className="space-y-2">
+                  {list.map((r) => (
+                    <ReportCard key={r.id} report={r} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-2">
           {data.reports.map((r) => (
