@@ -19,8 +19,10 @@ export default function BoardPage() {
   const [dim, setDim] = useState<BoardDim>("industry");
   const [period, setPeriod] = useState<"month" | "year">("month");
   const [rows, setRows] = useState<BoardRow[] | null>(null);
-  const [rowFilter, setRowFilter] = useState<string | null>(null); // 특정 산업/기업만 보기
+  const [rowFilter, setRowFilter] = useState<string | null>(null); // 산업=산업키, 기업=계열명
+  const [groupMap, setGroupMap] = useState<Record<string, string>>({}); // 회사→계열
   const [busy, setBusy] = useState(false);
+  const groupOf = (co: string) => groupMap[co] ?? "기타";
 
   const load = useCallback(async () => {
     const r = await api.boardRows({ dim, period }).catch(() => ({ rows: [] as BoardRow[] }));
@@ -34,6 +36,7 @@ export default function BoardPage() {
         window.location.href = "/login";
         return;
       }
+      api.companyGroups().then((r) => setGroupMap(r.map)).catch(() => {});
       load();
     })();
   }, [load]);
@@ -110,30 +113,41 @@ export default function BoardPage() {
         </button>
       </div>
 
-      {/* 행 필터(특정 산업/기업만) */}
-      {rows && rows.length > 1 && dim !== "news" && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setRowFilter(null)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              !rowFilter ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
-            }`}
-          >
-            전체
-          </button>
-          {rows.map((r) => (
-            <button
-              key={r.key}
-              onClick={() => setRowFilter(r.key)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                rowFilter === r.key ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 행 필터: 산업=산업, 기업=계열별 */}
+      {rows &&
+        rows.length > 1 &&
+        dim !== "news" &&
+        (() => {
+          // 기업 차원은 계열로 묶어 필터
+          const chips =
+            dim === "company"
+              ? [...new Set(rows.map((r) => groupOf(r.label)))].sort((a, b) => (a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b)))
+              : rows.map((r) => r.key);
+          const chipLabel = (k: string) => (dim === "company" ? k : rows.find((r) => r.key === k)?.label ?? k);
+          return (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setRowFilter(null)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  !rowFilter ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                }`}
+              >
+                전체
+              </button>
+              {chips.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setRowFilter(k)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    rowFilter === k ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                  }`}
+                >
+                  {chipLabel(k)}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
       {/* 행(타임라인) */}
       {rows === null ? (
@@ -153,7 +167,7 @@ export default function BoardPage() {
         </p>
       ) : (
         <div className="mt-6 space-y-6">
-          {rows.filter((row) => !rowFilter || row.key === rowFilter).map((row) => (
+          {rows.filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter)).map((row) => (
             <div key={row.key}>
               <div className="mb-2 text-sm font-semibold text-primary">{row.label}</div>
               <div className="flex gap-3 overflow-x-auto pb-2">
