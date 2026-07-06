@@ -25,6 +25,8 @@ export default function BoardPage() {
   const [favCompanies, setFavCompanies] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const groupOf = (co: string) => groupMap[co] ?? "기타";
+  // 기업 별표 여부: 그 기업이 직접 별표됐거나, 소속 계열이 별표된 경우
+  const isFavCompany = (co: string) => favCompanies.has(co) || favGroups.has(groupOf(co));
 
   const load = useCallback(async () => {
     const r = await api.boardRows({ dim, period }).catch(() => ({ rows: [] as BoardRow[] }));
@@ -143,7 +145,7 @@ export default function BoardPage() {
                 전체
               </button>
               {chips.map((k) => {
-                const starred = dim === "industry" && (rows.find((r) => r.key === k)?.star ?? false);
+                const starred = dim === "industry" ? (rows.find((r) => r.key === k)?.star ?? false) : dim === "company" ? favGroups.has(k) : false;
                 return (
                   <button
                     key={k}
@@ -182,13 +184,13 @@ export default function BoardPage() {
           {rows
             .filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter))
             .sort((a, b) => {
-              // 별표 우선(산업=row.star, 기업=favCompanies)
-              const fa = dim === "company" ? favCompanies.has(a.label) : !!a.star;
-              const fb = dim === "company" ? favCompanies.has(b.label) : !!b.star;
+              // 별표 우선(산업=row.star, 기업=직접 별표 또는 소속 계열 별표)
+              const fa = dim === "company" ? isFavCompany(a.label) : !!a.star;
+              const fb = dim === "company" ? isFavCompany(b.label) : !!b.star;
               return fa === fb ? 0 : fa ? -1 : 1;
             })
             .map((row) => {
-              const starred = dim === "company" ? favCompanies.has(row.label) : !!row.star;
+              const starred = dim === "company" ? isFavCompany(row.label) : !!row.star;
               return (
             <div key={row.key}>
               <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary">
