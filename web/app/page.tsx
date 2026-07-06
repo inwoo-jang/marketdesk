@@ -25,18 +25,22 @@ export default function Home() {
   const [pub, setPub] = useState<PublicContent[]>([]);
   const [view, setView] = useState<"all" | "bookmarks" | "hidden">("all");
   const [hidePublicFeed, setHidePublicFeed] = useState(true); // 공공 콘텐츠 기본 숨김(요청)
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const PAGE_SIZE = 20;
 
-  // 탭(view)에 맞는 리포트+공공 콘텐츠 피드 로드
-  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden") => {
-    const [{ reports }, pc] = await Promise.all([
-      api.myReports({ view: v }),
-      (v === "all" ? api.publicContents() : v === "bookmarks" ? api.bookmarkedContents() : api.hiddenContents()).catch(() => ({
-        contents: [],
-      })),
+  // 탭(view)·페이지에 맞는 리포트 로드. 공공 콘텐츠는 1페이지에서만.
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number) => {
+    const [rep, pc] = await Promise.all([
+      api.myReports({ view: v, page: p }),
+      p === 1
+        ? (v === "all" ? api.publicContents() : v === "bookmarks" ? api.bookmarkedContents() : api.hiddenContents()).catch(() => ({ contents: [] }))
+        : Promise.resolve({ contents: [] as PublicContent[] }),
     ]);
-    setRecent(reports);
+    setRecent(rep.reports);
+    setTotal(rep.total ?? rep.reports.length);
     setPub(pc.contents);
   }, []);
 
@@ -62,23 +66,29 @@ export default function Home() {
     (async () => {
       const me = await api.me().catch(() => ({ user: null }));
       setUser(me.user);
-      if (me.user) await Promise.all([loadData().catch(() => {}), loadFeed("all").catch(() => {})]);
+      if (me.user) await Promise.all([loadData().catch(() => {}), loadFeed("all", 1).catch(() => {})]);
       setLoaded(true);
     })();
   }, [loadData, loadFeed]);
 
   function switchView(v: "all" | "bookmarks" | "hidden") {
     setView(v);
-    loadFeed(v).catch(() => {});
+    setPage(1);
+    loadFeed(v, 1).catch(() => {});
+  }
+  function goPage(p: number) {
+    setPage(p);
+    loadFeed(view, p).catch(() => {});
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view).catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view, page).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadFeed, view]);
+  }, [user, recent, loadFeed, view, page]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -303,7 +313,7 @@ export default function Home() {
                 onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))}
               />
             ))}
-            {!hidePublicFeed && pub.map((c) => (
+            {page === 1 && !hidePublicFeed && pub.map((c) => (
               <PublicCard
                 key={c.id}
                 content={c}
@@ -311,6 +321,37 @@ export default function Home() {
                 onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))}
               />
             ))}
+          </div>
+        )}
+
+        {/* 페이지 (1,2,3...) */}
+        {total > PAGE_SIZE && (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-1">
+            <button
+              onClick={() => goPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-line px-2.5 py-1 text-sm text-ink-sub disabled:opacity-40"
+            >
+              ‹
+            </button>
+            {Array.from({ length: Math.ceil(total / PAGE_SIZE) }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => goPage(p)}
+                className={`rounded-lg px-3 py-1 text-sm font-medium ${
+                  p === page ? "bg-primary text-white" : "text-ink-sub hover:bg-bg-deep"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => goPage(Math.min(Math.ceil(total / PAGE_SIZE), page + 1))}
+              disabled={page >= Math.ceil(total / PAGE_SIZE)}
+              className="rounded-lg border border-line px-2.5 py-1 text-sm text-ink-sub disabled:opacity-40"
+            >
+              ›
+            </button>
           </div>
         )}
       </section>

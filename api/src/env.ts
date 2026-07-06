@@ -25,8 +25,10 @@ export const env = {
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
   uploadDir: process.env.UPLOAD_DIR ?? fileURLToPath(new URL("../.uploads", import.meta.url)),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 25),
-  // 용어 풀이 LLM: claude(CLI) | mock
+  // 용어 풀이 LLM: gemini(빠름, 키 있으면 우선) → claude(CLI 폴백) | mock
   defineProvider: process.env.DEFINE_PROVIDER ?? "claude",
+  geminiApiKey: process.env.GEMINI_API_KEY,
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
   // 개발자 모드: 분석 무제한(무료 한도 게이팅 우회). 로컬 Claude CLI(무제한)와 함께 쓰는 본인 테스트용. 운영에서는 false.
   devUnlimited: process.env.DEV_UNLIMITED === "true",
   // 개발자 계정 이메일(쉼표 구분). 이 계정만 설정에서 분석 엔진(로컬 Claude CLI) 선택 가능.

@@ -74,6 +74,7 @@ export function MemoLayer({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [notesHidden, setNotesHidden] = useState(false);
   const [positions, setPositions] = useState<Record<string, { top: number; left: number }>>({});
 
   // 각 메모를 앵커 오른쪽 여백에 배치(문서 절대좌표 → 스크롤 동행). 리플로우/리사이즈 시 재계산.
@@ -143,6 +144,17 @@ export function MemoLayer({
     document.addEventListener("mouseup", onUp);
     return () => document.removeEventListener("mouseup", onUp);
   }, [ready, rootRef]);
+
+  // 바깥 클릭 시 메모 팝오버 닫기(본문 재선택/다른 화면 클릭)
+  useEffect(() => {
+    if (!palette) return;
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.closest?.("[data-memo-pop]")) return;
+      setPalette(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [palette]);
 
   // 앵커 클릭 → 우측 패널 해당 메모 강조
   useEffect(() => {
@@ -219,8 +231,22 @@ export function MemoLayer({
         </div>
       )}
 
+      {/* 메모 숨기기/보기 토글 */}
+      {memos.length > 0 &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <button
+            onClick={() => setNotesHidden((v) => !v)}
+            className="fixed bottom-5 left-5 z-20 rounded-full border border-line bg-card/95 px-3 py-2 text-sm font-medium shadow-card backdrop-blur print:hidden"
+          >
+            📝 메모 {memos.length} · {notesHidden ? "보기" : "숨기기"}
+          </button>,
+          document.body,
+        )}
+
       {/* 여백 노트: 단어 옆(오른쪽)에 붙어 스크롤 동행 */}
-      {typeof document !== "undefined" &&
+      {!notesHidden &&
+        typeof document !== "undefined" &&
         createPortal(
           <>
             {memos.map((m) => {

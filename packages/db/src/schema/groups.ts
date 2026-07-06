@@ -15,11 +15,54 @@ export const companyGroups = pgTable(
   (t) => [index("company_groups_group_idx").on(t.groupName)],
 );
 
-// 회사명 정규화(매칭용): 공백 제거, (주)/주식회사/㈜ 제거, 소문자.
+// 대기업집단 한글 음차 ↔ 영문 이니셜(공정위 공식명은 음차, AI 추출명은 영문). 긴 것 먼저.
+const TRANS: [string, string][] = [
+  ["에이치디씨", "HDC"],
+  ["에스티엑스", "STX"],
+  ["케이씨씨", "KCC"],
+  ["오씨아이", "OCI"],
+  ["비지에프", "BGF"],
+  ["에이피알", "APR"],
+  ["에스엔티", "SNT"],
+  ["에스케이", "SK"],
+  ["에이치디", "HD"],
+  ["에이치엘", "HL"],
+  ["엘에스", "LS"],
+  ["지에스", "GS"],
+  ["케이티", "KT"],
+  ["씨제이", "CJ"],
+  ["케이지", "KG"],
+  ["티씨씨", "TCC"],
+  ["디알비", "DRB"],
+  ["아이에스", "IS"],
+  ["엘지", "LG"],
+  ["디엘", "DL"],
+  ["디비", "DB"],
+  ["디엔", "DN"],
+  ["에스엠", "SM"],
+];
+const transliterate = (s: string): string => {
+  let r = s;
+  for (const [k, v] of TRANS) if (r.includes(k)) r = r.split(k).join(v);
+  return r;
+};
+
+// 흔한 축약 별칭(AI 추출명 → 공식명). 정규화 결과가 키와 같으면 값으로 치환.
+const ALIAS: Record<string, string> = {
+  현대차: "현대자동차",
+  현대건설기계: "hd현대건설기계",
+  현대중공업: "hd현대중공업",
+};
+
+// 회사명 정규화(매칭용): (주)/유한회사 등 제거, 음차→영문, 공백 제거, 소문자, 별칭 치환.
 export function normCompany(name: string): string {
-  return name
-    .replace(/\(주\)|주식회사|㈜/g, "")
-    .replace(/\s+/g, "")
+  const s = transliterate(name.replace(/\(주\)|\(유\)|주식회사|유한회사|㈜/g, "").replace(/\s+/g, ""))
     .toLowerCase()
     .trim();
+  return ALIAS[s] ?? s;
+}
+
+// 그룹(기업집단) 표시명: 음차→영문(에스케이→SK, 엘지→LG, 엘에스→LS ...).
+export function displayGroupName(name: string): string {
+  return transliterate(name.trim());
 }

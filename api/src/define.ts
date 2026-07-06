@@ -32,6 +32,29 @@ function runClaude(prompt: string, timeoutMs = 30_000): Promise<string> {
   });
 }
 
+// Gemini REST(빠름, CLI 시작 지연 없음). thinking off.
+async function runGemini(prompt: string): Promise<string> {
+  const key = env.geminiApiKey;
+  if (!key) throw new Error("no gemini key");
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (!res.ok) throw new Error(`gemini ${res.status}`);
+  const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const text = (j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
+  if (!text) throw new Error("gemini empty");
+  return text;
+}
+
 // 용어를 100자 이내로 쉽고 정확하게 설명. context(리포트 본문 일부)로 맥락 반영.
 export async function defineTerm(term: string, context?: string): Promise<string> {
   const t = term.trim().slice(0, 40);
@@ -47,10 +70,15 @@ export async function defineTerm(term: string, context?: string): Promise<string
     `- 머리말·따옴표 금지, 100자 이내.\n` +
     `용어: ${t}\n` +
     (context ? `맥락: ${context.slice(0, 300)}\n` : "");
+  // Gemini 우선(빠름), 실패 시 claude CLI 폴백
+  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, "").slice(0, 200);
   try {
-    const text = (await runClaude(prompt)).trim().replace(/^["']|["']$/g, "");
-    return text.slice(0, 200) || `${t}: 설명을 찾지 못했어요.`;
+    return clean(await runGemini(prompt)) || `${t}: 설명을 찾지 못했어요.`;
   } catch {
-    return `${t}: 설명을 가져오지 못했어요(잠시 후 다시).`;
+    try {
+      return clean(await runClaude(prompt)) || `${t}: 설명을 찾지 못했어요.`;
+    } catch {
+      return `${t}: 설명을 가져오지 못했어요(잠시 후 다시).`;
+    }
   }
 }

@@ -813,25 +813,34 @@ meRoute.get("/reports", async (c) => {
   if (view === "hidden") conds.push(eq(reports.hidden, true));
   else conds.push(eq(reports.hidden, false)); // all·bookmarks 는 숨김 제외
   if (view === "bookmarks") conds.push(eq(reports.bookmarked, true));
+  const pageQ = Number(c.req.query("page"));
+  const page = Number.isInteger(pageQ) && pageQ >= 1 ? pageQ : 0; // 0=페이지네이션 안함(전체)
+  const pageSize = 20;
 
-  const rows = industryId
-    ? await db
-        .select(getTableColumns(reports))
-        .from(reports)
-        .innerJoin(
-          reportIndustries,
-          and(eq(reportIndustries.reportId, reports.id), eq(reportIndustries.industryId, industryId)),
-        )
-        .where(and(...conds))
-        .orderBy(desc(reports.createdAt))
-        .limit(50)
-    : await db
-        .select()
-        .from(reports)
-        .where(and(...conds))
-        .orderBy(desc(reports.createdAt))
-        .limit(50);
+  if (industryId) {
+    const rows = await db
+      .select(getTableColumns(reports))
+      .from(reports)
+      .innerJoin(reportIndustries, and(eq(reportIndustries.reportId, reports.id), eq(reportIndustries.industryId, industryId)))
+      .where(and(...conds))
+      .orderBy(desc(reports.createdAt))
+      .limit(500);
+    return c.json({ reports: await attachIndustries(rows) });
+  }
 
+  if (page >= 1) {
+    const [cnt] = await db.select({ n: sql<number>`count(*)::int` }).from(reports).where(and(...conds));
+    const rows = await db
+      .select()
+      .from(reports)
+      .where(and(...conds))
+      .orderBy(desc(reports.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return c.json({ reports: await attachIndustries(rows), total: cnt?.n ?? 0, page, pageSize });
+  }
+
+  const rows = await db.select().from(reports).where(and(...conds)).orderBy(desc(reports.createdAt)).limit(500);
   return c.json({ reports: await attachIndustries(rows) });
 });
 

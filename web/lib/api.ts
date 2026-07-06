@@ -53,13 +53,14 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden" }) => {
+  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
     if (params?.view) q.set("view", params.view);
+    if (params?.page) q.set("page", String(params.page));
     const qs = q.toString();
-    return get<{ reports: Report[] }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
+    return get<{ reports: Report[]; total?: number; page?: number; pageSize?: number }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
   },
   bookmarkReport: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/bookmark`),
   unbookmarkReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/bookmark`),
