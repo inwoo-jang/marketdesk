@@ -18,6 +18,8 @@ export default function DocsFeed() {
   const [all, setAll] = useState<Report[]>([]);
   const [followed, setFollowed] = useState<MyIndustry[]>([]);
   const [groupMap, setGroupMap] = useState<Record<string, string>>({});
+  const [favGroups, setFavGroups] = useState<Set<string>>(new Set());
+  const [favCompanies, setFavCompanies] = useState<Set<string>>(new Set());
   const [companyBy, setCompanyBy] = useState<"group" | "industry">("group"); // 기업리포트 상위 분류
   const [indFilter, setIndFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -30,14 +32,17 @@ export default function DocsFeed() {
       window.location.href = "/login";
       return;
     }
-    const [{ reports }, mi, cg] = await Promise.all([
+    const [{ reports }, mi, cg, fav] = await Promise.all([
       api.myReports(),
       api.myIndustries().catch(() => ({ industries: [] as MyIndustry[] })),
       api.companyGroups().catch(() => ({ map: {} as Record<string, string> })),
+      api.companyFavorites().catch(() => ({ groups: [] as string[], companies: [] as string[] })),
     ]);
     setAll(reports);
     setFollowed(mi.industries);
     setGroupMap(cg.map);
+    setFavGroups(new Set(fav.groups));
+    setFavCompanies(new Set(fav.companies));
     setLoaded(true);
   }, []);
 
@@ -93,6 +98,20 @@ export default function DocsFeed() {
   const isMisc = (k: string) => k === "국내 기타" || k === "해외 기타" || k === "기타" || k === "_none";
   const newsFor = (companies: string[]) => news.filter((r) => companies.some((n) => newsMentions(r, n)));
 
+  async function toggleFav(kind: "group" | "company", value: string) {
+    const cur = kind === "group" ? favGroups : favCompanies;
+    const setFn = kind === "group" ? setFavGroups : setFavCompanies;
+    const next = new Set(cur);
+    if (cur.has(value)) {
+      next.delete(value);
+      await api.removeCompanyFavorite(kind, value).catch(() => {});
+    } else {
+      next.add(value);
+      await api.addCompanyFavorite(kind, value).catch(() => {});
+    }
+    setFn(next);
+  }
+
   const followedIds = followed.map((f) => f.id);
   const followedOrder = new Map(followed.map((f, i) => [f.id, i]));
   // 산업 칩
@@ -107,7 +126,15 @@ export default function DocsFeed() {
   // 계열 칩
   const groupCount = new Map<string, number>();
   if (type === "company") for (const r of reports) groupCount.set(groupOf(r.company), (groupCount.get(groupOf(r.company)) ?? 0) + 1);
-  const groupChips = [...groupCount.entries()].sort((a, b) => (isMisc(a[0]) ? 1 : isMisc(b[0]) ? -1 : b[1] - a[1])).map(([g]) => g);
+  const groupChips = [...groupCount.entries()]
+    .sort((a, b) => {
+      const fa = favGroups.has(a[0]);
+      const fb = favGroups.has(b[0]);
+      if (fa !== fb) return fa ? -1 : 1; // 별표 우선
+      if (isMisc(a[0]) !== isMisc(b[0])) return isMisc(a[0]) ? 1 : -1;
+      return b[1] - a[1];
+    })
+    .map(([g]) => g);
 
   // 기업리포트 상위 필터(계열 또는 산업)
   const cFilter = companyBy === "group" ? groupFilter : indFilter;
@@ -115,7 +142,12 @@ export default function DocsFeed() {
     companyBy === "group" ? groupOf(r.company) === cFilter : (r.industries ?? []).some((i) => i.id === cFilter);
   const companyChips =
     type === "company"
-      ? [...new Set(reports.filter((r) => !cFilter || inScope(r)).map((r) => r.company?.trim()).filter((c): c is string => !!c))].sort()
+      ? [...new Set(reports.filter((r) => !cFilter || inScope(r)).map((r) => r.company?.trim()).filter((c): c is string => !!c))].sort((a, b) => {
+          const fa = favCompanies.has(a);
+          const fb = favCompanies.has(b);
+          if (fa !== fb) return fa ? -1 : 1; // 별표 우선
+          return a.localeCompare(b);
+        })
       : [];
 
   const relatedCompanyReports =
@@ -214,7 +246,26 @@ export default function DocsFeed() {
         <div className="mt-3 flex flex-wrap gap-1.5">
           <Chip label="전체" active={!groupFilter} onClick={() => { setGroupFilter(null); setCompany(null); }} />
           {groupChips.map((g) => (
-            <Chip key={g} label={g} active={groupFilter === g} onClick={() => { setGroupFilter(g); setCompany(null); }} />
+            <span
+              key={g}
+              className={`inline-flex items-center gap-1 rounded-full border py-1 pl-3 pr-1 text-sm font-medium ${
+                groupFilter === g ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"
+              }`}
+            >
+              <button onClick={() => { setGroupFilter(g); setCompany(null); }}>
+                {favGroups.has(g) ? "★ " : ""}
+                {g}
+              </button>
+              {!isMisc(g) && (
+                <button
+                  onClick={() => toggleFav("group", g)}
+                  className={`rounded-full px-1 ${favGroups.has(g) ? "text-amber-500" : "text-ink-muted hover:text-amber-500"}`}
+                  title={favGroups.has(g) ? "별표 해제" : "별표"}
+                >
+                  {favGroups.has(g) ? "★" : "☆"}
+                </button>
+              )}
+            </span>
           ))}
         </div>
       )}
@@ -234,15 +285,26 @@ export default function DocsFeed() {
               전체
             </button>
             {companyChips.map((c) => (
-              <button
+              <span
                 key={c}
-                onClick={() => setCompany(c)}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  company === c ? "bg-primary text-white" : "bg-card text-ink-sub ring-1 ring-primary/20 hover:bg-primary/10"
+                className={`inline-flex items-center gap-0.5 rounded-full py-0.5 pl-2.5 pr-1 text-xs font-medium ${
+                  company === c ? "bg-primary text-white" : "bg-card text-ink-sub ring-1 ring-primary/20"
                 }`}
               >
-                {c}
-              </button>
+                <button onClick={() => setCompany(c)}>
+                  {favCompanies.has(c) ? "★ " : ""}
+                  {c}
+                </button>
+                <button
+                  onClick={() => toggleFav("company", c)}
+                  className={`rounded-full px-0.5 ${
+                    favCompanies.has(c) ? "text-amber-400" : company === c ? "text-white/70 hover:text-white" : "text-ink-muted hover:text-amber-500"
+                  }`}
+                  title={favCompanies.has(c) ? "별표 해제" : "별표"}
+                >
+                  {favCompanies.has(c) ? "★" : "☆"}
+                </button>
+              </span>
             ))}
           </div>
         </div>

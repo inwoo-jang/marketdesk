@@ -19,6 +19,7 @@ import {
   userPublicHidden,
   userPublicBookmark,
   companyGroups,
+  userCompanyFavorites,
   normCompany,
   memos,
   JOB_ROLES,
@@ -618,6 +619,45 @@ meRoute.get("/company-groups", async (c) => {
     if (g) map[co] = g;
   }
   return c.json({ map });
+});
+
+// GET /api/me/company-favorites - 즐겨찾기한 계열/기업(별표)
+meRoute.get("/company-favorites", async (c) => {
+  const user = c.get("user");
+  const rows = await db
+    .select({ kind: userCompanyFavorites.kind, value: userCompanyFavorites.value })
+    .from(userCompanyFavorites)
+    .where(eq(userCompanyFavorites.userId, user.id));
+  return c.json({
+    groups: rows.filter((r) => r.kind === "group").map((r) => r.value),
+    companies: rows.filter((r) => r.kind === "company").map((r) => r.value),
+  });
+});
+
+const favSchema = z.object({ kind: z.enum(["group", "company"]), value: z.string().min(1).max(120) });
+
+// POST /api/me/company-favorites - 계열/기업 별표 추가
+meRoute.post("/company-favorites", async (c) => {
+  const user = c.get("user");
+  const parsed = favSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  await db
+    .insert(userCompanyFavorites)
+    .values({ userId: user.id, kind: parsed.data.kind, value: parsed.data.value.trim() })
+    .onConflictDoNothing();
+  return c.json({ ok: true });
+});
+
+// DELETE /api/me/company-favorites?kind=&value= - 별표 해제
+meRoute.delete("/company-favorites", async (c) => {
+  const user = c.get("user");
+  const kind = c.req.query("kind");
+  const value = c.req.query("value");
+  if ((kind !== "group" && kind !== "company") || !value) return c.json({ error: "invalid" }, 400);
+  await db
+    .delete(userCompanyFavorites)
+    .where(and(eq(userCompanyFavorites.userId, user.id), eq(userCompanyFavorites.kind, kind), eq(userCompanyFavorites.value, value)));
+  return c.json({ ok: true });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)

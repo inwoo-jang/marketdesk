@@ -10,3 +10,4 @@ export * from "./highlights";
 export * from "./public";
 export * from "./groups";
 export * from "./memos";
+export * from "./company-favorites";

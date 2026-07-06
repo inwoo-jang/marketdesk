@@ -111,6 +111,11 @@ export const api = {
     return get<{ contents: PublicContent[] }>(`/api/me/public/contents${qs ? `?${qs}` : ""}`);
   },
   companyGroups: () => get<{ map: Record<string, string> }>("/api/me/company-groups"),
+  companyFavorites: () => get<{ groups: string[]; companies: string[] }>("/api/me/company-favorites"),
+  addCompanyFavorite: (kind: "group" | "company", value: string) =>
+    post<{ ok: true }>("/api/me/company-favorites", { kind, value }),
+  removeCompanyFavorite: (kind: "group" | "company", value: string) =>
+    del<{ ok: true }>(`/api/me/company-favorites?kind=${kind}&value=${encodeURIComponent(value)}`),
   hiddenContents: () => get<{ contents: PublicContent[] }>("/api/me/public/hidden"),
   bookmarkedContents: () => get<{ contents: PublicContent[] }>("/api/me/public/bookmarks"),
   ingestPublic: () => post<{ ok: true; started?: boolean; already?: boolean }>("/api/me/public/ingest"),

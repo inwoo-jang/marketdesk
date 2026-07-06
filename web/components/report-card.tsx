@@ -15,8 +15,8 @@ const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업"
 // 문서 타입별 아주 연한 카드 톤 + 배지 색(가독성 해치지 않게 옅게). 메뉴 칩과 색 통일.
 const DOC_TONE: Record<string, { card: string; badge: string }> = {
   industry: { card: "bg-violet-50/40", badge: "bg-violet-100 text-violet-700" },
-  company: { card: "bg-emerald-50/40", badge: "bg-emerald-100 text-emerald-700" },
-  news: { card: "bg-sky-50/60", badge: "bg-sky-100 text-sky-700" },
+  company: { card: "bg-amber-50/40", badge: "bg-amber-100 text-amber-700" },
+  news: { card: "bg-sky-50/50", badge: "bg-sky-100 text-sky-700" },
 };
 const fmt = (d: string | null) => {
   if (!d) return null;

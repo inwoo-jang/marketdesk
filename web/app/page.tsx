@@ -32,9 +32,9 @@ type DocFilter = (typeof DOC_FILTERS)[number]["k"];
 const CHIP_TONE: Record<DocFilter, string> = {
   all: "border-primary bg-primary/10 text-primary",
   industry: "border-violet-300 bg-violet-100 text-violet-700",
-  company: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  company: "border-amber-300 bg-amber-100 text-amber-700",
   news: "border-sky-300 bg-sky-100 text-sky-700",
-  public: "border-amber-300 bg-amber-100 text-amber-700",
+  public: "border-emerald-300 bg-emerald-100 text-emerald-700",
 };
 
 // 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
