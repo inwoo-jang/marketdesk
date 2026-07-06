@@ -140,6 +140,8 @@ export default function Home() {
   const [total, setTotal] = useState(0);
   const [hidePublic, setHidePublic] = useState(true);
   const [isDev, setIsDev] = useState(false);
+  const [favGroups, setFavGroups] = useState<string[]>([]);
+  const [favCompanies, setFavCompanies] = useState<string[]>([]);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
@@ -187,6 +189,7 @@ export default function Home() {
     setCatalog(industries);
     setUsage(u);
     api.llmSetting().then((s) => setIsDev(s.isDeveloper)).catch(() => {});
+    api.companyFavorites().then((f) => { setFavGroups(f.groups); setFavCompanies(f.companies); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -381,6 +384,35 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* 관심 기업(별표) = 산업보다 작게. 계열/개별 기업 칩 → 기업리포트로 이동 */}
+      {(favGroups.length > 0 || favCompanies.length > 0) && (
+        <section className="mb-8">
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + favCompanies.length})</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {favGroups.map((g) => (
+              <a
+                key={`g-${g}`}
+                href={`/docs/company?by=group&g=${encodeURIComponent(g)}`}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+              >
+                <span className="text-amber-500">★</span>
+                {g} <span className="text-amber-500/70">계열</span>
+              </a>
+            ))}
+            {favCompanies.map((c) => (
+              <a
+                key={`c-${c}`}
+                href={`/docs/company?c=${encodeURIComponent(c)}`}
+                className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+              >
+                <span className="text-amber-400">★</span>
+                {c}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 전체 산업: 다 볼 수 있고, ★ 로 핀 선택 */}
       <section>
