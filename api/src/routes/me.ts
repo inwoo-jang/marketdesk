@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, inArray, desc, sql, isNull, gte, lt, getTableColumns } from "drizzle-orm";
@@ -1051,6 +1052,18 @@ meRoute.post("/reports", async (c) => {
     return c.json({ error: "PDF 파일 또는 텍스트를 입력하세요" }, 400);
   }
 
+  // 정확 중복 감지: 업로드 내용 SHA-256. 같은 해시가 이미 있으면(force 아니면) 안내하고 중단.
+  const contentHash = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+  const force = body["force"] === "true" || body["force"] === "1";
+  if (!force) {
+    const [dup] = await db
+      .select({ id: reports.id, title: reports.title })
+      .from(reports)
+      .where(and(eq(reports.userId, user.id), eq(reports.contentHash, contentHash), eq(reports.hidden, false)))
+      .limit(1);
+    if (dup) return c.json({ duplicate: { id: dup.id, title: dup.title } });
+  }
+
   // 산업(선택): 글로벌이거나 본인 소유만. 미지정이면 워커 AI 매칭.
   const industryId = typeof body["industryId"] === "string" && body["industryId"] ? body["industryId"] : null;
   if (industryId) {
@@ -1095,6 +1108,7 @@ meRoute.post("/reports", async (c) => {
       inputFormat,
       fileKey,
       fileSize: size,
+      contentHash,
       requestedLenses: requested,
       llmProvider,
       parseStatus: "pending",

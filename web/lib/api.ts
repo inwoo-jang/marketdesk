@@ -81,6 +81,7 @@ export const api = {
     title?: string;
     industryId?: string;
     lensKeys?: string[];
+    force?: boolean;
   }) => {
     const fd = new FormData();
     if (input.file) fd.append("file", input.file);
@@ -88,12 +89,13 @@ export const api = {
     if (input.title) fd.append("title", input.title);
     if (input.industryId) fd.append("industryId", input.industryId);
     if (input.lensKeys) fd.append("lensKeys", JSON.stringify(input.lensKeys));
+    if (input.force) fd.append("force", "true");
     const res = await fetch(`${API_URL}/api/me/reports`, { method: "POST", credentials: "include", body: fd });
     if (!res.ok) {
       const msg = await res.json().catch(() => ({ error: `업로드 실패: ${res.status}` }));
       throw new Error((msg as { error?: string }).error ?? "업로드 실패");
     }
-    return res.json() as Promise<{ report: Report }>;
+    return res.json() as Promise<{ report?: Report; duplicate?: { id: string; title: string | null } }>;
   },
   setReportIndustry: (reportId: string, industryId: string | null) =>
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),

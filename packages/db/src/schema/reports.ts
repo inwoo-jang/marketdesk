@@ -32,10 +32,14 @@ export const reports = pgTable(
     // 유저 정리용(리포트는 단일 소유라 컬럼으로 충분). 숨김=피드 제외, 책갈피=즐겨찾기.
     hidden: boolean("hidden").default(false).notNull(),
     bookmarked: boolean("bookmarked").default(false).notNull(),
+    contentHash: text("content_hash"), // 업로드 내용 SHA-256(정확 중복 감지)
     parseStatus: parseStatus("parse_status").default("pending").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("reports_user_industry_date_idx").on(t.userId, t.industryId, t.pubDate)],
+  (t) => [
+    index("reports_user_industry_date_idx").on(t.userId, t.industryId, t.pubDate),
+    index("reports_user_hash_idx").on(t.userId, t.contentHash),
+  ],
 );
 
 // report_pages: 페이지 단위 텍스트([p.N] 인용·룰매칭 검증용).

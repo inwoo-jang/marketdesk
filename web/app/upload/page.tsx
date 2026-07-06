@@ -26,6 +26,7 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dup, setDup] = useState<{ id: string; title: string | null } | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -62,22 +63,31 @@ export default function UploadPage() {
     });
   }
 
-  async function submit() {
+  async function submit(force = false) {
     if (mode === "pdf" && !file) return setError("PDF 파일을 선택하세요.");
     if (mode === "text" && !text.trim()) return setError("텍스트를 입력하세요.");
     if (lensKeys.size === 0) return setError("렌즈를 1개 이상 선택하세요.");
     setBusy(true);
     setError(null);
+    if (force) setDup(null);
     try {
-      const { report } = await api.uploadReport({
+      const res = await api.uploadReport({
         file: mode === "pdf" ? (file ?? undefined) : undefined,
         text: mode === "text" ? text : undefined,
         title: mode === "text" ? title || undefined : undefined,
         industryId: industryId || undefined,
         lensKeys: [...lensKeys],
+        force,
       });
-      router.push(`/reports/${report.id}`); // 검토 화면에서 처리상태 폴링
-      router.refresh();
+      if (res.duplicate) {
+        setDup(res.duplicate); // 정확 중복 → 확인 요청
+        setBusy(false);
+        return;
+      }
+      if (res.report) {
+        router.push(`/reports/${res.report.id}`); // 검토 화면에서 처리상태 폴링
+        router.refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "업로드 실패");
       setBusy(false);
@@ -209,8 +219,29 @@ export default function UploadPage() {
 
       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
+      {/* 정확 중복 안내 */}
+      {dup && (
+        <div className="mt-4 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm">
+          <p className="font-medium text-amber-800">이미 올린 것과 내용이 똑같아요.</p>
+          <p className="mt-0.5 text-amber-700">“{dup.title ?? "기존 리포트"}”</p>
+          <div className="mt-3 flex gap-2">
+            <a href={`/reports/${dup.id}`} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white">
+              기존 리포트 보기
+            </a>
+            <button
+              onClick={() => submit(true)}
+              disabled={busy}
+              className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-sub hover:bg-bg-deep disabled:opacity-50"
+            >
+              그래도 새로 분석
+            </button>
+            <button onClick={() => setDup(null)} className="px-2 py-1.5 text-xs text-ink-muted hover:text-ink">취소</button>
+          </div>
+        </div>
+      )}
+
       <button
-        onClick={submit}
+        onClick={() => submit()}
         disabled={busy || noQuota}
         className="mt-8 w-full rounded-xl bg-primary py-3 font-medium text-white hover:brightness-105 disabled:opacity-50"
       >
