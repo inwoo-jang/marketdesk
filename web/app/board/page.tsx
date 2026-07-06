@@ -21,6 +21,8 @@ export default function BoardPage() {
   const [rows, setRows] = useState<BoardRow[] | null>(null);
   const [rowFilter, setRowFilter] = useState<string | null>(null); // 산업=산업키, 기업=계열명
   const [groupMap, setGroupMap] = useState<Record<string, string>>({}); // 회사→계열
+  const [favGroups, setFavGroups] = useState<Set<string>>(new Set());
+  const [favCompanies, setFavCompanies] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const groupOf = (co: string) => groupMap[co] ?? "기타";
 
@@ -37,6 +39,7 @@ export default function BoardPage() {
         return;
       }
       api.companyGroups().then((r) => setGroupMap(r.map)).catch(() => {});
+      api.companyFavorites().then((f) => { setFavGroups(new Set(f.groups)); setFavCompanies(new Set(f.companies)); }).catch(() => {});
       load();
     })();
   }, [load]);
@@ -121,7 +124,12 @@ export default function BoardPage() {
           // 기업 차원은 계열로 묶어 필터
           const chips =
             dim === "company"
-              ? [...new Set(rows.map((r) => groupOf(r.label)))].sort((a, b) => (a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b)))
+              ? [...new Set(rows.map((r) => groupOf(r.label)))].sort((a, b) => {
+                  const fa = favGroups.has(a);
+                  const fb = favGroups.has(b);
+                  if (fa !== fb) return fa ? -1 : 1; // 별표 계열 우선
+                  return a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b);
+                })
               : rows.map((r) => r.key);
           const chipLabel = (k: string) => (dim === "company" ? k : rows.find((r) => r.key === k)?.label ?? k);
           return (
@@ -171,10 +179,20 @@ export default function BoardPage() {
         </p>
       ) : (
         <div className="mt-6 space-y-6">
-          {rows.filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter)).map((row) => (
+          {rows
+            .filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter))
+            .sort((a, b) => {
+              // 별표 우선(산업=row.star, 기업=favCompanies)
+              const fa = dim === "company" ? favCompanies.has(a.label) : !!a.star;
+              const fb = dim === "company" ? favCompanies.has(b.label) : !!b.star;
+              return fa === fb ? 0 : fa ? -1 : 1;
+            })
+            .map((row) => {
+              const starred = dim === "company" ? favCompanies.has(row.label) : !!row.star;
+              return (
             <div key={row.key}>
               <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary">
-                {row.star && <span className="text-amber-500">★</span>}
+                {starred && <span className="text-amber-500">★</span>}
                 {row.label}
               </div>
               <div className="flex gap-3 overflow-x-auto pb-2">
@@ -189,7 +207,8 @@ export default function BoardPage() {
                 ))}
               </div>
             </div>
-          ))}
+              );
+            })}
         </div>
       )}
     </main>

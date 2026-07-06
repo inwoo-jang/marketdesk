@@ -248,14 +248,11 @@ export default function DocsFeed() {
           {groupChips.map((g) => (
             <span
               key={g}
-              className={`inline-flex items-center gap-1 rounded-full border py-1 pl-3 pr-1 text-sm font-medium ${
+              className={`inline-flex items-center gap-1 rounded-full border py-1 pl-3 text-sm font-medium ${isMisc(g) ? "pr-3" : "pr-1"} ${
                 groupFilter === g ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"
               }`}
             >
-              <button onClick={() => { setGroupFilter(g); setCompany(null); }}>
-                {favGroups.has(g) ? "★ " : ""}
-                {g}
-              </button>
+              <button onClick={() => { setGroupFilter(g); setCompany(null); }}>{g}</button>
               {!isMisc(g) && (
                 <button
                   onClick={() => toggleFav("group", g)}
@@ -291,10 +288,7 @@ export default function DocsFeed() {
                   company === c ? "bg-primary text-white" : "bg-card text-ink-sub ring-1 ring-primary/20"
                 }`}
               >
-                <button onClick={() => setCompany(c)}>
-                  {favCompanies.has(c) ? "★ " : ""}
-                  {c}
-                </button>
+                <button onClick={() => setCompany(c)}>{c}</button>
                 <button
                   onClick={() => toggleFav("company", c)}
                   className={`rounded-full px-0.5 ${
