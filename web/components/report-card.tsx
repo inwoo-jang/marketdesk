@@ -85,7 +85,19 @@ export function ReportCard({
           <span className="truncate font-semibold">
             {processing ? (report.title ?? "분석 중...") : (report.title ?? "제목 없음")}
           </span>
-          <span className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${s.c}`}>{s.t}</span>
+          <span className="ml-auto shrink-0" title={s.t}>
+            {report.parseStatus === "parsed" ? (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            ) : report.parseStatus === "failed" ? (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            ) : (
+              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+            )}
+          </span>
         </div>
         {report.summary && <p className="mt-1 line-clamp-2 text-sm text-ink-sub">{report.summary}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
