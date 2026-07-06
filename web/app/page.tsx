@@ -7,7 +7,62 @@ import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
 import { LoginPanel } from "@/components/login-panel";
 import { UsageBadge } from "@/components/usage-badge";
-import { HideIcon } from "@/components/hide-icon";
+
+// 기간 선택(연도→월→일). 미선택이면 최근 3개월.
+const pad = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+type DateSel = { year: number | null; month: number | null; day: number | null };
+function computeRange(d: DateSel): { from: string; to: string } {
+  const now = new Date();
+  if (!d.year) return { from: ymd(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())), to: ymd(now) };
+  if (!d.month) return { from: `${d.year}-01-01`, to: `${d.year}-12-31` };
+  const last = new Date(d.year, d.month, 0).getDate();
+  if (!d.day) return { from: `${d.year}-${pad(d.month)}-01`, to: `${d.year}-${pad(d.month)}-${pad(last)}` };
+  return { from: `${d.year}-${pad(d.month)}-${pad(d.day)}`, to: `${d.year}-${pad(d.month)}-${pad(d.day)}` };
+}
+const DOC_FILTERS = [
+  { k: "all", label: "전체" },
+  { k: "industry", label: "산업" },
+  { k: "company", label: "기업" },
+  { k: "news", label: "뉴스" },
+  { k: "public", label: "공공" },
+] as const;
+type DocFilter = (typeof DOC_FILTERS)[number]["k"];
+
+// 기간 선택 UI: 연도 → 월 → 일 (미선택=최근 3개월)
+function DateRange({ sel, onChange }: { sel: DateSel; onChange: (d: DateSel) => void }) {
+  const nowY = new Date().getFullYear();
+  const years = Array.from({ length: 6 }, (_, i) => nowY - i);
+  const days = sel.year && sel.month ? new Date(sel.year, sel.month, 0).getDate() : 0;
+  const cls = "rounded-lg border border-line bg-card px-2 py-1 text-xs outline-none focus:border-primary";
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-ink-muted">기간</span>
+      <select className={cls} value={sel.year ?? ""} onChange={(e) => onChange({ year: e.target.value ? Number(e.target.value) : null, month: null, day: null })}>
+        <option value="">최근 3개월</option>
+        {years.map((y) => (
+          <option key={y} value={y}>{y}년</option>
+        ))}
+      </select>
+      {sel.year && (
+        <select className={cls} value={sel.month ?? ""} onChange={(e) => onChange({ ...sel, month: e.target.value ? Number(e.target.value) : null, day: null })}>
+          <option value="">전체 월</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>{m}월</option>
+          ))}
+        </select>
+      )}
+      {sel.year && sel.month && (
+        <select className={cls} value={sel.day ?? ""} onChange={(e) => onChange({ ...sel, day: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">전체 일</option>
+          {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
+            <option key={d} value={d}>{d}일</option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
 
 // 홈 = 내 산업 목록(산업별 개별 대시보드 진입). 산업 클릭 → /industry/[id].
 export default function Home() {
@@ -24,21 +79,33 @@ export default function Home() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [pub, setPub] = useState<PublicContent[]>([]);
   const [view, setView] = useState<"all" | "bookmarks" | "hidden">("all");
-  const [hidePublicFeed, setHidePublicFeed] = useState(true); // 공공 콘텐츠 기본 숨김(요청)
+  const [docFilter, setDocFilter] = useState<DocFilter>("all");
+  const [dateSel, setDateSel] = useState<DateSel>({ year: null, month: null, day: null });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
 
-  // 탭(view)·페이지에 맞는 리포트 로드. 공공 콘텐츠는 1페이지에서만.
-  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number) => {
-    const [rep, pc] = await Promise.all([
-      api.myReports({ view: v, page: p }),
-      p === 1
-        ? (v === "all" ? api.publicContents() : v === "bookmarks" ? api.bookmarkedContents() : api.hiddenContents()).catch(() => ({ contents: [] }))
-        : Promise.resolve({ contents: [] as PublicContent[] }),
-    ]);
+  // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel) => {
+    const { from, to } = computeRange(ds);
+    const dt = df === "industry" || df === "company" || df === "news" ? df : undefined;
+    const repP =
+      df === "public"
+        ? Promise.resolve({ reports: [] as Report[], total: 0 })
+        : api.myReports({ view: v, docType: dt, from, to, page: p });
+    const pubP =
+      p !== 1
+        ? Promise.resolve({ contents: [] as PublicContent[] })
+        : v === "all"
+          ? df === "all" || df === "public"
+            ? api.publicContents({ from, to })
+            : Promise.resolve({ contents: [] as PublicContent[] })
+          : v === "bookmarks"
+            ? api.bookmarkedContents()
+            : api.hiddenContents();
+    const [rep, pc] = await Promise.all([repP, pubP.catch(() => ({ contents: [] as PublicContent[] }))]);
     setRecent(rep.reports);
     setTotal(rep.total ?? rep.reports.length);
     setPub(pc.contents);
@@ -66,7 +133,8 @@ export default function Home() {
     (async () => {
       const me = await api.me().catch(() => ({ user: null }));
       setUser(me.user);
-      if (me.user) await Promise.all([loadData().catch(() => {}), loadFeed("all", 1).catch(() => {})]);
+      if (me.user)
+        await Promise.all([loadData().catch(() => {}), loadFeed("all", 1, "all", { year: null, month: null, day: null }).catch(() => {})]);
       setLoaded(true);
     })();
   }, [loadData, loadFeed]);
@@ -74,21 +142,31 @@ export default function Home() {
   function switchView(v: "all" | "bookmarks" | "hidden") {
     setView(v);
     setPage(1);
-    loadFeed(v, 1).catch(() => {});
+    loadFeed(v, 1, docFilter, dateSel).catch(() => {});
   }
   function goPage(p: number) {
     setPage(p);
-    loadFeed(view, p).catch(() => {});
+    loadFeed(view, p, docFilter, dateSel).catch(() => {});
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function applyDoc(df: DocFilter) {
+    setDocFilter(df);
+    setPage(1);
+    loadFeed(view, 1, df, dateSel).catch(() => {});
+  }
+  function applyDate(ds: DateSel) {
+    setDateSel(ds);
+    setPage(1);
+    loadFeed(view, 1, docFilter, ds).catch(() => {});
   }
 
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view, page).catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadFeed, view, page]);
+  }, [user, recent, loadFeed, view, page, docFilter, dateSel]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -265,7 +343,7 @@ export default function Home() {
 
       {/* 피드: 탭(전체/즐겨찾기/숨긴항목) — 리포트 + 공공 콘텐츠 통합 */}
       <section className="mt-10">
-        <div className="mb-4 flex items-center gap-1 border-b border-line">
+        <div className="mb-3 flex items-center gap-1 border-b border-line">
           {([
             { k: "all", label: "전체보기" },
             { k: "bookmarks", label: "저장" },
@@ -281,48 +359,51 @@ export default function Home() {
               {t.label}
             </button>
           ))}
-          {/* 공공 숨기기 필터: 탭 오른쪽 끝 */}
-          <button
-            onClick={() => setHidePublicFeed((v) => !v)}
-            title="공공 콘텐츠를 피드에서 숨기기"
-            className={`ml-auto mb-1 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${
-              hidePublicFeed ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
-            }`}
-          >
-            <HideIcon slashed={!hidePublicFeed} className="h-3.5 w-3.5" />
-            공공 {hidePublicFeed ? "표시" : "숨김"}
-          </button>
         </div>
 
-        {recent.length === 0 && (hidePublicFeed || pub.length === 0) ? (
-          <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-            {view === "all"
-              ? "표시할 자료가 없어요. 우측 상단 “+ 업로드”로 리포트·뉴스를 올리거나, 아래 산업에서 공공 콘텐츠를 확인하세요."
-              : view === "bookmarks"
-                ? "즐겨찾기한 항목이 없어요. 카드의 책갈피를 눌러 추가하세요."
-                : "숨긴 항목이 없어요."}
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {recent.map((r) => (
-              <ReportCard
-                key={r.id}
-                report={r}
-                variant={view}
-                onDelete={deleteReport}
-                onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))}
-              />
-            ))}
-            {page === 1 && !hidePublicFeed && pub.map((c) => (
-              <PublicCard
-                key={c.id}
-                content={c}
-                variant={view === "all" ? "feed" : view}
-                onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))}
-              />
+        {/* docType + 기간 필터 */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {DOC_FILTERS.map((f) => (
+              <button
+                key={f.k}
+                onClick={() => applyDoc(f.k)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  docFilter === f.k ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                }`}
+              >
+                {f.label}
+              </button>
             ))}
           </div>
-        )}
+          <DateRange sel={dateSel} onChange={applyDate} />
+        </div>
+
+        {(() => {
+          const items = [
+            ...recent.map((r) => ({
+              k: `r-${r.id}`,
+              d: r.pubDate ?? r.createdAt,
+              n: (
+                <ReportCard report={r} variant={view} onDelete={deleteReport} onRemoved={(id) => setRecent((p) => p.filter((x) => x.id !== id))} />
+              ),
+            })),
+            ...(page === 1
+              ? pub.map((c) => ({
+                  k: `p-${c.id}`,
+                  d: c.pubDate ?? "",
+                  n: <PublicCard content={c} variant={view === "all" ? "feed" : view} onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))} />,
+                }))
+              : []),
+          ].sort((a, b) => new Date(b.d || 0).getTime() - new Date(a.d || 0).getTime());
+          return items.length === 0 ? (
+            <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
+              {view === "all" ? "이 기간·분류에 표시할 자료가 없어요. 기간을 넓히거나 “+ 업로드” 해보세요." : view === "bookmarks" ? "저장한 항목이 없어요." : "숨긴 항목이 없어요."}
+            </p>
+          ) : (
+            <div className="space-y-2">{items.map((x) => <div key={x.k}>{x.n}</div>)}</div>
+          );
+        })()}
 
         {/* 페이지 (1,2,3...) */}
         {total > PAGE_SIZE && (

@@ -53,12 +53,14 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number }) => {
+  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
     if (params?.view) q.set("view", params.view);
     if (params?.page) q.set("page", String(params.page));
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
     const qs = q.toString();
     return get<{ reports: Report[]; total?: number; page?: number; pageSize?: number }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
   },
@@ -98,10 +100,12 @@ export const api = {
   llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm"),
   setLlmProvider: (provider: "claude" | "gemini") =>
     put<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm", { provider }),
-  publicContents: (params?: { industryId?: string; docType?: string }) => {
+  publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
     const qs = q.toString();
     return get<{ contents: PublicContent[] }>(`/api/me/public/contents${qs ? `?${qs}` : ""}`);
   },

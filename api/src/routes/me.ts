@@ -263,6 +263,10 @@ meRoute.get("/public/contents", async (c) => {
   if (industryId) conds.push(eq(publicContents.industryId, industryId));
   if (docTypeQ === "industry" || docTypeQ === "company" || docTypeQ === "news")
     conds.push(eq(publicContents.docType, docTypeQ));
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+  if (from) conds.push(sql`${publicContents.pubDate} >= ${from}`);
+  if (to) conds.push(sql`${publicContents.pubDate} <= ${to}`);
   const { hidden, bookmarked } = await myPublicSets(user.id);
   const rows = await fetchPublic(conds.length ? and(...conds) : undefined);
   const contents = rows.filter((r) => !hidden.has(r.id)).map((r) => shapePublic(r, bookmarked.has(r.id)));
@@ -813,6 +817,11 @@ meRoute.get("/reports", async (c) => {
   if (view === "hidden") conds.push(eq(reports.hidden, true));
   else conds.push(eq(reports.hidden, false)); // all·bookmarks 는 숨김 제외
   if (view === "bookmarks") conds.push(eq(reports.bookmarked, true));
+  // 기간 필터(발간일 기준, 없으면 추가일). from/to = YYYY-MM-DD
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+  if (from) conds.push(sql`COALESCE(${reports.pubDate}, ${reports.createdAt}::date) >= ${from}`);
+  if (to) conds.push(sql`COALESCE(${reports.pubDate}, ${reports.createdAt}::date) <= ${to}`);
   const pageQ = Number(c.req.query("page"));
   const page = Number.isInteger(pageQ) && pageQ >= 1 ? pageQ : 0; // 0=페이지네이션 안함(전체)
   const pageSize = 20;
