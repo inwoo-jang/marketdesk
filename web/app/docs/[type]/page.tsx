@@ -98,7 +98,15 @@ export default function DocsFeed() {
   const relatedNews =
     type === "company"
       ? all
-          .filter((r) => r.docType === "news" && (company ? newsMentions(r, company) : companyNames.some((n) => newsMentions(r, n))))
+          .filter(
+            (r) =>
+              r.docType === "news" &&
+              (company
+                ? newsMentions(r, company)
+                : indFilter
+                  ? (r.industries ?? []).some((i) => i.id === indFilter)
+                  : companyNames.some((n) => newsMentions(r, n))),
+          )
           .sort(byDateDesc)
       : [];
   // 산업리포트: 산업 선택 시 그 산업의 기업 리포트 연결
@@ -116,7 +124,8 @@ export default function DocsFeed() {
       </p>
     );
   } else if (type === "news") {
-    body = <List reports={[...reports].sort(byDateDesc)} onDelete={onDelete} />;
+    const list = (indFilter ? reports.filter((r) => (r.industries ?? []).some((i) => i.id === indFilter)) : reports).sort(byDateDesc);
+    body = <List reports={list} onDelete={onDelete} />;
   } else if (type === "company") {
     if (company) body = <List reports={reports.filter((r) => r.company?.trim() === company).sort(byDateDesc)} onDelete={onDelete} />;
     else if (indFilter)
@@ -141,11 +150,11 @@ export default function DocsFeed() {
           ? "산업별로 골라 보고, 그 산업의 기업 리포트까지 연결돼요."
           : type === "company"
             ? "산업 → 기업 순으로 좁혀 보고, 그 기업 관련 뉴스도 함께 봐요."
-            : `AI 가 ${label}로 분류한 문서(발간일 최신순).`}
+            : "산업별로 골라 보거나 전체를 발간일 최신순으로."}
       </p>
 
-      {/* tier1: 산업 칩(산업/기업 공용) */}
-      {type !== "news" && indChips.length > 0 && (
+      {/* tier1: 산업 칩(산업/기업/뉴스 공용) */}
+      {indChips.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
           <Chip label="전체" active={!indFilter} onClick={() => { setIndFilter(null); setCompany(null); }} />
           {indChips.map((ch) => (

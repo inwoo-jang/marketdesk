@@ -24,7 +24,7 @@ export default function Home() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [pub, setPub] = useState<PublicContent[]>([]);
   const [view, setView] = useState<"all" | "bookmarks" | "hidden">("all");
-  const [hidePublicFeed, setHidePublicFeed] = useState(false); // 공공 콘텐츠 피드에서 숨기기
+  const [hidePublicFeed, setHidePublicFeed] = useState(true); // 공공 콘텐츠 기본 숨김(요청)
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
 
