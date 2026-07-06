@@ -9,6 +9,8 @@
     "start": "tsx src/main.ts",
     "once": "tsx src/main.ts --once",
     "ingest": "tsx src/ingest.ts",
+    "seed:groups": "tsx src/seed-groups.ts",
+    "ingest:groups": "tsx src/ingest-groups.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

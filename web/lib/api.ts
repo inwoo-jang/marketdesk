@@ -104,6 +104,7 @@ export const api = {
     const qs = q.toString();
     return get<{ contents: PublicContent[] }>(`/api/me/public/contents${qs ? `?${qs}` : ""}`);
   },
+  companyGroups: () => get<{ map: Record<string, string> }>("/api/me/company-groups"),
   hiddenContents: () => get<{ contents: PublicContent[] }>("/api/me/public/hidden"),
   bookmarkedContents: () => get<{ contents: PublicContent[] }>("/api/me/public/bookmarks"),
   hidePublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/hide`),

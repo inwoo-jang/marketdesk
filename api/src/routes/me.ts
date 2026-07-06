@@ -18,6 +18,8 @@ import {
   publicContents,
   userPublicHidden,
   userPublicBookmark,
+  companyGroups,
+  normCompany,
   JOB_ROLES,
   type EntryFrame,
 } from "@reportlens/db";
@@ -508,6 +510,29 @@ meRoute.get("/board/scopes", async (c) => {
     .where(and(eq(reports.userId, user.id), sql`${reports.company} is not null`));
   const companies = companyRows.map((r) => r.company).filter((x): x is string => !!x);
   return c.json({ industries: inds, companies });
+});
+
+// GET /api/me/company-groups - 내 기업 리포트의 회사 → 계열(기업집단) 매핑
+meRoute.get("/company-groups", async (c) => {
+  const user = c.get("user");
+  const rows = await db
+    .selectDistinct({ company: reports.company })
+    .from(reports)
+    .where(and(eq(reports.userId, user.id), sql`${reports.company} is not null`));
+  const companies = rows.map((r) => r.company).filter((x): x is string => !!x);
+  if (companies.length === 0) return c.json({ map: {} });
+  const norms = [...new Set(companies.map((c2) => normCompany(c2)))];
+  const grp = await db
+    .select({ normName: companyGroups.normName, groupName: companyGroups.groupName })
+    .from(companyGroups)
+    .where(inArray(companyGroups.normName, norms));
+  const byNorm = new Map(grp.map((g) => [g.normName, g.groupName]));
+  const map: Record<string, string> = {};
+  for (const co of companies) {
+    const g = byNorm.get(normCompany(co));
+    if (g) map[co] = g;
+  }
+  return c.json({ map });
 });
 
 // GET /api/me/lenses - 내가 켠 렌즈 + 취업 직무(config.jobRole)
