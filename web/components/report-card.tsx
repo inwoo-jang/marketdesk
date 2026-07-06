@@ -64,12 +64,21 @@ export function ReportCard({
     }
   }
 
+  const isNews = report.docType === "news";
   return (
-    <div className="group relative rounded-card bg-card shadow-card transition hover:ring-1 hover:ring-primary/30">
+    <div
+      className={`group relative rounded-card shadow-card transition hover:ring-1 hover:ring-primary/30 ${
+        isNews ? "bg-sky-50/60" : "bg-card"
+      }`}
+    >
       <a href={`/reports/${report.id}`} className="block p-4 pr-12">
         <div className="flex items-center gap-2">
           {report.docType && (
-            <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[11px] text-ink-muted">
+            <span
+              className={`rounded px-1.5 py-0.5 text-[11px] ${
+                isNews ? "bg-sky-100 text-sky-700" : "bg-ink/5 text-ink-muted"
+              }`}
+            >
               {DOC_TYPE[report.docType] ?? report.docType}
             </span>
           )}
