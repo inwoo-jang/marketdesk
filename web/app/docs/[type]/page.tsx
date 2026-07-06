@@ -8,21 +8,17 @@ import { ReportCard } from "@/components/report-card";
 const TYPE_LABEL: Record<string, string> = { industry: "산업리포트", company: "기업리포트", news: "뉴스" };
 const dnum = (r: Report) => new Date(r.pubDate ?? r.createdAt).getTime();
 const byDateDesc = (a: Report, b: Report) => dnum(b) - dnum(a);
+const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
 
-// 산업리포트=산업별 필터(★우선)+그 산업의 기업 연결, 기업리포트=기업별 필터+관련 뉴스. 전체는 발간일 최신순.
+// 산업리포트=산업별 필터(★우선)+그 산업의 기업 연결. 기업리포트=산업별 2단계(산업→기업)+관련 뉴스. 뉴스=최신순.
 export default function DocsFeed() {
   const { type } = useParams<{ type: string }>();
   const label = TYPE_LABEL[type] ?? "문서";
-  const [all, setAll] = useState<Report[]>([]); // 전체 리포트(교차 참조용)
+  const [all, setAll] = useState<Report[]>([]);
   const [followed, setFollowed] = useState<MyIndustry[]>([]);
-  const [filter, setFilter] = useState<string | null>(null);
+  const [indFilter, setIndFilter] = useState<string | null>(null); // 산업 필터(공용 tier1)
+  const [company, setCompany] = useState<string | null>(null); // 기업 필터(tier2)
   const [loaded, setLoaded] = useState(false);
-
-  // ?c=회사명 으로 진입 시 해당 기업 필터 선택(흐름 보드 기업 셀 클릭)
-  useEffect(() => {
-    const c = new URLSearchParams(window.location.search).get("c");
-    if (c) setFilter(c);
-  }, []);
 
   const load = useCallback(async () => {
     const me = await api.me().catch(() => ({ user: null }));
@@ -42,7 +38,10 @@ export default function DocsFeed() {
   useEffect(() => {
     load().catch(() => setLoaded(true));
   }, [load]);
-
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c");
+    if (c) setCompany(c);
+  }, []);
   useEffect(() => {
     if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
       const t = setInterval(() => load().catch(() => {}), 2500);
@@ -64,47 +63,51 @@ export default function DocsFeed() {
     load();
   };
 
-  // 필터 칩
   const followedIds = followed.map((f) => f.id);
-  let chips: { key: string; label: string; star?: boolean }[] = [];
-  if (type === "industry") {
-    const present = new Map<string, string>();
-    for (const r of reports) for (const i of r.industries ?? []) present.set(i.id, i.name);
-    const star = followed.filter((f) => present.has(f.id)).map((f) => ({ key: f.id, label: f.name, star: true }));
-    const others = [...present.entries()]
-      .filter(([id]) => !followedIds.includes(id))
-      .map(([id, name]) => ({ key: id, label: name }));
-    chips = [...star, ...others];
-  } else if (type === "company") {
-    const c = new Map<string, number>();
-    for (const r of reports) {
-      const name = r.company?.trim();
-      if (name) c.set(name, (c.get(name) ?? 0) + 1);
-    }
-    chips = [...c.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => ({ key: name, label: name }));
-  }
+  const followedOrder = new Map(followed.map((f, i) => [f.id, i]));
+  // 산업 칩(해당 타입 리포트에 존재하는 산업, ★ 먼저)
+  const indPresent = new Map<string, string>();
+  for (const r of reports) for (const i of r.industries ?? []) indPresent.set(i.id, i.name);
+  const indChips = [...indPresent.entries()]
+    .map(([id, name]) => ({ key: id, label: name, star: followedIds.includes(id) }))
+    .sort((a, b) =>
+      a.star && b.star
+        ? (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0)
+        : a.star !== b.star
+          ? a.star
+            ? -1
+            : 1
+          : a.label.localeCompare(b.label),
+    );
+  // 기업 칩(선택 산업의 기업만; 산업 미선택이면 전체 기업)
+  const companyChips =
+    type === "company"
+      ? [
+          ...new Set(
+            reports
+              .filter((r) => !indFilter || (r.industries ?? []).some((i) => i.id === indFilter))
+              .map((r) => r.company?.trim())
+              .filter((c): c is string => !!c),
+          ),
+        ].sort()
+      : [];
 
-  const matchesFilter = (r: Report) =>
-    !filter ||
-    (type === "industry" ? (r.industries ?? []).some((i) => i.id === filter) : r.company?.trim() === filter);
-
-  // 교차 링크: 산업 필터 → 그 산업의 기업 리포트 / 기업(전체·선택) → 관련 뉴스
-  const relatedCompanyReports =
-    type === "industry" && filter ? all.filter((r) => r.docType === "company" && (r.industries ?? []).some((i) => i.id === filter)).sort(byDateDesc) : [];
-
-  const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
+  // 관련 뉴스(기업 선택 시 그 기업, 전체면 내 기업들 언급)
   const newsMentions = (r: Report, name: string) => norm(`${r.title ?? ""} ${r.summary ?? ""}`).includes(norm(name));
   const companyNames = [...new Set(reports.map((r) => r.company?.trim()).filter((c): c is string => !!c))];
   const relatedNews =
     type === "company"
       ? all
-          .filter(
-            (r) =>
-              r.docType === "news" && (filter ? newsMentions(r, filter) : companyNames.some((n) => newsMentions(r, n))),
-          )
+          .filter((r) => r.docType === "news" && (company ? newsMentions(r, company) : companyNames.some((n) => newsMentions(r, n))))
           .sort(byDateDesc)
       : [];
+  // 산업리포트: 산업 선택 시 그 산업의 기업 리포트 연결
+  const relatedCompanyReports =
+    type === "industry" && indFilter
+      ? all.filter((r) => r.docType === "company" && (r.industries ?? []).some((i) => i.id === indFilter)).sort(byDateDesc)
+      : [];
 
+  // 본문 리스트 결정
   let body: React.ReactNode;
   if (reports.length === 0) {
     body = (
@@ -112,37 +115,22 @@ export default function DocsFeed() {
         아직 {label}로 분류된 문서가 없어요. <a href="/upload" className="text-primary">업로드</a> 하면 AI 가 자동 분류합니다.
       </p>
     );
-  } else if (filter || type === "company" || type === "news") {
-    const list = reports.filter(matchesFilter).sort(byDateDesc);
-    body = (
-      <div className="mt-6 space-y-2">
-        {list.map((r) => (
-          <ReportCard key={r.id} report={r} onDelete={onDelete} />
-        ))}
-      </div>
-    );
+  } else if (type === "news") {
+    body = <List reports={[...reports].sort(byDateDesc)} onDelete={onDelete} />;
+  } else if (type === "company") {
+    if (company) body = <List reports={reports.filter((r) => r.company?.trim() === company).sort(byDateDesc)} onDelete={onDelete} />;
+    else if (indFilter)
+      body = (
+        <List
+          reports={reports.filter((r) => (r.industries ?? []).some((i) => i.id === indFilter)).sort(byDateDesc)}
+          onDelete={onDelete}
+        />
+      );
+    else body = <Grouped groups={buildIndustryGroups(reports, followed)} onDelete={onDelete} />;
   } else {
-    const groups = buildIndustryGroups(reports, followed);
-    body = (
-      <div className="mt-6 space-y-7">
-        {groups.map((g) => (
-          <section key={g.key}>
-            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-muted">
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-primary">
-                {g.star ? "★ " : ""}
-                {g.label}
-              </span>
-              <span className="text-xs text-ink-muted">{g.reports.length}</span>
-            </h2>
-            <div className="space-y-2">
-              {g.reports.map((r) => (
-                <ReportCard key={r.id} report={r} onDelete={onDelete} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
+    // industry
+    if (indFilter) body = <List reports={reports.filter((r) => (r.industries ?? []).some((i) => i.id === indFilter)).sort(byDateDesc)} onDelete={onDelete} />;
+    else body = <Grouped groups={buildIndustryGroups(reports, followed)} onDelete={onDelete} />;
   }
 
   return (
@@ -152,61 +140,101 @@ export default function DocsFeed() {
         {type === "industry"
           ? "산업별로 골라 보고, 그 산업의 기업 리포트까지 연결돼요."
           : type === "company"
-            ? "기업별로 골라 보고, 그 기업 관련 뉴스도 함께 봐요."
+            ? "산업 → 기업 순으로 좁혀 보고, 그 기업 관련 뉴스도 함께 봐요."
             : `AI 가 ${label}로 분류한 문서(발간일 최신순).`}
       </p>
 
-      {type !== "news" && chips.length > 0 && (
+      {/* tier1: 산업 칩(산업/기업 공용) */}
+      {type !== "news" && indChips.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
-          <FilterChip label="전체" active={!filter} onClick={() => setFilter(null)} />
-          {chips.map((ch) => (
-            <FilterChip
+          <Chip label="전체" active={!indFilter} onClick={() => { setIndFilter(null); setCompany(null); }} />
+          {indChips.map((ch) => (
+            <Chip
               key={ch.key}
               label={(ch.star ? "★ " : "") + ch.label}
-              active={filter === ch.key}
-              onClick={() => setFilter(ch.key)}
+              active={indFilter === ch.key}
+              onClick={() => { setIndFilter(ch.key); setCompany(null); }}
             />
+          ))}
+        </div>
+      )}
+      {/* tier2: 기업 칩(기업리포트) */}
+      {type === "company" && companyChips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5 border-l-2 border-line pl-2">
+          <Chip label={indFilter ? "이 산업 전체" : "기업 전체"} active={!company} onClick={() => setCompany(null)} small />
+          {companyChips.map((c) => (
+            <Chip key={c} label={c} active={company === c} onClick={() => setCompany(c)} small />
           ))}
         </div>
       )}
 
       {body}
 
-      {/* 교차 링크 섹션 */}
       {relatedCompanyReports.length > 0 && (
         <section className="mt-8 border-t border-line pt-6">
           <h2 className="mb-2 text-sm font-semibold text-ink-muted">🏢 이 산업의 기업 리포트 ({relatedCompanyReports.length})</h2>
-          <div className="space-y-2">
-            {relatedCompanyReports.map((r) => (
-              <ReportCard key={r.id} report={r} onDelete={onDelete} />
-            ))}
-          </div>
+          <List reports={relatedCompanyReports} onDelete={onDelete} />
         </section>
       )}
       {relatedNews.length > 0 && (
         <section className="mt-8 border-t border-line pt-6">
-          <h2 className="mb-2 text-sm font-semibold text-ink-muted">📰 {filter ? `${filter} ` : ""}관련 뉴스 ({relatedNews.length})</h2>
-          <div className="space-y-2">
-            {relatedNews.map((r) => (
-              <ReportCard key={r.id} report={r} onDelete={onDelete} />
-            ))}
-          </div>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">📰 {company ? `${company} ` : ""}관련 뉴스 ({relatedNews.length})</h2>
+          <List reports={relatedNews} onDelete={onDelete} />
         </section>
       )}
     </main>
   );
 }
 
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function Chip({ label, active, onClick, small }: { label: string; active: boolean; onClick: () => void; small?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs font-medium ${
+      className={`rounded-full border font-medium ${small ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs"} ${
         active ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
       }`}
     >
       {label}
     </button>
+  );
+}
+
+function List({ reports, onDelete }: { reports: Report[]; onDelete: (id: string) => void }) {
+  return (
+    <div className="mt-6 space-y-2">
+      {reports.map((r) => (
+        <ReportCard key={r.id} report={r} onDelete={onDelete} />
+      ))}
+    </div>
+  );
+}
+
+function Grouped({
+  groups,
+  onDelete,
+}: {
+  groups: { key: string; label: string; star: boolean; reports: Report[] }[];
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="mt-6 space-y-7">
+      {groups.map((g) => (
+        <section key={g.key}>
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-muted">
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-primary">
+              {g.star ? "★ " : ""}
+              {g.label}
+            </span>
+            <span className="text-xs text-ink-muted">{g.reports.length}</span>
+          </h2>
+          <div className="space-y-2">
+            {g.reports.map((r) => (
+              <ReportCard key={r.id} report={r} onDelete={onDelete} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
