@@ -49,7 +49,7 @@ export default function BoardFeedPage() {
           <p className="text-[15px] font-medium leading-snug text-ink">{data.rollup.oneLiner}</p>
           {common.length > 0 && (
             <div className="mt-3">
-              <div className="text-xs font-semibold text-success-text">공통 이슈</div>
+              <div className="text-xs font-semibold text-primary">✓ 공통 이슈</div>
               <ul className="mt-1 space-y-0.5 text-sm text-ink-sub">
                 {common.map((f) => (
                   <li key={f.id}>· {f.content}</li>

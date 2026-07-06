@@ -171,11 +171,11 @@ export default function IndustryDashboard() {
                     {ru.facts.map((f) => (
                       <div key={f.id} className="flex items-start gap-2 text-sm">
                         <span
-                          className={`mt-0.5 shrink-0 self-start rounded-full px-2 py-0.5 text-xs ${
-                            f.factType === "common" ? "bg-success-bg text-success-text" : "bg-amber-50 text-amber-600"
+                          className={`mt-0.5 flex shrink-0 items-center gap-0.5 self-start rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                            f.factType === "common" ? "bg-primary/10 text-primary" : "bg-amber-50 text-amber-600"
                           }`}
                         >
-                          {f.factType === "common" ? "공통" : "엇갈림"}
+                          {f.factType === "common" ? "✓ 공통" : "⚡ 엇갈림"}
                         </span>
                         <span className="leading-relaxed text-ink">{f.content}</span>
                       </div>
