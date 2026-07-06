@@ -9,14 +9,20 @@ const TYPE_LABEL: Record<string, string> = { industry: "산업리포트", compan
 const dnum = (r: Report) => new Date(r.pubDate ?? r.createdAt).getTime();
 const byDateDesc = (a: Report, b: Report) => dnum(b) - dnum(a);
 
-// 문서 타입별 피드. 산업리포트=산업별 필터+★우선, 기업리포트=기업별 필터. 전체는 발간일 최신순.
+// 산업리포트=산업별 필터(★우선)+그 산업의 기업 연결, 기업리포트=기업별 필터+관련 뉴스. 전체는 발간일 최신순.
 export default function DocsFeed() {
   const { type } = useParams<{ type: string }>();
   const label = TYPE_LABEL[type] ?? "문서";
-  const [reports, setReports] = useState<Report[]>([]);
+  const [all, setAll] = useState<Report[]>([]); // 전체 리포트(교차 참조용)
   const [followed, setFollowed] = useState<MyIndustry[]>([]);
-  const [filter, setFilter] = useState<string | null>(null); // null=전체 | industryId | 회사명
+  const [filter, setFilter] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+
+  // ?c=회사명 으로 진입 시 해당 기업 필터 선택(흐름 보드 기업 셀 클릭)
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c");
+    if (c) setFilter(c);
+  }, []);
 
   const load = useCallback(async () => {
     const me = await api.me().catch(() => ({ user: null }));
@@ -25,24 +31,24 @@ export default function DocsFeed() {
       return;
     }
     const [{ reports }, mi] = await Promise.all([
-      api.myReports({ docType: type }),
+      api.myReports(),
       api.myIndustries().catch(() => ({ industries: [] as MyIndustry[] })),
     ]);
-    setReports(reports);
+    setAll(reports);
     setFollowed(mi.industries);
     setLoaded(true);
-  }, [type]);
+  }, []);
 
   useEffect(() => {
     load().catch(() => setLoaded(true));
   }, [load]);
 
   useEffect(() => {
-    if (reports.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
+    if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
       const t = setInterval(() => load().catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [reports, load]);
+  }, [all, load]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (!TYPE_LABEL[type])
@@ -52,12 +58,13 @@ export default function DocsFeed() {
       </main>
     );
 
+  const reports = all.filter((r) => r.docType === type);
   const onDelete = async (rid: string) => {
     await api.deleteReport(rid);
     load();
   };
 
-  // 필터 칩(뉴스는 없음)
+  // 필터 칩
   const followedIds = followed.map((f) => f.id);
   let chips: { key: string; label: string; star?: boolean }[] = [];
   if (type === "industry") {
@@ -77,10 +84,26 @@ export default function DocsFeed() {
     chips = [...c.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => ({ key: name, label: name }));
   }
 
-  // 본문
   const matchesFilter = (r: Report) =>
     !filter ||
     (type === "industry" ? (r.industries ?? []).some((i) => i.id === filter) : r.company?.trim() === filter);
+
+  // 교차 링크: 산업 필터 → 그 산업의 기업 리포트 / 기업(전체·선택) → 관련 뉴스
+  const relatedCompanyReports =
+    type === "industry" && filter ? all.filter((r) => r.docType === "company" && (r.industries ?? []).some((i) => i.id === filter)).sort(byDateDesc) : [];
+
+  const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
+  const newsMentions = (r: Report, name: string) => norm(`${r.title ?? ""} ${r.summary ?? ""}`).includes(norm(name));
+  const companyNames = [...new Set(reports.map((r) => r.company?.trim()).filter((c): c is string => !!c))];
+  const relatedNews =
+    type === "company"
+      ? all
+          .filter(
+            (r) =>
+              r.docType === "news" && (filter ? newsMentions(r, filter) : companyNames.some((n) => newsMentions(r, n))),
+          )
+          .sort(byDateDesc)
+      : [];
 
   let body: React.ReactNode;
   if (reports.length === 0) {
@@ -90,7 +113,6 @@ export default function DocsFeed() {
       </p>
     );
   } else if (filter || type === "company" || type === "news") {
-    // 필터 선택됨 or 전체(기업/뉴스): 평면 최신순
     const list = reports.filter(matchesFilter).sort(byDateDesc);
     body = (
       <div className="mt-6 space-y-2">
@@ -100,7 +122,6 @@ export default function DocsFeed() {
       </div>
     );
   } else {
-    // 전체(산업): 산업별 그룹, ★ 먼저 → 나머지 건수순, 내부 발간일 최신순
     const groups = buildIndustryGroups(reports, followed);
     body = (
       <div className="mt-6 space-y-7">
@@ -129,9 +150,9 @@ export default function DocsFeed() {
       <h1 className="text-2xl font-bold">{label}</h1>
       <p className="mt-1 text-sm text-ink-sub">
         {type === "industry"
-          ? "산업별로 골라 보거나 전체를 볼 수 있어요."
+          ? "산업별로 골라 보고, 그 산업의 기업 리포트까지 연결돼요."
           : type === "company"
-            ? "기업별로 골라 볼 수 있어요. 전체는 발간일 최신순."
+            ? "기업별로 골라 보고, 그 기업 관련 뉴스도 함께 봐요."
             : `AI 가 ${label}로 분류한 문서(발간일 최신순).`}
       </p>
 
@@ -150,6 +171,28 @@ export default function DocsFeed() {
       )}
 
       {body}
+
+      {/* 교차 링크 섹션 */}
+      {relatedCompanyReports.length > 0 && (
+        <section className="mt-8 border-t border-line pt-6">
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">🏢 이 산업의 기업 리포트 ({relatedCompanyReports.length})</h2>
+          <div className="space-y-2">
+            {relatedCompanyReports.map((r) => (
+              <ReportCard key={r.id} report={r} onDelete={onDelete} />
+            ))}
+          </div>
+        </section>
+      )}
+      {relatedNews.length > 0 && (
+        <section className="mt-8 border-t border-line pt-6">
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">📰 {filter ? `${filter} ` : ""}관련 뉴스 ({relatedNews.length})</h2>
+          <div className="space-y-2">
+            {relatedNews.map((r) => (
+              <ReportCard key={r.id} report={r} onDelete={onDelete} />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
@@ -167,7 +210,6 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
-// 산업별 그룹: ★ 관심 산업 먼저(팔로우 순), 그다음 나머지 건수순. 각 그룹 발간일 최신순. 멀티태그면 각 산업에 노출.
 function buildIndustryGroups(
   reports: Report[],
   followed: MyIndustry[],
@@ -187,18 +229,14 @@ function buildIndustryGroups(
       }
   }
   const followedIds = followed.map((f) => f.id);
-  const entries = [...map.entries()].map(([key, v]) => ({
-    key,
-    label: v.label,
-    star: followedIds.includes(key),
-    reports: v.reports.sort(byDateDesc),
-  }));
   const followedOrder = new Map(followed.map((f, i) => [f.id, i]));
-  return entries.sort((a, b) => {
-    if (a.key === "_none") return 1;
-    if (b.key === "_none") return -1;
-    if (a.star && b.star) return (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0);
-    if (a.star !== b.star) return a.star ? -1 : 1;
-    return b.reports.length - a.reports.length;
-  });
+  return [...map.entries()]
+    .map(([key, v]) => ({ key, label: v.label, star: followedIds.includes(key), reports: v.reports.sort(byDateDesc) }))
+    .sort((a, b) => {
+      if (a.key === "_none") return 1;
+      if (b.key === "_none") return -1;
+      if (a.star && b.star) return (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0);
+      if (a.star !== b.star) return a.star ? -1 : 1;
+      return b.reports.length - a.reports.length;
+    });
 }

@@ -6,10 +6,13 @@ import { api, type BoardRow, type BoardCell, type BoardDim } from "@/lib/api";
 const DIMS: { k: BoardDim; label: string }[] = [
   { k: "industry", label: "산업별" },
   { k: "company", label: "기업별" },
-  { k: "news", label: "뉴스별" },
+  { k: "news", label: "경제흐름" },
 ];
 const fmtPeriod = (k: string, period: "month" | "year") =>
   period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`;
+// 셀 클릭 → 근거 내용으로. 산업=산업 대시보드, 기업=그 회사 리포트, 경제흐름=뉴스 피드.
+const cellHref = (dim: BoardDim, key: string) =>
+  dim === "industry" ? `/industry/${key}` : dim === "company" ? `/docs/company?c=${encodeURIComponent(key)}` : `/docs/news`;
 
 // 흐름 보드: 산업 선택 없이 관심 산업/기업/뉴스를 각각 타임라인 행으로. "빈 칸 모두 생성"으로 한 번에.
 export default function BoardPage() {
@@ -130,6 +133,7 @@ export default function BoardPage() {
                     key={cell.periodKey}
                     cell={cell}
                     period={period}
+                    href={cellHref(dim, row.key)}
                     onGenerate={() => generateCell(row.key, cell.periodKey)}
                   />
                 ))}
@@ -142,56 +146,92 @@ export default function BoardPage() {
   );
 }
 
+// 키워드: 팩트 문장에서 앞부분만 짧게(스캔용).
+const kw = (s: string | null) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 16);
+
 function Cell({
   cell,
   period,
+  href,
   onGenerate,
 }: {
   cell: BoardCell;
   period: "month" | "year";
+  href: string;
   onGenerate: () => void;
 }) {
   const r = cell.rollup;
   const common = r?.facts.filter((f) => f.factType === "common") ?? [];
   const conflict = r?.facts.filter((f) => f.factType === "conflict") ?? [];
-  return (
-    <div className="flex w-60 shrink-0 flex-col rounded-card bg-card p-3 shadow-card">
-      <div className="mb-1.5 text-xs font-bold text-ink-muted">{fmtPeriod(cell.periodKey, period)}</div>
-      {!r ? (
+  const head = (
+    <div className="mb-1.5 text-xs font-bold text-ink-muted">{fmtPeriod(cell.periodKey, period)}</div>
+  );
+  const base = "flex w-60 shrink-0 flex-col rounded-card bg-card p-3 shadow-card";
+
+  if (!r)
+    return (
+      <div className={base}>
+        {head}
         <button
           onClick={onGenerate}
           className="mt-1 rounded-lg border border-dashed border-line py-2.5 text-xs text-ink-sub hover:border-primary hover:text-primary"
         >
           + 생성
         </button>
-      ) : r.status === "pending" ? (
+      </div>
+    );
+  if (r.status === "pending")
+    return (
+      <div className={base}>
+        {head}
         <p className="mt-1 text-xs text-ink-muted">생성 중...</p>
-      ) : r.status === "failed" ? (
+      </div>
+    );
+  if (r.status === "failed")
+    return (
+      <div className={base}>
+        {head}
         <button onClick={onGenerate} className="mt-1 text-xs text-red-500 hover:underline">
           실패 · 다시
         </button>
+      </div>
+    );
+
+  const empty = (r.oneLiner ?? "").startsWith("이 기간");
+  // done: 키워드 칩 위주 + 클릭 → 근거 내용
+  return (
+    <a href={href} className={`${base} transition hover:ring-1 hover:ring-primary/40`}>
+      {head}
+      {empty ? (
+        <p className="text-xs text-ink-muted">기록 없음</p>
       ) : (
-        <div className="space-y-1.5">
-          <p className="text-[13px] font-medium leading-snug text-ink">{r.oneLiner ?? "-"}</p>
+        <div className="space-y-2">
+          <p className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{r.oneLiner ?? "-"}</p>
           {common.length > 0 && (
-            <ul className="space-y-0.5 text-[11px] text-ink-sub">
+            <div className="flex flex-wrap gap-1">
               {common.map((f) => (
-                <li key={f.id}>· {f.content}</li>
+                <span key={f.id} className="rounded bg-bg-deep px-1.5 py-0.5 text-[11px] text-ink-sub" title={f.content ?? ""}>
+                  {kw(f.content)}
+                </span>
               ))}
-            </ul>
-          )}
-          {conflict.length > 0 && (
-            <div>
-              <div className="text-[11px] font-semibold text-amber-600">엇갈림</div>
-              <ul className="space-y-0.5 text-[11px] text-ink-sub">
-                {conflict.map((f) => (
-                  <li key={f.id}>· {f.content}</li>
-                ))}
-              </ul>
             </div>
           )}
+          {conflict.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {conflict.map((f) => (
+                <span
+                  key={f.id}
+                  className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700"
+                  title={f.content ?? ""}
+                >
+                  ⚡{kw(f.content)}
+                </span>
+              ))}
+            </div>
+          )}
+          <span className="text-[11px] text-primary">내용 보기 →</span>
         </div>
       )}
-    </div>
+    </a>
   );
 }
