@@ -158,7 +158,7 @@ export type BoardCell = {
   rollup: { id: string; oneLiner: string | null; status: "pending" | "done" | "failed"; facts: RollupFact[] } | null;
 };
 export type Board = { dim: BoardDim; key: string; period: "month" | "year"; label: string; cells: BoardCell[] };
-export type BoardRow = { dim: BoardDim; key: string; label: string; cells: BoardCell[] };
+export type BoardRow = { dim: BoardDim; key: string; label: string; star?: boolean; cells: BoardCell[] };
 export type BoardFeed = {
   dim: BoardDim;
   key: string;

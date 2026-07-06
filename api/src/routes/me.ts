@@ -382,8 +382,8 @@ function boardMatch(userId: string, dim: Dim, key: string, periodType: "month" |
   return and(...conds);
 }
 
-// dim 의 대상 키 목록(rows/generate-all 공용). industry=★관심 산업, company=내 회사들, news=단일.
-async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label: string }[]> {
+// dim 의 대상 키 목록(rows/generate-all 공용). industry=관심+데이터 있는 산업 전체(★우선), company=내 회사들, news=단일.
+async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label: string; star?: boolean }[]> {
   if (dim === "news") return [{ key: "all", label: "경제뉴스" }];
   if (dim === "company") {
     const rows = await db
@@ -392,13 +392,30 @@ async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label
       .where(and(eq(reports.userId, userId), sql`${reports.company} is not null`));
     return rows.map((r) => r.company).filter((c): c is string => !!c).map((c) => ({ key: c, label: c }));
   }
-  const inds = await db
-    .select({ id: industries.id, name: industries.name })
+  // 관심 산업 + 롤업(데이터) 있는 산업을 합쳐 별표 안 친 산업도 노출. 별표 우선, 그다음 이름순.
+  const followed = await db
+    .select({ id: userIndustries.industryId, sort: userIndustries.sort })
     .from(userIndustries)
-    .innerJoin(industries, eq(industries.id, userIndustries.industryId))
-    .where(eq(userIndustries.userId, userId))
-    .orderBy(industries.sort, industries.name);
-  return inds.map((i) => ({ key: i.id, label: i.name }));
+    .where(eq(userIndustries.userId, userId));
+  const followedOrder = new Map(followed.map((f, i) => [f.id, f.sort ?? i]));
+  const withData = await db
+    .selectDistinct({ id: rollups.industryId })
+    .from(rollups)
+    .where(and(eq(rollups.userId, userId), eq(rollups.scope, "industry"), sql`${rollups.industryId} is not null`));
+  const ids = [...new Set([...followed.map((f) => f.id), ...withData.map((r) => r.id).filter((x): x is string => !!x)])];
+  if (ids.length === 0) return [];
+  const inds = await db.select({ id: industries.id, name: industries.name }).from(industries).where(inArray(industries.id, ids));
+  return inds
+    .map((i) => ({ key: i.id, label: i.name, star: followedOrder.has(i.id) }))
+    .sort((a, b) =>
+      a.star !== b.star
+        ? a.star
+          ? -1
+          : 1
+        : a.star
+          ? (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0)
+          : a.label.localeCompare(b.label),
+    );
 }
 
 // 한 (dim,key)의 기간 시리즈 칸들
@@ -441,7 +458,7 @@ meRoute.get("/board/rows", async (c) => {
   const period = c.req.query("period") === "year" ? "year" : "month";
   const keys = await boardKeys(user.id, dim);
   const rows = [];
-  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, cells: await buildCells(user.id, dim, k.key, period) });
+  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, star: k.star ?? false, cells: await buildCells(user.id, dim, k.key, period) });
   return c.json({ dim, period, rows });
 });
 

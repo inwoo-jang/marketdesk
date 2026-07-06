@@ -32,7 +32,7 @@ type DocFilter = (typeof DOC_FILTERS)[number]["k"];
 // 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
 type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean };
 function readFeedUrl(): FeedState {
-  const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: false };
+  const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: true };
   if (typeof window === "undefined") return def;
   const q = new URLSearchParams(window.location.search);
   const v = q.get("view");
@@ -44,7 +44,7 @@ function readFeedUrl(): FeedState {
     docFilter: (DOC_FILTERS.some((f) => f.k === df) ? df : "all") as DocFilter,
     dateSel: { year: num(q.get("y")), month: num(q.get("m")), day: num(q.get("d")) },
     page: p && p > 0 ? p : 1,
-    hidePublic: q.get("hp") === "1",
+    hidePublic: q.get("sp") !== "1", // 기본 숨김. sp=1 이면 공공 표시
   };
 }
 function writeFeedUrl(s: FeedState) {
@@ -56,7 +56,7 @@ function writeFeedUrl(s: FeedState) {
   if (s.dateSel.month) q.set("m", String(s.dateSel.month));
   if (s.dateSel.day) q.set("d", String(s.dateSel.day));
   if (s.page !== 1) q.set("page", String(s.page));
-  if (s.hidePublic) q.set("hp", "1");
+  if (!s.hidePublic) q.set("sp", "1"); // 공공 표시일 때만 URL 에 기록(기본은 숨김)
   const qs = q.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
@@ -130,7 +130,7 @@ export default function Home() {
   const [dateSel, setDateSel] = useState<DateSel>({ year: null, month: null, day: null });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [hidePublic, setHidePublic] = useState(false);
+  const [hidePublic, setHidePublic] = useState(true);
   const [isDev, setIsDev] = useState(false);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);

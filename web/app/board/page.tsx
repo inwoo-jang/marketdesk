@@ -134,17 +134,21 @@ export default function BoardPage() {
               >
                 전체
               </button>
-              {chips.map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setRowFilter(k)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                    rowFilter === k ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
-                  }`}
-                >
-                  {chipLabel(k)}
-                </button>
-              ))}
+              {chips.map((k) => {
+                const starred = dim === "industry" && (rows.find((r) => r.key === k)?.star ?? false);
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setRowFilter(k)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                      rowFilter === k ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                    }`}
+                  >
+                    {starred ? "★ " : ""}
+                    {chipLabel(k)}
+                  </button>
+                );
+              })}
             </div>
           );
         })()}
@@ -156,8 +160,8 @@ export default function BoardPage() {
         <p className="mt-6 rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
           {dim === "industry" ? (
             <>
-              관심 산업(★)이 없어요.{" "}
-              <a href="/" className="text-primary hover:underline">대시보드에서 ★ 추가</a>
+              아직 산업 흐름이 없어요. 리포트를 올리면 그 산업이 자동으로 여기 쌓여요.{" "}
+              <a href="/upload" className="text-primary hover:underline">업로드</a>
             </>
           ) : dim === "company" ? (
             "기업 문서를 올리면 회사별 흐름이 모여요."
@@ -169,7 +173,10 @@ export default function BoardPage() {
         <div className="mt-6 space-y-6">
           {rows.filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter)).map((row) => (
             <div key={row.key}>
-              <div className="mb-2 text-sm font-semibold text-primary">{row.label}</div>
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary">
+                {row.star && <span className="text-amber-500">★</span>}
+                {row.label}
+              </div>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {row.cells.map((cell) => (
                   <Cell
@@ -189,8 +196,8 @@ export default function BoardPage() {
   );
 }
 
-// 키워드: 팩트 문장에서 앞부분만 짧게(스캔용).
-const kw = (s: string | null) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 16);
+// 팩트 문장 정리(줄바꿈·중복 공백 제거). 읽기용이라 자르지 않고 line-clamp 로 제어.
+const clean = (s: string | null) => (s ?? "").replace(/\s+/g, " ").trim();
 
 function Cell({
   cell,
@@ -207,9 +214,9 @@ function Cell({
   const common = r?.facts.filter((f) => f.factType === "common") ?? [];
   const conflict = r?.facts.filter((f) => f.factType === "conflict") ?? [];
   const head = (
-    <div className="mb-1.5 text-xs font-bold text-ink-muted">{fmtPeriod(cell.periodKey, period)}</div>
+    <div className="mb-2 text-xs font-bold text-ink-muted">{fmtPeriod(cell.periodKey, period)}</div>
   );
-  const base = "flex w-60 shrink-0 flex-col rounded-card bg-card p-3 shadow-card";
+  const base = "flex w-72 shrink-0 flex-col rounded-card bg-card p-4 shadow-card";
 
   if (!r)
     return (
@@ -248,32 +255,26 @@ function Cell({
       {empty ? (
         <p className="text-xs text-ink-muted">기록 없음</p>
       ) : (
-        <div className="space-y-2">
-          {/* 요약: 한눈에 파악 */}
-          <p className="text-[13px] font-medium leading-snug text-ink">{r.oneLiner ?? "-"}</p>
+        <div className="space-y-2.5">
+          {/* 요약: 한눈에 파악(가독성 우선) */}
+          <p className="line-clamp-3 text-sm font-semibold leading-snug text-ink">{r.oneLiner ?? "-"}</p>
           {common.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {common.map((f) => (
-                <span key={f.id} className="rounded bg-bg-deep px-1.5 py-0.5 text-[11px] text-ink-sub" title={f.content ?? ""}>
-                  {kw(f.content)}
-                </span>
+            <ul className="space-y-1">
+              {common.slice(0, 3).map((f) => (
+                <li key={f.id} className="flex gap-1.5 text-[12px] leading-snug text-ink-sub">
+                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" />
+                  <span className="line-clamp-2">{clean(f.content)}</span>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-          {conflict.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {conflict.map((f) => (
-                <span
-                  key={f.id}
-                  className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700"
-                  title={f.content ?? ""}
-                >
-                  ⚡{kw(f.content)}
-                </span>
-              ))}
+          {conflict.slice(0, 2).map((f) => (
+            <div key={f.id} className="flex gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[12px] leading-snug text-amber-700">
+              <span className="shrink-0">⚡</span>
+              <span className="line-clamp-2">{clean(f.content)}</span>
             </div>
-          )}
-          <span className="mt-1 inline-block text-[11px] text-primary opacity-0 transition group-hover/cell:opacity-100">자세히 · 원문 →</span>
+          ))}
+          <span className="mt-0.5 inline-block text-[11px] font-medium text-primary opacity-0 transition group-hover/cell:opacity-100">자세히 · 원문 →</span>
         </div>
       )}
     </a>
