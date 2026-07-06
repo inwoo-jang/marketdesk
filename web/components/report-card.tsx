@@ -12,7 +12,11 @@ const STATUS: Record<string, { t: string; c: string }> = {
   failed: { t: "실패", c: "bg-red-50 text-red-500" },
 };
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
-const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) : null);
+const fmt = (d: string | null) => {
+  if (!d) return null;
+  const t = new Date(d);
+  return `${t.getFullYear()}.${String(t.getMonth() + 1).padStart(2, "0")}.${String(t.getDate()).padStart(2, "0")}`;
+};
 
 // 피드 카드: AI 제목·요약·산업태그·발간일·상태 + 책갈피/숨김(복원)/삭제.
 export function ReportCard({

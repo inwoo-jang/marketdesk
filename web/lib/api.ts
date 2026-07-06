@@ -123,6 +123,12 @@ export const api = {
   },
   generateBoardCell: (input: { dim: BoardDim; key?: string; period: "month" | "year"; periodKey: string }) =>
     post<{ rollup: { id: string } }>("/api/me/board/generate", input),
+  boardRows: (params: { dim: BoardDim; period: "month" | "year" }) =>
+    get<{ dim: BoardDim; period: "month" | "year"; rows: BoardRow[] }>(
+      `/api/me/board/rows?dim=${params.dim}&period=${params.period}`,
+    ),
+  generateAllBoard: (input: { dim: BoardDim; period: "month" | "year" }) =>
+    post<{ queued: number }>("/api/me/board/generate-all", input),
   boardScopes: () => get<{ industries: { id: string; name: string }[]; companies: string[] }>("/api/me/board/scopes"),
   rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
   createRollup: (industryId: string, period: string) =>
@@ -135,6 +141,7 @@ export type BoardCell = {
   rollup: { id: string; oneLiner: string | null; status: "pending" | "done" | "failed"; facts: RollupFact[] } | null;
 };
 export type Board = { dim: BoardDim; key: string; period: "month" | "year"; label: string; cells: BoardCell[] };
+export type BoardRow = { dim: BoardDim; key: string; label: string; cells: BoardCell[] };
 
 export type RollupFact = { id: string; factType: "common" | "conflict"; content: string | null; sort: number | null };
 export type Rollup = {

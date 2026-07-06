@@ -6,7 +6,11 @@ import { BookmarkIcon } from "@/components/bookmark-icon";
 import { HideIcon } from "@/components/hide-icon";
 
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
-const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) : null);
+const fmt = (d: string | null) => {
+  if (!d) return null;
+  const t = new Date(d);
+  return `${t.getFullYear()}.${String(t.getMonth() + 1).padStart(2, "0")}.${String(t.getDate()).padStart(2, "0")}`;
+};
 
 // 공개소스 콘텐츠 카드. 제목 클릭=원문(새 탭). 책갈피(즐겨찾기)·숨김/다시공개.
 export function PublicCard({

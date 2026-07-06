@@ -300,36 +300,103 @@ function boardMatch(userId: string, dim: Dim, key: string, periodType: "month" |
   return and(...conds);
 }
 
-// GET /api/me/board?dim=&key=&period= - 기간 시리즈 + 각 칸의 롤업(흐름/이슈)
-meRoute.get("/board", async (c) => {
-  const user = c.get("user");
-  const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
-  const period = c.req.query("period") === "year" ? "year" : "month";
-  const key = c.req.query("key") ?? "all";
-  if (dim !== "news" && key === "all") return c.json({ error: "key 필요" }, 400);
+// dim 의 대상 키 목록(rows/generate-all 공용). industry=★관심 산업, company=내 회사들, news=단일.
+async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label: string }[]> {
+  if (dim === "news") return [{ key: "all", label: "경제뉴스" }];
+  if (dim === "company") {
+    const rows = await db
+      .selectDistinct({ company: reports.company })
+      .from(reports)
+      .where(and(eq(reports.userId, userId), sql`${reports.company} is not null`));
+    return rows.map((r) => r.company).filter((c): c is string => !!c).map((c) => ({ key: c, label: c }));
+  }
+  const inds = await db
+    .select({ id: industries.id, name: industries.name })
+    .from(userIndustries)
+    .innerJoin(industries, eq(industries.id, userIndustries.industryId))
+    .where(eq(userIndustries.userId, userId))
+    .orderBy(industries.sort, industries.name);
+  return inds.map((i) => ({ key: i.id, label: i.name }));
+}
 
-  let label = "경제뉴스";
-  if (dim === "industry") {
-    const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, key)).limit(1);
-    label = ind?.name ?? "산업";
-  } else if (dim === "company") label = key;
-
-  const rows = await db.select().from(rollups).where(boardMatch(user.id, dim, key, period));
+// 한 (dim,key)의 기간 시리즈 칸들
+async function buildCells(userId: string, dim: Dim, key: string, period: "month" | "year") {
+  const rows = await db.select().from(rollups).where(boardMatch(userId, dim, key, period));
   const ids = rows.map((r) => r.id);
   const facts = ids.length ? await db.select().from(rollupFacts).where(inArray(rollupFacts.rollupId, ids)) : [];
   const factsBy = new Map<string, typeof facts>();
   for (const f of facts) factsBy.set(f.rollupId, [...(factsBy.get(f.rollupId) ?? []), f]);
   const byKey = new Map(rows.map((r) => [r.periodKey, r]));
-
   const n = period === "year" ? 5 : 12;
-  const cells = periodKeys(period, n).map((pk) => {
+  return periodKeys(period, n).map((pk) => {
     const r = byKey.get(pk);
     return {
       periodKey: pk,
       rollup: r ? { id: r.id, oneLiner: r.oneLiner, status: r.status, facts: factsBy.get(r.id) ?? [] } : null,
     };
   });
-  return c.json({ dim, key, period, label, cells });
+}
+
+// GET /api/me/board?dim=&key=&period= - 단일 (dim,key)
+meRoute.get("/board", async (c) => {
+  const user = c.get("user");
+  const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
+  const period = c.req.query("period") === "year" ? "year" : "month";
+  const key = c.req.query("key") ?? "all";
+  if (dim !== "news" && key === "all") return c.json({ error: "key 필요" }, 400);
+  let label = "경제뉴스";
+  if (dim === "industry") {
+    const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, key)).limit(1);
+    label = ind?.name ?? "산업";
+  } else if (dim === "company") label = key;
+  return c.json({ dim, key, period, label, cells: await buildCells(user.id, dim, key, period) });
+});
+
+// GET /api/me/board/rows?dim=&period= - 산업 선택 없이 모든 대상(관심 산업/기업/뉴스)의 타임라인 행
+meRoute.get("/board/rows", async (c) => {
+  const user = c.get("user");
+  const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
+  const period = c.req.query("period") === "year" ? "year" : "month";
+  const keys = await boardKeys(user.id, dim);
+  const rows = [];
+  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, cells: await buildCells(user.id, dim, k.key, period) });
+  return c.json({ dim, period, rows });
+});
+
+// POST /api/me/board/generate-all - 대상×기간의 빈 칸을 한 번에 pending 으로(워커가 이어 처리). { dim, period }
+meRoute.post("/board/generate-all", async (c) => {
+  const user = c.get("user");
+  const b = await c.req.json().catch(() => ({}));
+  const dim: Dim = isDim(b.dim) ? b.dim : "industry";
+  const period = b.period === "year" ? "year" : "month";
+  const quota = await consumeAnalysis(user);
+  if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
+
+  const keys = await boardKeys(user.id, dim);
+  const provider = await resolveProvider(user);
+  const n = period === "year" ? 5 : 12;
+  const pks = periodKeys(period, n);
+  let queued = 0;
+  for (const k of keys) {
+    const existing = await db.select().from(rollups).where(boardMatch(user.id, dim, k.key, period));
+    const doneKeys = new Set(existing.filter((r) => r.status === "done").map((r) => r.periodKey));
+    for (const pk of pks) {
+      if (doneKeys.has(pk)) continue; // 이미 생성된 칸은 건너뜀(빈 칸만)
+      await db.delete(rollups).where(and(boardMatch(user.id, dim, k.key, period), eq(rollups.periodKey, pk)));
+      await db.insert(rollups).values({
+        userId: user.id,
+        scope: dim,
+        industryId: dim === "industry" ? k.key : null,
+        companyName: dim === "company" ? k.key : null,
+        periodType: period,
+        periodKey: pk,
+        llmProvider: provider,
+        status: "pending",
+      });
+      queued++;
+    }
+  }
+  return c.json({ queued });
 });
 
 // POST /api/me/board/generate - 한 칸 생성(워커가 LLM 처리). { dim, key, period, periodKey }
