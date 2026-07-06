@@ -18,7 +18,7 @@ export const rollups = pgTable(
     // 흐름 보드 차원: industry(산업, industryId 사용) | company(기업, companyName) | news(경제뉴스 전체)
     scope: text("scope").default("industry").notNull(),
     companyName: text("company_name"), // scope=company 일 때 회사명
-    llmProvider: text("llm_provider"), // 생성 엔진(claude|gemini). 생성 시 사용자 설정으로 고정. null=워커 env 기본
+    llmProvider: text("llm_provider"), // 생성 엔진(claude|codex|gemini). 생성 시 사용자 설정으로 고정. null=워커 env 기본
     periodType: periodType("period_type").notNull(), // 'month' | 'year'
     periodKey: text("period_key").notNull(), // '2026-06'
     oneLiner: text("one_liner"),

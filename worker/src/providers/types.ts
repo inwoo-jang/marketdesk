@@ -30,10 +30,10 @@ export type DocMeta = {
 export type RollupFact = { type: "common" | "conflict"; content: string };
 export type RollupResult = { oneLiner: string; facts: RollupFact[] };
 
-// LLM 라우터 추상화. 구현체: MockProvider(로컬), GeminiProvider(기본), ClaudeCliProvider.
+// LLM 라우터 추상화. 구현체: MockProvider(로컬), GeminiProvider(기본), ClaudeCliProvider, CodexCliProvider.
 export interface Provider {
-  // entries.provider 에 기록할 값(enum: gemini|claude|mcp). mock 은 null.
-  providerKey: "gemini" | "claude" | "mcp" | null;
+  // entries.provider 에 기록할 값(enum: gemini|claude|codex|mcp). mock 은 null.
+  providerKey: "gemini" | "claude" | "codex" | "mcp" | null;
   model: string; // entries.model (예: gemini-2.0-flash-001, mock)
   // 메타 추출(제목·발간일·요약·타입·멀티산업). industries = 카탈로그 후보 이름.
   analyze(document: string, industries: string[]): Promise<DocMeta>;

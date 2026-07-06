@@ -177,18 +177,19 @@ meRoute.delete("/memos/:mid", async (c) => {
   return c.json({ ok: true });
 });
 
-// ===== 분석 엔진(LLM) 설정 — 개발자 계정만 로컬 Claude CLI 선택 가능 =====
+// ===== 분석 엔진(LLM) 설정 — 개발자 계정만 로컬 CLI 엔진 선택 가능 =====
 const isDeveloper = (user: AppUser) => !!user.email && env.devEmails.includes(user.email.toLowerCase());
+type AnalysisProvider = "claude" | "codex" | "gemini";
 
-// 이 사용자의 리포트에 적용할 분석 엔진 결정. 개발자가 claude 선택 시에만 claude, 그 외 gemini(기본).
-async function resolveProvider(user: AppUser): Promise<"claude" | "gemini"> {
+// 이 사용자의 리포트에 적용할 분석 엔진 결정. 개발자가 로컬 CLI 엔진 선택 시에만 반영, 그 외 gemini(기본).
+async function resolveProvider(user: AppUser): Promise<AnalysisProvider> {
   if (!isDeveloper(user)) return "gemini";
   const [s] = await db
     .select({ p: userLlmSettings.analysisProvider })
     .from(userLlmSettings)
     .where(eq(userLlmSettings.userId, user.id))
     .limit(1);
-  return s?.p === "claude" ? "claude" : "gemini";
+  return s?.p === "claude" || s?.p === "codex" ? s.p : "gemini";
 }
 
 // GET /api/me/llm - 분석 엔진 설정(개발자 여부 + 현재 선택)
@@ -198,11 +199,11 @@ meRoute.get("/llm", async (c) => {
   return c.json({ isDeveloper: isDeveloper(user), provider });
 });
 
-// PUT /api/me/llm - 분석 엔진 변경(개발자만). { provider: 'claude'|'gemini' }
+// PUT /api/me/llm - 분석 엔진 변경(개발자만). { provider: 'claude'|'codex'|'gemini' }
 meRoute.put("/llm", async (c) => {
   const user = c.get("user");
   if (!isDeveloper(user)) return c.json({ error: "개발자 계정만 변경할 수 있어요." }, 403);
-  const parsed = z.object({ provider: z.enum(["claude", "gemini"]) }).safeParse(await c.req.json().catch(() => ({})));
+  const parsed = z.object({ provider: z.enum(["claude", "codex", "gemini"]) }).safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "invalid body" }, 400);
   await db
     .insert(userLlmSettings)
@@ -537,20 +538,28 @@ meRoute.post("/board/generate-all", async (c) => {
   let queued = 0;
   for (const k of keys) {
     const existing = await db.select().from(rollups).where(boardMatch(user.id, dim, k.key, period));
+    const byPeriod = new Map(existing.map((r) => [r.periodKey, r]));
     const doneKeys = new Set(existing.filter((r) => r.status === "done").map((r) => r.periodKey));
     for (const pk of pks) {
       if (doneKeys.has(pk)) continue; // 이미 생성된 칸은 건너뜀(빈 칸만)
-      await db.delete(rollups).where(and(boardMatch(user.id, dim, k.key, period), eq(rollups.periodKey, pk)));
-      await db.insert(rollups).values({
-        userId: user.id,
-        scope: dim,
-        industryId: dim === "industry" ? k.key : null,
-        companyName: dim === "company" ? k.key : null,
-        periodType: period,
-        periodKey: pk,
-        llmProvider: provider,
-        status: "pending",
-      });
+      const current = byPeriod.get(pk);
+      if (current) {
+        await db
+          .update(rollups)
+          .set({ llmProvider: provider, status: "pending", updatedAt: new Date() })
+          .where(eq(rollups.id, current.id));
+      } else {
+        await db.insert(rollups).values({
+          userId: user.id,
+          scope: dim,
+          industryId: dim === "industry" ? k.key : null,
+          companyName: dim === "company" ? k.key : null,
+          periodType: period,
+          periodKey: pk,
+          llmProvider: provider,
+          status: "pending",
+        });
+      }
       queued++;
     }
   }
@@ -571,17 +580,29 @@ meRoute.post("/board/generate", async (c) => {
   const quota = await consumeAnalysis(user);
   if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
 
-  await db.delete(rollups).where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, periodKey)));
-  const [rollup] = await db
-    .insert(rollups)
-    .values({
+  const provider = await resolveProvider(user);
+  const [existing] = await db
+    .select()
+    .from(rollups)
+    .where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, periodKey)))
+    .limit(1);
+
+  const [rollup] = existing
+    ? await db
+        .update(rollups)
+        .set({ llmProvider: provider, status: "pending", updatedAt: new Date() })
+        .where(eq(rollups.id, existing.id))
+        .returning()
+    : await db
+        .insert(rollups)
+        .values({
       userId: user.id,
       scope: dim,
       industryId: dim === "industry" ? key : null,
       companyName: dim === "company" ? key : null,
       periodType: period,
       periodKey,
-      llmProvider: await resolveProvider(user),
+      llmProvider: provider,
       status: "pending",
     })
     .returning();
@@ -925,9 +946,11 @@ meRoute.post("/industries/:id/rollups", async (c) => {
   if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
 
   const period = parsed.data.period;
-  // 같은 (산업, 월) 롤업 재생성: 기존 삭제(facts/sources cascade) 후 pending 생성
-  await db
-    .delete(rollups)
+  // 같은 (산업, 월) 롤업 재생성: 기존 내용은 유지하고 pending 으로 재큐잉한다.
+  const provider = await resolveProvider(user);
+  const [existing] = await db
+    .select()
+    .from(rollups)
     .where(
       and(
         eq(rollups.userId, user.id),
@@ -935,18 +958,25 @@ meRoute.post("/industries/:id/rollups", async (c) => {
         eq(rollups.periodType, "month"),
         eq(rollups.periodKey, period),
       ),
-    );
-  const [rollup] = await db
-    .insert(rollups)
-    .values({
-      userId: user.id,
-      industryId,
-      periodType: "month",
-      periodKey: period,
-      llmProvider: await resolveProvider(user),
-      status: "pending",
-    })
-    .returning();
+    )
+    .limit(1);
+  const [rollup] = existing
+    ? await db
+        .update(rollups)
+        .set({ llmProvider: provider, status: "pending", updatedAt: new Date() })
+        .where(eq(rollups.id, existing.id))
+        .returning()
+    : await db
+        .insert(rollups)
+        .values({
+          userId: user.id,
+          industryId,
+          periodType: "month",
+          periodKey: period,
+          llmProvider: provider,
+          status: "pending",
+        })
+        .returning();
   return c.json({ rollup });
 });
 
@@ -1113,7 +1143,7 @@ meRoute.post("/reports", async (c) => {
 
   const filename = inputFormat === "pdf" ? baseName + ".pdf" : baseName + ".txt";
   const { fileKey, size } = await storage.save(user.id, filename, bytes);
-  const llmProvider = await resolveProvider(user); // 개발자=설정값(claude 가능), 일반=gemini
+  const llmProvider = await resolveProvider(user); // 개발자=설정값(로컬 CLI 가능), 일반=gemini
 
   const [report] = await db
     .insert(reports)

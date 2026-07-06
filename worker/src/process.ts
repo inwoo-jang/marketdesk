@@ -46,7 +46,7 @@ export async function processReport(report: Report): Promise<void> {
     await db.update(reports).set({ pageCount }).where(eq(reports.id, report.id));
 
     const document = buildDocument(pages);
-    const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=claude 가능)
+    const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=로컬 CLI 가능)
 
     // 유사 중복 감지: 본문 SimHash 로 내 다른 리포트와 비교(가장 가까운 것 하나)
     const sim = simhash(document);

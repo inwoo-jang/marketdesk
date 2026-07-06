@@ -15,7 +15,7 @@ export const userLlmSettings = pgTable("user_llm_settings", {
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
   tier: llmTier("tier").default("default").notNull(), // default(Gemini) | byo(Claude 키) | mcp
-  // 개발자 계정 분석 엔진 선호(claude=로컬 CLI 무제한 | gemini). null=기본(gemini). 일반 사용자는 무시.
+  // 개발자 계정 분석 엔진 선호(claude/codex=로컬 CLI | gemini). null=기본(gemini). 일반 사용자는 무시.
   analysisProvider: text("analysis_provider"),
   claudeKeyEnc: bytea("claude_key_enc"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

@@ -27,7 +27,7 @@
 | 스토리지 | S3 (프라이빗·사용자별 prefix) | 로컬 디스크 |
 | 인증 | Cognito + 구글·카카오 | dev 로그인(쿠키 세션) |
 | 비동기 | SQS + 추출 워커 | DB 폴링 큐 |
-| LLM | 멀티프로바이더 — 기본 **Gemini** / BYO Claude 키 / MCP | **mock**(키 불필요) |
+| LLM | 멀티프로바이더 — 기본 **Gemini** / BYO Claude 키 / MCP | **mock**(키 불필요) · 로컬 Claude/Codex CLI |
 | IaC·관측 | CDK · CloudWatch | - |
 
 자세한 설계: [`build/아키텍처_DB설계_v0.1.md`](build/아키텍처_DB설계_v0.1.md)
@@ -71,7 +71,7 @@ pnpm dev               # api + web + worker 동시 실행
 ```
 → 브라우저 http://localhost:3000 (dev 로그인 → 온보딩 → 대시보드 → 업로드 → 검토)
 
-> `.env` 는 각 패키지의 `.env.example` 참고해서 생성(`api/.env`, `web/.env.local`, `worker/.env`, `packages/db/.env`). 실제 LLM 을 쓰려면 `worker/.env` 의 `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`.
+> `.env` 는 각 패키지의 `.env.example` 참고해서 생성(`api/.env`, `web/.env.local`, `worker/.env`, `packages/db/.env`). 실제 LLM 은 `worker/.env` 의 `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`, 또는 개발자 설정 화면에서 로컬 Claude/Codex CLI를 선택해 사용.
 
 ## 노션 빌드 보드
 https://app.notion.com/p/387445fbc7c081b597fcec5551fd6400
@@ -84,7 +84,7 @@ https://app.notion.com/p/387445fbc7c081b597fcec5551fd6400
 - **Sprint 4**: PDF 내보내기 · BYO Claude 키 · QA · AWS 배포
 - **Sprint 5**: MCP 서버(사용자 Claude로 추출, Phase 2)
 - **공공 콘텐츠**: 업로드 없이도 보이는 산업별 콘텐츠 — 공개·허용 소스만(정책브리핑 korea.kr 등, KIET/KOTRA/KIEP/공공기관). 증권사 크롤링은 금지. 저작권 안전하게 **원문 재호스팅 없이 제목+우리 요약+출처 링크**만 저장, 산업 무관은 스킵(핵심만). 유저별 **숨김/다시 표시·즐겨찾기(책갈피)** 제공.
-- **분석 엔진**: 일반=Gemini(gemini-2.5-flash), 개발자 계정만 설정에서 로컬 Claude CLI(무제한) 선택.
+- **분석 엔진**: 일반=Gemini(gemini-2.5-flash), 개발자 계정만 설정에서 로컬 Claude CLI 또는 Codex CLI 선택.
 - **흐름 보드**: 월/년 × 산업별(★관심)·기업별(개별 회사)·뉴스별 흐름과 주요 이슈를 가로 타임라인(최신←)으로. 업로드 분석 완료 시 자동 갱신.
 - **백로그**: 이미지 입력(비전/OCR) · 연별 롤업 · 실결제(Stripe) 연동 · 공공소스 수집 스케줄러·소스 확대
 

@@ -27,7 +27,7 @@ export const reports = pgTable(
     pageCount: integer("page_count"),
     // 업로드 시 사용자가 고른 렌즈(추출 대상). Sprint2 워커가 이 렌즈들로 entries 생성.
     requestedLenses: text("requested_lenses").array(),
-    // 분석 엔진(claude|gemini). 업로드 시 사용자 설정으로 결정해 고정. null=워커 env 기본.
+    // 분석 엔진(claude|codex|gemini). 업로드 시 사용자 설정으로 결정해 고정. null=워커 env 기본.
     llmProvider: text("llm_provider"),
     // 유저 정리용(리포트는 단일 소유라 컬럼으로 충분). 숨김=피드 제외, 책갈피=즐겨찾기.
     hidden: boolean("hidden").default(false).notNull(),

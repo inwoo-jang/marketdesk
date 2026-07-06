@@ -11,6 +11,22 @@ const DIMS: { k: BoardDim; label: string }[] = [
 ];
 const fmtPeriod = (k: string, period: "month" | "year") =>
   period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`;
+const stripPeriodLead = (text: string, periodKey: string) => {
+  const original = text.trim();
+  if (!original) return original;
+  let pattern: RegExp | null = null;
+  if (/^\d{4}-\d{2}$/.test(periodKey)) {
+    const [year, month] = periodKey.split("-");
+    const m = String(Number(month));
+    pattern = new RegExp(
+      `^\\s*(?:${year}\\s*년\\s*0?${m}\\s*월|${year}[.-]0?${m})(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`,
+    );
+  } else if (/^\d{4}$/.test(periodKey)) {
+    pattern = new RegExp(`^\\s*${periodKey}\\s*년(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`);
+  }
+  const stripped = pattern ? original.replace(pattern, "").trim() : original;
+  return stripped || original;
+};
 // 셀 클릭 → 그 칸의 흐름 피드(요약 + 근거 원문). 거기서 리포트 클릭 → 원문.
 const cellHref = (dim: BoardDim, key: string, period: "month" | "year", periodKey: string) =>
   `/board/feed?dim=${dim}&key=${encodeURIComponent(key)}&period=${period}&periodKey=${periodKey}`;
@@ -296,6 +312,7 @@ function Cell({
   const conflict = r?.facts.filter((f) => f.factType === "conflict") ?? [];
   const base = "flex w-72 shrink-0 flex-col rounded-card bg-card p-4 shadow-card";
   const hasContent = !!r?.oneLiner && !r.oneLiner.startsWith("이 기간");
+  const oneLiner = r?.oneLiner ? stripPeriodLead(r.oneLiner, cell.periodKey) : "-";
   const updating = r?.status === "pending";
   const failed = r?.status === "failed";
   const head = (
@@ -303,6 +320,19 @@ function Cell({
       <span>{fmtPeriod(cell.periodKey, period)}</span>
       {updating && hasContent && (
         <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">갱신 중</span>
+      )}
+      {failed && hasContent && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onGenerate();
+          }}
+          title="갱신 실패 · 이전 내용을 보여주는 중이에요. 눌러서 다시 시도"
+          className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-700 hover:bg-amber-200"
+        >
+          ?
+        </button>
       )}
     </div>
   );
@@ -339,7 +369,7 @@ function Cell({
       {(
         <div className="space-y-2.5">
           {/* 요약: 한눈에 파악(가독성 우선) */}
-          <p className="line-clamp-3 text-sm font-semibold leading-snug text-ink">{r.oneLiner ?? "-"}</p>
+          <p className="line-clamp-3 text-sm font-semibold leading-snug text-ink">{oneLiner}</p>
           {common.length > 0 && (
             <ul className="space-y-1">
               {common.slice(0, 3).map((f) => (

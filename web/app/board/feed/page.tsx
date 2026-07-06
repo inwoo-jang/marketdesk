@@ -5,6 +5,22 @@ import { api, type BoardFeed, type BoardDim } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
+const stripPeriodLead = (text: string, periodKey: string) => {
+  const original = text.trim();
+  if (!original) return original;
+  let pattern: RegExp | null = null;
+  if (/^\d{4}-\d{2}$/.test(periodKey)) {
+    const [year, month] = periodKey.split("-");
+    const m = String(Number(month));
+    pattern = new RegExp(
+      `^\\s*(?:${year}\\s*년\\s*0?${m}\\s*월|${year}[.-]0?${m})(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`,
+    );
+  } else if (/^\d{4}$/.test(periodKey)) {
+    pattern = new RegExp(`^\\s*${periodKey}\\s*년(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`);
+  }
+  const stripped = pattern ? original.replace(pattern, "").trim() : original;
+  return stripped || original;
+};
 
 // 흐름 보드 셀 → 피드: 그 기간·대상의 흐름 요약 + 근거 원문 리포트. 리포트 클릭 → 원문.
 export default function BoardFeedPage() {
@@ -33,6 +49,7 @@ export default function BoardFeedPage() {
   const common = data.rollup?.facts.filter((f) => f.factType === "common") ?? [];
   const conflict = data.rollup?.facts.filter((f) => f.factType === "conflict") ?? [];
   const empty = (data.rollup?.oneLiner ?? "").startsWith("이 기간");
+  const oneLiner = data.rollup?.oneLiner ? stripPeriodLead(data.rollup.oneLiner, data.periodKey) : "";
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -46,7 +63,7 @@ export default function BoardFeedPage() {
       {data.rollup && !empty ? (
         <section className="mt-4 rounded-card bg-card p-5 shadow-card">
           <div className="mb-1 text-xs font-semibold text-primary">이 기간 흐름</div>
-          <p className="text-[15px] font-medium leading-snug text-ink">{data.rollup.oneLiner}</p>
+          <p className="text-[15px] font-medium leading-snug text-ink">{oneLiner}</p>
           {common.length > 0 && (
             <div className="mt-3">
               <div className="text-xs font-semibold text-primary">✓ 공통 이슈</div>

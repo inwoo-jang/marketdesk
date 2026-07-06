@@ -101,9 +101,9 @@ export function buildExtractPrompt(document: string, ctx: { docType: string; len
 // 월별 롤업 프롬프트: 한 달 엔트리 모음 → 흐름 한 줄 + 공통/엇갈림. 하위 엔트리만 근거.
 export function buildRollupPrompt(industryName: string, period: string, digest: string): string {
   return (
-    `아래는 '${industryName}' 산업의 ${period} 한 달간 분석 엔트리 모음이다.\n` +
-    `이 엔트리들만 근거로(새 사실·숫자 생성 금지) 이 달의 흐름을 정리하라.\n` +
-    `- one_liner: 이 달 이 산업의 흐름 한 줄.\n` +
+    `아래는 '${industryName}'의 ${period} 기간 분석 엔트리 모음이다.\n` +
+    `이 엔트리들만 근거로(새 사실·숫자 생성 금지) 해당 기간의 흐름을 정리하라.\n` +
+    `- one_liner: 흐름 한 줄. UI에서 기간은 따로 표시되므로 '${period}', '2026년 7월' 같은 기간 머리말로 시작하지 말 것.\n` +
     `- facts: [{type, content}] 배열. 여러 리포트가 같은 방향이면 type='common'(공통 팩트), 엇갈리면 type='conflict'(엇갈림).\n` +
     `출력 JSON: {"one_liner":"","facts":[{"type":"common","content":""}]}` +
     STRICT_JSON +

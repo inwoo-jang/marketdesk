@@ -17,6 +17,26 @@ function periodRange(periodType: string, periodKey: string): { start: string; en
   return { start: `${periodKey}-01`, end: `${ny}-${String(nm).padStart(2, "0")}-01` };
 }
 
+function stripPeriodLead(text: string, periodKey: string): string {
+  const original = text.trim();
+  if (!original) return original;
+
+  let pattern: RegExp | null = null;
+  if (/^\d{4}-\d{2}$/.test(periodKey)) {
+    const [year, month] = periodKey.split("-");
+    const m = String(Number(month));
+    pattern = new RegExp(
+      `^\\s*(?:${year}\\s*년\\s*0?${m}\\s*월|${year}[.-]0?${m})(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`,
+    );
+  } else if (/^\d{4}$/.test(periodKey)) {
+    pattern = new RegExp(`^\\s*${periodKey}\\s*년(?:\\s*(?:에는|에서는|은|는|의|엔|에))?\\s*[,·:：\\-]?\\s*`);
+  }
+
+  if (!pattern) return original;
+  const stripped = original.replace(pattern, "").trim();
+  return stripped || original;
+}
+
 // 롤업 1건 처리: scope(산업/기업/뉴스) × 기간(월/년) 엔트리 → 흐름 한 줄 + 공통/엇갈림(하위 엔트리만 근거).
 export async function processRollup(r: Rollup): Promise<void> {
   try {
@@ -58,7 +78,11 @@ export async function processRollup(r: Rollup): Promise<void> {
     if (rows.length === 0 && pubRows.length === 0) {
       await db
         .update(rollups)
-        .set({ oneLiner: "이 기간 분석된 자료가 없습니다.", status: "done", updatedAt: new Date() })
+        .set({
+          ...(r.oneLiner ? {} : { oneLiner: "이 기간 분석된 자료가 없습니다." }),
+          status: "done",
+          updatedAt: new Date(),
+        })
         .where(eq(rollups.id, r.id));
       return;
     }
@@ -69,8 +93,9 @@ export async function processRollup(r: Rollup): Promise<void> {
     const pubDigest = pubRows.map((p) => `- [공공/정책] ${p.title}: ${p.summary ?? ""}`.trim()).join("\n");
     const digest = [reportDigest, pubDigest].filter(Boolean).join("\n");
 
-    const provider = getProvider(r.llmProvider); // 생성 시 고정된 엔진(개발자=claude 등)
+    const provider = getProvider(r.llmProvider); // 생성 시 고정된 엔진(개발자=로컬 CLI 가능)
     const result = await provider.rollup(industryName, r.periodKey, digest);
+    const oneLiner = stripPeriodLead(result.oneLiner, r.periodKey);
 
     await db.delete(rollupFacts).where(eq(rollupFacts.rollupId, r.id));
     await db.delete(rollupSources).where(eq(rollupSources.rollupId, r.id));
@@ -87,7 +112,7 @@ export async function processRollup(r: Rollup): Promise<void> {
     }
     await db
       .update(rollups)
-      .set({ oneLiner: result.oneLiner, status: "done", updatedAt: new Date() })
+      .set({ oneLiner, status: "done", updatedAt: new Date() })
       .where(eq(rollups.id, r.id));
     console.log(`롤업 완료 ${r.id} (${industryName} ${r.periodKey}, 엔트리 ${rows.length})`);
   } catch (e) {

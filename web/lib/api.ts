@@ -103,9 +103,9 @@ export const api = {
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
   deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
   usage: () => get<Usage>("/api/me/usage"),
-  llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm"),
-  setLlmProvider: (provider: "claude" | "gemini") =>
-    put<{ isDeveloper: boolean; provider: "claude" | "gemini" }>("/api/me/llm", { provider }),
+  llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm"),
+  setLlmProvider: (provider: "claude" | "codex" | "gemini") =>
+    put<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm", { provider }),
   publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
@@ -274,7 +274,7 @@ export type EntryFull = {
   lensKey: string | null;
   status: "draft" | "saved";
   frame: EntryFrame | null;
-  provider: "gemini" | "claude" | "mcp" | null;
+  provider: "gemini" | "claude" | "codex" | "mcp" | null;
   model: string | null;
   numbers: EntryNumber[];
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type User, type Usage } from "@/lib/api";
 import { Logo } from "@/components/logo";
@@ -13,13 +13,11 @@ const NAV = [
   { href: "/docs/company", label: "기업리포트", match: (p: string) => p === "/docs/company" },
   { href: "/docs/news", label: "뉴스", match: (p: string) => p === "/docs/news" },
   { href: "/favorites", label: "저장", icon: true, match: (p: string) => p === "/favorites" },
-  { href: "/settings", label: "설정", match: (p: string) => p === "/settings" },
 ];
 
 // 전역 상단 네비. 로그인 상태에서만 노출. /login·/onboarding 에서는 숨김.
 export function AppNav() {
   const pathname = usePathname();
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
 
@@ -34,13 +32,6 @@ export function AppNav() {
   }, [pathname]);
 
   if (!user || pathname === "/login" || pathname === "/onboarding") return null;
-
-  async function logout() {
-    await api.logout();
-    setUser(null);
-    router.push("/login");
-    router.refresh();
-  }
 
   return (
     <nav className="sticky top-0 z-10 border-b border-line bg-card/80 backdrop-blur print:hidden">
@@ -72,9 +63,28 @@ export function AppNav() {
             </span>
           )}
           <span className="hidden text-sm text-ink-sub md:inline">{user.displayName ?? user.email}</span>
-          <button onClick={logout} className="rounded-full border border-line px-3 py-1.5 text-sm hover:bg-bg-deep">
-            로그아웃
-          </button>
+          <a
+            href="/settings"
+            aria-label="환경설정"
+            title="환경설정"
+            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line text-ink-sub transition hover:bg-bg-deep hover:text-ink ${
+              pathname === "/settings" ? "bg-primary/10 text-primary" : ""
+            }`}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-[18px] w-[18px]"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            >
+              <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 0 1-4 0v-.07a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 0 1 0-4h.07A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.88l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 3.6a1.7 1.7 0 0 0 1-1.53V2a2 2 0 0 1 4 0v.07a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 0 1 0 4h-.07A1.7 1.7 0 0 0 19.4 15Z" />
+            </svg>
+          </a>
         </div>
       </div>
     </nav>
