@@ -12,6 +12,12 @@ const STATUS: Record<string, { t: string; c: string }> = {
   failed: { t: "실패", c: "bg-red-50 text-red-500" },
 };
 const DOC_TYPE: Record<string, string> = { industry: "산업", company: "기업", news: "뉴스" };
+// 문서 타입별 아주 연한 카드 톤 + 배지 색(가독성 해치지 않게 옅게). 메뉴 칩과 색 통일.
+const DOC_TONE: Record<string, { card: string; badge: string }> = {
+  industry: { card: "bg-violet-50/40", badge: "bg-violet-100 text-violet-700" },
+  company: { card: "bg-emerald-50/40", badge: "bg-emerald-100 text-emerald-700" },
+  news: { card: "bg-sky-50/60", badge: "bg-sky-100 text-sky-700" },
+};
 const fmt = (d: string | null) => {
   if (!d) return null;
   const t = new Date(d);
@@ -64,21 +70,15 @@ export function ReportCard({
     }
   }
 
-  const isNews = report.docType === "news";
+  const tone = report.docType ? DOC_TONE[report.docType] : undefined;
   return (
     <div
-      className={`group relative rounded-card shadow-card transition hover:ring-1 hover:ring-primary/30 ${
-        isNews ? "bg-sky-50/60" : "bg-card"
-      }`}
+      className={`group relative rounded-card shadow-card transition hover:ring-1 hover:ring-primary/30 ${tone?.card ?? "bg-card"}`}
     >
       <a href={`/reports/${report.id}`} className="block p-4 pr-12">
         <div className="flex items-center gap-2">
           {report.docType && (
-            <span
-              className={`rounded px-1.5 py-0.5 text-[11px] ${
-                isNews ? "bg-sky-100 text-sky-700" : "bg-ink/5 text-ink-muted"
-              }`}
-            >
+            <span className={`rounded px-1.5 py-0.5 text-[11px] ${tone?.badge ?? "bg-ink/5 text-ink-muted"}`}>
               {DOC_TYPE[report.docType] ?? report.docType}
             </span>
           )}

@@ -28,6 +28,14 @@ const DOC_FILTERS = [
   { k: "public", label: "공공" },
 ] as const;
 type DocFilter = (typeof DOC_FILTERS)[number]["k"];
+// 메뉴 칩 활성 색 = 카드 톤과 통일
+const CHIP_TONE: Record<DocFilter, string> = {
+  all: "border-primary bg-primary/10 text-primary",
+  industry: "border-violet-300 bg-violet-100 text-violet-700",
+  company: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  news: "border-sky-300 bg-sky-100 text-sky-700",
+  public: "border-amber-300 bg-amber-100 text-amber-700",
+};
 
 // 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
 type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean };
@@ -450,7 +458,7 @@ export default function Home() {
                 key={f.k}
                 onClick={() => applyDoc(f.k)}
                 className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  docFilter === f.k ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
+                  docFilter === f.k ? CHIP_TONE[f.k] : "border-line text-ink-sub hover:bg-bg-deep"
                 }`}
               >
                 {f.label}
