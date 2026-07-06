@@ -627,17 +627,38 @@ meRoute.get("/company-groups", async (c) => {
   return c.json({ map });
 });
 
-// GET /api/me/company-favorites - 즐겨찾기한 계열/기업(별표)
+// GET /api/me/company-favorites - 즐겨찾기한 계열/기업(별표). 사용자 지정 순서(sort) → 생성순.
 meRoute.get("/company-favorites", async (c) => {
   const user = c.get("user");
   const rows = await db
     .select({ kind: userCompanyFavorites.kind, value: userCompanyFavorites.value })
     .from(userCompanyFavorites)
-    .where(eq(userCompanyFavorites.userId, user.id));
+    .where(eq(userCompanyFavorites.userId, user.id))
+    .orderBy(sql`${userCompanyFavorites.sort} asc nulls last`, userCompanyFavorites.createdAt);
   return c.json({
     groups: rows.filter((r) => r.kind === "group").map((r) => r.value),
     companies: rows.filter((r) => r.kind === "company").map((r) => r.value),
   });
+});
+
+// PUT /api/me/company-favorites/reorder - 별표 순서 저장. { kind, values: 순서대로 }
+meRoute.put("/company-favorites/reorder", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const kind = body["kind"] === "group" || body["kind"] === "company" ? (body["kind"] as string) : null;
+  const values = Array.isArray(body["values"]) ? (body["values"] as unknown[]).filter((v): v is string => typeof v === "string") : null;
+  if (!kind || !values) return c.json({ error: "invalid" }, 400);
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < values.length; i++) {
+      await tx
+        .update(userCompanyFavorites)
+        .set({ sort: i })
+        .where(
+          and(eq(userCompanyFavorites.userId, user.id), eq(userCompanyFavorites.kind, kind), eq(userCompanyFavorites.value, values[i])),
+        );
+    }
+  });
+  return c.json({ ok: true });
 });
 
 const favSchema = z.object({ kind: z.enum(["group", "company"]), value: z.string().min(1).max(120) });

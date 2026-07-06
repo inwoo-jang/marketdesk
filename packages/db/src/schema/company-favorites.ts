@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 // user_company_favorites: 기업리포트에서 계열(group) 또는 개별 기업(company)을 즐겨찾기(별표).
@@ -11,6 +11,7 @@ export const userCompanyFavorites = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(), // 'group' | 'company'
     value: text("value").notNull(),
+    sort: integer("sort"), // 표시 순서(사용자 지정). null 이면 생성순
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.value] })],

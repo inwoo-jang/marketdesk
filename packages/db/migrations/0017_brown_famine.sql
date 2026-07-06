@@ -1,0 +1,1 @@
+ALTER TABLE "user_company_favorites" ADD COLUMN "sort" integer;

@@ -150,6 +150,7 @@ export default function Home() {
   const [isDev, setIsDev] = useState(false);
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
+  const [favEdit, setFavEdit] = useState(false);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
@@ -349,6 +350,20 @@ export default function Home() {
     await api.deleteReport(rid);
     setRecent((r) => r.filter((x) => x.id !== rid));
   }
+  async function moveFav(kind: "group" | "company", idx: number, dir: -1 | 1) {
+    const list = kind === "group" ? [...favGroups] : [...favCompanies];
+    const j = idx + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[idx], list[j]] = [list[j], list[idx]];
+    if (kind === "group") setFavGroups(list);
+    else setFavCompanies(list);
+    await api.reorderCompanyFavorites(kind, list).catch(() => {});
+  }
+  async function unstarFav(kind: "group" | "company", value: string) {
+    if (kind === "group") setFavGroups((g) => g.filter((x) => x !== value));
+    else setFavCompanies((c) => c.filter((x) => x !== value));
+    await api.removeCompanyFavorite(kind, value).catch(() => {});
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -410,31 +425,60 @@ export default function Home() {
         )}
       </section>
 
-      {/* 관심 기업(별표) = 산업보다 작게. 계열·개별 기업 각각 별표한 대로 표시 */}
+      {/* 관심 기업(별표) = 산업보다 작게. 순서변경/편집 모드 지원 */}
       {(favGroups.length > 0 || favCompanies.length > 0) && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + favCompanies.length})</h2>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink-muted">관심 기업 ({favGroups.length + favCompanies.length})</h2>
+            <button onClick={() => setFavEdit((v) => !v)} className="text-xs font-medium text-primary hover:underline">
+              {favEdit ? "완료" : "순서변경"}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-1.5">
-            {favGroups.map((g) => (
-              <a
-                key={`g-${g}`}
-                href={`/docs/company?by=group&g=${encodeURIComponent(g)}`}
-                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
-              >
-                <span className="text-amber-500">★</span>
-                {g} <span className="text-amber-500/70">계열</span>
-              </a>
-            ))}
-            {favCompanies.map((c) => (
-              <a
-                key={`c-${c}`}
-                href={`/docs/company?c=${encodeURIComponent(c)}`}
-                className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
-              >
-                <span className="text-amber-400">★</span>
-                {c}
-              </a>
-            ))}
+            {favGroups.map((g, i) =>
+              favEdit ? (
+                <span
+                  key={`g-${g}`}
+                  className="inline-flex items-center gap-0.5 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs font-medium text-amber-700"
+                >
+                  <button onClick={() => moveFav("group", i, -1)} disabled={i === 0} className="px-0.5 disabled:opacity-30" title="앞으로">◀</button>
+                  <span className="px-0.5">★ {g} 계열</span>
+                  <button onClick={() => moveFav("group", i, 1)} disabled={i === favGroups.length - 1} className="px-0.5 disabled:opacity-30" title="뒤로">▶</button>
+                  <button onClick={() => unstarFav("group", g)} className="px-0.5 text-amber-500 hover:text-red-500" title="별표 해제">✕</button>
+                </span>
+              ) : (
+                <a
+                  key={`g-${g}`}
+                  href={`/docs/company?by=group&g=${encodeURIComponent(g)}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                >
+                  <span className="text-amber-500">★</span>
+                  {g} <span className="text-amber-500/70">계열</span>
+                </a>
+              ),
+            )}
+            {favCompanies.map((c, i) =>
+              favEdit ? (
+                <span
+                  key={`c-${c}`}
+                  className="inline-flex items-center gap-0.5 rounded-full border border-line bg-card px-1.5 py-1 text-xs font-medium text-ink-sub"
+                >
+                  <button onClick={() => moveFav("company", i, -1)} disabled={i === 0} className="px-0.5 disabled:opacity-30" title="앞으로">◀</button>
+                  <span className="px-0.5">★ {c}</span>
+                  <button onClick={() => moveFav("company", i, 1)} disabled={i === favCompanies.length - 1} className="px-0.5 disabled:opacity-30" title="뒤로">▶</button>
+                  <button onClick={() => unstarFav("company", c)} className="px-0.5 text-ink-muted hover:text-red-500" title="별표 해제">✕</button>
+                </span>
+              ) : (
+                <a
+                  key={`c-${c}`}
+                  href={`/docs/company?c=${encodeURIComponent(c)}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+                >
+                  <span className="text-amber-400">★</span>
+                  {c}
+                </a>
+              ),
+            )}
           </div>
         </section>
       )}
