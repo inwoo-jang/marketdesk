@@ -87,7 +87,9 @@ export default function IndustryDashboard() {
     arr.push(r);
     byMonth.set(k, arr);
   }
-  const months = [...byMonth.keys()].sort().reverse();
+  // 흐름(롤업)이 있는 달은 그 카드 안에서 원문을 보여주므로, 아래 리포트 목록에선 제외(중복 방지)
+  const rollupMonths = new Set(rollups.map((r) => r.periodKey));
+  const months = [...byMonth.keys()].filter((m) => !rollupMonths.has(m)).sort().reverse();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -171,19 +173,44 @@ export default function IndustryDashboard() {
                     ))}
                   </div>
                 )}
+                {/* 이 달 원문 바로보기(접기/펼치기) */}
+                {(byMonth.get(ru.periodKey)?.length ?? 0) > 0 && (
+                  <details className="group/orig mt-3 border-t border-line pt-2">
+                    <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-primary">
+                      <span className="inline-block transition group-open/orig:rotate-90">▸</span>
+                      {ru.periodKey} 원문 바로보기 ({byMonth.get(ru.periodKey)!.length})
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {byMonth.get(ru.periodKey)!.map((r) => (
+                        <ReportCard
+                          key={r.id}
+                          report={r}
+                          onDelete={async (rid) => {
+                            await api.deleteReport(rid);
+                            load();
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* 시간뷰: 월별 그룹 리포트 */}
+      {/* 시간뷰: 흐름이 없는 나머지 달의 리포트(흐름 있는 달은 위 카드에서 원문 확인) */}
       <section className="mt-10">
-        <h2 className="mb-3 text-sm font-semibold text-ink-muted">리포트 ({reports.length})</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink-muted">
+          {rollupMonths.size > 0 ? "그 외 달 리포트" : "리포트"} ({months.reduce((n, m) => n + byMonth.get(m)!.length, 0)})
+        </h2>
         {reports.length === 0 ? (
           <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
             이 산업으로 분류된 리포트가 아직 없어요. 업로드하면 AI 가 이 산업으로 매칭합니다.
           </p>
+        ) : months.length === 0 ? (
+          <p className="rounded-card bg-card p-5 text-sm text-ink-sub shadow-card">모든 달의 원문은 위 흐름 카드에서 볼 수 있어요.</p>
         ) : (
           <div className="space-y-3">
             {months.map((m, idx) => (
