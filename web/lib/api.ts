@@ -71,7 +71,8 @@ export const api = {
   hideReport: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/hide`),
   unhideReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/hide`),
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
-  reportEntries: (id: string) => get<{ report: Report; entries: EntryFull[] }>(`/api/me/reports/${id}/entries`),
+  reportEntries: (id: string) =>
+    get<{ report: Report; entries: EntryFull[]; dupInfo?: { id: string; title: string | null } | null }>(`/api/me/reports/${id}/entries`),
   reExtract: (id: string, opts?: { lensKeys?: string[]; jobRole?: string }) =>
     post<{ ok: true; parseStatus: string; requestedLenses?: string[]; jobRole?: string }>(`/api/me/reports/${id}/extract`, opts ?? {}),
   saveEntry: (id: string, input: { frame?: Partial<EntryFrame>; status?: "draft" | "saved" }) =>
@@ -241,6 +242,7 @@ export type Report = {
   fileSize: number | null;
   pageCount: number | null;
   requestedLenses: string[] | null;
+  dupOf?: string | null; // 유사 중복이면 원본 리포트 id
   parseStatus: "pending" | "parsing" | "parsed" | "failed";
   hidden?: boolean;
   bookmarked?: boolean;

@@ -1283,9 +1283,20 @@ meRoute.get("/reports/:id/entries", async (c) => {
     arr.push(n);
     byEntry.set(n.entryId, arr);
   }
+  // 유사 중복 원본 정보(있으면 제목)
+  let dupInfo: { id: string; title: string | null } | null = null;
+  if (report.dupOf) {
+    const [orig] = await db
+      .select({ id: reports.id, title: reports.title })
+      .from(reports)
+      .where(and(eq(reports.id, report.dupOf), eq(reports.userId, user.id)))
+      .limit(1);
+    if (orig) dupInfo = orig;
+  }
   return c.json({
     report: (await attachIndustries([report]))[0],
     entries: entryRows.map((e) => ({ ...e, numbers: byEntry.get(e.id) ?? [] })),
+    dupInfo,
   });
 });
 

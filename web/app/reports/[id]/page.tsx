@@ -18,6 +18,7 @@ export default function ReportReviewPage() {
   const [catalog, setCatalog] = useState<Industry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hlKey, setHlKey] = useState(0);
+  const [dupInfo, setDupInfo] = useState<{ id: string; title: string | null } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -25,6 +26,7 @@ export default function ReportReviewPage() {
     setReport(d.report);
     setEntry(d.entries[0] ?? null);
     setCatalog(industries);
+    setDupInfo(d.dupInfo ?? null);
     setHlKey((k) => k + 1);
     setLoaded(true);
   }, [id]);
@@ -48,6 +50,11 @@ export default function ReportReviewPage() {
     if (!confirm("이 리포트를 삭제할까요? 분석 결과도 함께 삭제됩니다.")) return;
     await api.deleteReport(id);
     router.push("/");
+  }
+  async function mergeHide() {
+    // 유사 중복 병합 = 이 리포트를 숨기고 원본으로 이동
+    await api.hideReport(id).catch(() => {});
+    router.push(dupInfo ? `/reports/${dupInfo.id}` : "/");
   }
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
@@ -80,6 +87,22 @@ export default function ReportReviewPage() {
       </div>
 
       <IndustryRow report={report} catalog={catalog} onSaved={load} />
+
+      {/* 유사 중복 안내(병합) */}
+      {dupInfo && (
+        <div className="mt-4 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm">
+          <p className="font-medium text-amber-800">이미 올린 리포트와 내용이 거의 같아요.</p>
+          <p className="mt-0.5 text-amber-700">“{dupInfo.title ?? "기존 리포트"}”</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a href={`/reports/${dupInfo.id}`} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white">
+              기존 리포트 보기
+            </a>
+            <button onClick={mergeHide} className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-sub hover:bg-bg-deep">
+              이 리포트 숨기기(병합)
+            </button>
+          </div>
+        </div>
+      )}
 
       {report.parseStatus !== "parsing" && <LensEditor report={report} onReanalyze={load} />}
 

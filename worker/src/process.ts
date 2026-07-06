@@ -1,10 +1,13 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, ne, isNotNull } from "drizzle-orm";
 import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses, rollups } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
 import { verifyNumbers } from "./guardrail.js";
 import { getProvider } from "./providers/index.js";
+import { simhash, hamming } from "./simhash.js";
+
+const SIMHASH_DUP_THRESHOLD = 6; // Hamming 거리 이하면 유사 중복으로 판단(64bit 중)
 
 type Report = typeof reports.$inferSelect;
 
@@ -45,6 +48,28 @@ export async function processReport(report: Report): Promise<void> {
     const document = buildDocument(pages);
     const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=claude 가능)
 
+    // 유사 중복 감지: 본문 SimHash 로 내 다른 리포트와 비교(가장 가까운 것 하나)
+    const sim = simhash(document);
+    let dupOf: string | null = null;
+    const others = await db
+      .select({ id: reports.id, simhash: reports.simhash })
+      .from(reports)
+      .where(
+        and(
+          eq(reports.userId, report.userId),
+          eq(reports.parseStatus, "parsed"),
+          ne(reports.id, report.id),
+          isNull(reports.dupOf),
+          isNotNull(reports.simhash),
+        ),
+      );
+    for (const o of others) {
+      if (o.simhash && hamming(sim, o.simhash) <= SIMHASH_DUP_THRESHOLD) {
+        dupOf = o.id;
+        break;
+      }
+    }
+
     // AI 메타 추출(제목·발간일·요약·타입·멀티산업) + 카탈로그 매칭. 확인된 산업은 덮지 않음.
     const catalog = await db
       .select({ id: industries.id, name: industries.name })
@@ -61,6 +86,8 @@ export async function processReport(report: Report): Promise<void> {
         summary: meta.summary,
         title: cleanTitle(meta.title) ?? report.title,
         company: meta.company,
+        simhash: sim,
+        dupOf,
         ...(meta.pubDate ? { pubDate: meta.pubDate } : {}),
         ...(report.industryConfirmed ? {} : { industryId: primaryId }),
       })

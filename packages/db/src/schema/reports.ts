@@ -33,6 +33,8 @@ export const reports = pgTable(
     hidden: boolean("hidden").default(false).notNull(),
     bookmarked: boolean("bookmarked").default(false).notNull(),
     contentHash: text("content_hash"), // 업로드 내용 SHA-256(정확 중복 감지)
+    simhash: text("simhash"), // 본문 SimHash 64bit hex(유사 중복 감지)
+    dupOf: uuid("dup_of"), // 유사 중복이면 원본 리포트 id(사용자가 병합·숨김 결정)
     parseStatus: parseStatus("parse_status").default("pending").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

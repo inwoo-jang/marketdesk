@@ -82,6 +82,11 @@ export function ReportCard({
               {DOC_TYPE[report.docType] ?? report.docType}
             </span>
           )}
+          {report.dupOf && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="이미 올린 리포트와 내용이 거의 같아요">
+              유사중복
+            </span>
+          )}
           <span className="truncate font-semibold">
             {processing ? (report.title ?? "분석 중...") : (report.title ?? "제목 없음")}
           </span>
