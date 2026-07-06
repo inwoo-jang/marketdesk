@@ -1,5 +1,5 @@
 import { and, eq, gte, lt } from "drizzle-orm";
-import { rollups, rollupFacts, rollupSources, entries, reports, industries } from "@reportlens/db";
+import { rollups, rollupFacts, rollupSources, entries, reports, industries, publicContents } from "@reportlens/db";
 import { db } from "./db.js";
 import { getProvider } from "./providers/index.js";
 
@@ -46,7 +46,16 @@ export async function processRollup(r: Rollup): Promise<void> {
 
     const industryName = label;
 
-    if (rows.length === 0) {
+    // 산업 흐름엔 공공 콘텐츠(정책브리핑 등)의 중요한 정책도 함께 반영
+    const pubRows =
+      r.scope === "industry" && r.industryId
+        ? await db
+            .select({ title: publicContents.title, summary: publicContents.summary })
+            .from(publicContents)
+            .where(and(eq(publicContents.industryId, r.industryId), gte(publicContents.pubDate, start), lt(publicContents.pubDate, end)))
+        : [];
+
+    if (rows.length === 0 && pubRows.length === 0) {
       await db
         .update(rollups)
         .set({ oneLiner: "이 기간 분석된 자료가 없습니다.", status: "done", updatedAt: new Date() })
@@ -54,9 +63,11 @@ export async function processRollup(r: Rollup): Promise<void> {
       return;
     }
 
-    const digest = rows
+    const reportDigest = rows
       .map((e) => `- ${e.title ?? "제목 없음"}: ${e.frame?.summary ?? ""} ${e.frame?.facts?.what ?? ""}`.trim())
       .join("\n");
+    const pubDigest = pubRows.map((p) => `- [공공/정책] ${p.title}: ${p.summary ?? ""}`.trim()).join("\n");
+    const digest = [reportDigest, pubDigest].filter(Boolean).join("\n");
 
     const provider = getProvider(r.llmProvider); // 생성 시 고정된 엔진(개발자=claude 등)
     const result = await provider.rollup(industryName, r.periodKey, digest);
@@ -68,10 +79,12 @@ export async function processRollup(r: Rollup): Promise<void> {
         .insert(rollupFacts)
         .values(result.facts.map((f, i) => ({ rollupId: r.id, factType: f.type, content: f.content, sort: i })));
     }
-    await db
-      .insert(rollupSources)
-      .values(rows.map((e) => ({ rollupId: r.id, entryId: e.id })))
-      .onConflictDoNothing();
+    if (rows.length > 0) {
+      await db
+        .insert(rollupSources)
+        .values(rows.map((e) => ({ rollupId: r.id, entryId: e.id })))
+        .onConflictDoNothing();
+    }
     await db
       .update(rollups)
       .set({ oneLiner: result.oneLiner, status: "done", updatedAt: new Date() })
