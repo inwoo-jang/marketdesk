@@ -12,6 +12,15 @@ const HILITES = [
   { c: "#FED7AA", name: "주황" },
 ];
 
+// 손글씨 3종 + 기본. cls 는 globals.css 클래스. 동글한 Gaegu 가 기본.
+const FONTS = [
+  { key: "gaegu", label: "동글", cls: "font-gaegu" },
+  { key: "himelody", label: "부드러움", cls: "font-himelody" },
+  { key: "nanumpen", label: "펜", cls: "font-nanumpen" },
+  { key: "sans", label: "기본", cls: "" },
+] as const;
+type FontKey = (typeof FONTS)[number]["key"];
+
 // 자유 서식 메모: 제목 접기/펼치기, 손글씨 폰트, H1~3·굵기·글자크기·형광펜. 800ms 디바운스 자동저장.
 export function RichNote({
   scopeType,
@@ -24,7 +33,7 @@ export function RichNote({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [hand, setHand] = useState(true);
+  const [font, setFont] = useState<FontKey>("gaegu");
   const [empty, setEmpty] = useState(true);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,7 +136,21 @@ export function RichNote({
           ))}
           <Btn onDo={() => cmd("hiliteColor", "transparent")} title="형광펜 지우기">지우기</Btn>
           <span className="mx-1 h-4 w-px bg-line" />
-          <Btn onDo={() => setHand((v) => !v)} title="손글씨 폰트" active={hand}>✏️ 손글씨</Btn>
+          <span className="text-[11px] text-ink-muted">글씨체</span>
+          {FONTS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              title={`${f.label} 글씨체`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setFont(f.key)}
+              className={`rounded px-1.5 py-1 text-xs font-medium transition hover:bg-bg-deep ${f.cls} ${
+                font === f.key ? "bg-primary/10 text-primary" : "text-ink-sub"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
         <div
           ref={ref}
@@ -135,7 +158,7 @@ export function RichNote({
           suppressContentEditableWarning
           onInput={onInput}
           data-placeholder="여기에 자유롭게 메모하세요. 제목·굵기·형광펜·손글씨로 꾸밀 수 있어요."
-          className={`rich-note min-h-[110px] px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ${hand ? "font-hand" : ""}`}
+          className={`rich-note min-h-[110px] px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ${FONTS.find((f) => f.key === font)?.cls ?? ""}`}
         />
       </div>
     </div>
