@@ -49,6 +49,7 @@ export const api = {
     put<{ enabled: string[]; jobRole?: string }>("/api/me/lenses", { keys, jobRole }),
   myIndustries: () => get<{ industries: MyIndustry[] }>("/api/me/industries"),
   followIndustry: (industryId: string) => post<{ ok: true }>("/api/me/industries/follow", { industryId }),
+  reorderIndustries: (ids: string[]) => put<{ ok: true }>("/api/me/industries/reorder", { ids }),
   unfollowIndustry: (id: string) => del<{ ok: true }>(`/api/me/industries/${id}`),
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),

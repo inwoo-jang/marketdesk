@@ -151,6 +151,7 @@ export default function Home() {
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
   const [favEdit, setFavEdit] = useState(false);
+  const [indEdit, setIndEdit] = useState(false);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
@@ -364,6 +365,14 @@ export default function Home() {
     else setFavCompanies((c) => c.filter((x) => x !== value));
     await api.removeCompanyFavorite(kind, value).catch(() => {});
   }
+  async function moveInd(idx: number, dir: -1 | 1) {
+    const list = [...myIndustries];
+    const j = idx + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[idx], list[j]] = [list[j], list[idx]];
+    setMyIndustries(list);
+    await api.reorderIndustries(list.map((i) => i.id)).catch(() => {});
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -388,7 +397,14 @@ export default function Home() {
       {/* 내 산업(핀) = 펼치기 전 보이는 산업 */}
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink-muted">내 산업 ({myIndustries.length})</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink-muted">내 산업 ({myIndustries.length})</h2>
+            {myIndustries.length > 1 && (
+              <button onClick={() => setIndEdit((v) => !v)} className="text-xs font-medium text-primary hover:underline">
+                {indEdit ? "완료" : "순서변경"}
+              </button>
+            )}
+          </div>
           <a href="/upload" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white">
             + 업로드
           </a>
@@ -400,7 +416,7 @@ export default function Home() {
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {myIndustries.map((ind) => (
+            {myIndustries.map((ind, i) => (
               <div key={ind.id} className="group relative rounded-card bg-card p-5 shadow-card hover:ring-1 hover:ring-primary/30">
                 <a href={`/industry/${ind.id}`} className="block">
                   <div
@@ -412,13 +428,16 @@ export default function Home() {
                   <div className="font-semibold">{ind.name}</div>
                   {ind.isCustom && <span className="text-xs text-ink-muted">커스텀</span>}
                 </a>
-                <button
-                  onClick={() => togglePin(ind.id, true)}
-                  className="absolute right-3 top-3 text-primary"
-                  title="관심 해제"
-                >
-                  ★
-                </button>
+                {indEdit ? (
+                  <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-bg-deep/80 px-1 py-0.5 text-xs backdrop-blur">
+                    <button onClick={() => moveInd(i, -1)} disabled={i === 0} className="px-1 disabled:opacity-30" title="앞으로">◀</button>
+                    <button onClick={() => moveInd(i, 1)} disabled={i === myIndustries.length - 1} className="px-1 disabled:opacity-30" title="뒤로">▶</button>
+                  </div>
+                ) : (
+                  <button onClick={() => togglePin(ind.id, true)} className="absolute right-3 top-3 text-primary" title="관심 해제">
+                    ★
+                  </button>
+                )}
               </div>
             ))}
           </div>

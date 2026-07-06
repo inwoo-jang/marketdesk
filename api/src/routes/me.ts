@@ -801,6 +801,23 @@ meRoute.get("/industries", async (c) => {
 
 const followSchema = z.object({ industryId: z.string().uuid() });
 
+// PUT /api/me/industries/reorder - 내 산업 순서 저장. { ids: 순서대로 }
+meRoute.put("/industries/reorder", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const ids = Array.isArray(body["ids"]) ? (body["ids"] as unknown[]).filter((v): v is string => typeof v === "string") : null;
+  if (!ids) return c.json({ error: "invalid" }, 400);
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < ids.length; i++) {
+      await tx
+        .update(userIndustries)
+        .set({ sort: i })
+        .where(and(eq(userIndustries.userId, user.id), eq(userIndustries.industryId, ids[i])));
+    }
+  });
+  return c.json({ ok: true });
+});
+
 // POST /api/me/industries/follow - 기존 산업(글로벌/커스텀) 팔로우
 meRoute.post("/industries/follow", async (c) => {
   const user = c.get("user");
