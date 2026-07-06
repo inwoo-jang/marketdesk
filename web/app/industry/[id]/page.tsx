@@ -39,7 +39,9 @@ export default function IndustryDashboard() {
     setReports(reports);
     setRollups(rollups);
     setPub(pc.contents);
-    if (reports[0]) setPeriod(monthKey(reports[0]));
+    // 월별 흐름 기본값: 데이터가 있는 가장 최근 달(없으면 이번 달). reports[0] 은 정렬 보장이 없어 사용 안 함.
+    const latest = reports.reduce((mx, r) => (monthKey(r) > mx ? monthKey(r) : mx), "");
+    setPeriod(latest || thisMonth());
     setLoaded(true);
   }, [id]);
 
@@ -156,15 +158,15 @@ export default function IndustryDashboard() {
                 {ru.facts.length > 0 && (
                   <div className="mt-3 space-y-1.5">
                     {ru.facts.map((f) => (
-                      <div key={f.id} className="flex gap-2 text-sm">
+                      <div key={f.id} className="flex items-start gap-2 text-sm">
                         <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                          className={`mt-0.5 shrink-0 self-start rounded-full px-2 py-0.5 text-xs ${
                             f.factType === "common" ? "bg-success-bg text-success-text" : "bg-amber-50 text-amber-600"
                           }`}
                         >
                           {f.factType === "common" ? "공통" : "엇갈림"}
                         </span>
-                        <span className="text-ink">{f.content}</span>
+                        <span className="leading-relaxed text-ink">{f.content}</span>
                       </div>
                     ))}
                   </div>
