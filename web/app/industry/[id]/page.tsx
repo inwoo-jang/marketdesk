@@ -185,11 +185,17 @@ export default function IndustryDashboard() {
             이 산업으로 분류된 리포트가 아직 없어요. 업로드하면 AI 가 이 산업으로 매칭합니다.
           </p>
         ) : (
-          <div className="space-y-6">
-            {months.map((m) => (
-              <div key={m}>
-                <div className="mb-2 text-xs font-semibold text-ink-muted">{m}</div>
-                <div className="space-y-2">
+          <div className="space-y-3">
+            {months.map((m, idx) => (
+              <details key={m} open={idx === 0} className="group/month rounded-card border border-line bg-card/40">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-xs font-semibold text-ink-muted">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block transition group-open/month:rotate-90">▸</span>
+                    {m}
+                  </span>
+                  <span className="font-normal">{byMonth.get(m)!.length}건</span>
+                </summary>
+                <div className="space-y-2 px-3 pb-3">
                   {byMonth.get(m)!.map((r) => (
                     <ReportCard
                       key={r.id}
@@ -201,7 +207,7 @@ export default function IndustryDashboard() {
                     />
                   ))}
                 </div>
-              </div>
+              </details>
             ))}
           </div>
         )}
