@@ -111,6 +111,11 @@ export const api = {
   unhidePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/hide`),
   bookmarkPublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/bookmark`),
   unbookmarkPublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/bookmark`),
+  reportMemos: (reportId: string) => get<{ memos: Memo[] }>(`/api/me/reports/${reportId}/memos`),
+  addMemo: (reportId: string, input: { startOffset: number; endOffset: number; anchorText: string; note: string }) =>
+    post<{ memo: Memo }>(`/api/me/reports/${reportId}/memos`, input),
+  updateMemo: (mid: string, note: string) => put<{ memo: Memo }>(`/api/me/memos/${mid}`, { note }),
+  deleteMemo: (mid: string) => del<{ ok: true }>(`/api/me/memos/${mid}`),
   define: (term: string, context?: string) =>
     post<{ term: string; definition: string }>("/api/me/define", { term, context }),
   highlights: (reportId: string) => get<{ highlights: Highlight[] }>(`/api/me/reports/${reportId}/highlights`),
@@ -180,6 +185,8 @@ export type PublicContent = {
   pubDate: string | null;
   isBookmarked: boolean;
 };
+
+export type Memo = { id: string; startOffset: number; endOffset: number; anchorText: string; note: string };
 
 export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "purple";
 export type Highlight = {

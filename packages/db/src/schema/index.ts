@@ -9,3 +9,4 @@ export * from "./settings";
 export * from "./highlights";
 export * from "./public";
 export * from "./groups";
+export * from "./memos";

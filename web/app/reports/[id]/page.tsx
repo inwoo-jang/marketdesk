@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry } from "@/lib/api";
 import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
+import { MemoLayer } from "@/components/memo";
 
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
 
@@ -99,6 +100,7 @@ export default function ReportReviewPage() {
       {report.parseStatus === "parsed" && entry && (
         <>
           <Highlighter reportId={id} rootRef={contentRef} ready={loaded} reloadKey={hlKey} />
+          <MemoLayer reportId={id} rootRef={contentRef} ready={loaded} reloadKey={hlKey} />
           <WordLookup targetRef={contentRef} contextText={`${report.title ?? ""} ${entry.frame?.summary ?? ""}`} />
         </>
       )}

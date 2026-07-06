@@ -3,7 +3,8 @@
 export const GUARDRAIL =
   "리포트에 없는 숫자·전망을 절대 지어내지 마라. 리포트에 없는 항목은 그 값을 비워라(빈 문자열 \"\" 또는 빈 배열 []). " +
   "'명시 없음'·'해당 없음'·'정보 없음'·'N/A' 같은 채움 문구를 절대 쓰지 마라. " +
-  "핵심숫자에는 반드시 출처 페이지(page_no)를 단다. 한국어, em dash 사용 금지.";
+  "핵심숫자에는 반드시 출처 페이지(page_no)를 단다. " +
+  "**출력은 반드시 한국어로 작성한다(원문이 영어·외국어여도 한국어로 번역·요약).** em dash 사용 금지.";
 
 // 모든 추출 응답에 강제하는 엄격 JSON 규칙(특히 CLI 프로바이더 파싱 안정화).
 export const STRICT_JSON =
@@ -39,6 +40,7 @@ export function buildAnalyzePrompt(document: string, industries: string[]): stri
     `4) doc_type: 'industry'(산업 리포트) | 'company'(기업 리포트) | 'news'(경제뉴스).\n` +
     `5) industries: 다음 후보 중 해당하는 것 모두(1~3개) 정확한 이름 배열. [${industries.join(", ")}]\n` +
     `6) company: 특정 기업이 핵심 주제면 그 회사명 1개(예: 삼성전자), 아니면 null.\n` +
+    `title·summary 는 반드시 한국어로(원문이 영어·외국어여도 한국어로 번역·요약).\n` +
     `출력: {"title":"","pub_date":null,"summary":"","doc_type":"industry","industries":["..."],"company":null}` +
     STRICT_JSON +
     `\n\n--- 문서(일부) ---\n${document.slice(0, 6000)}`

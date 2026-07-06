@@ -20,6 +20,7 @@ import {
   userPublicBookmark,
   companyGroups,
   normCompany,
+  memos,
   JOB_ROLES,
   type EntryFrame,
 } from "@reportlens/db";
@@ -125,6 +126,51 @@ meRoute.post("/reports/:id/highlights", async (c) => {
 meRoute.delete("/highlights/:hid", async (c) => {
   const user = c.get("user");
   await db.delete(highlights).where(and(eq(highlights.id, c.req.param("hid")), eq(highlights.userId, user.id)));
+  return c.json({ ok: true });
+});
+
+// ===== 메모(단어/문장에 붙이는 노트, 우측 메모란) =====
+const memoSchema = z.object({
+  startOffset: z.number().int().min(0),
+  endOffset: z.number().int().min(0),
+  anchorText: z.string().min(1).max(2000),
+  note: z.string().min(1).max(4000),
+});
+meRoute.get("/reports/:id/memos", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  if (!(await ownReport(user.id, id))) return c.json({ error: "리포트 없음" }, 404);
+  const rows = await db
+    .select()
+    .from(memos)
+    .where(and(eq(memos.reportId, id), eq(memos.userId, user.id)))
+    .orderBy(memos.startOffset);
+  return c.json({ memos: rows });
+});
+meRoute.post("/reports/:id/memos", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const parsed = memoSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  if (parsed.data.endOffset <= parsed.data.startOffset) return c.json({ error: "invalid range" }, 400);
+  if (!(await ownReport(user.id, id))) return c.json({ error: "리포트 없음" }, 404);
+  const [row] = await db.insert(memos).values({ userId: user.id, reportId: id, ...parsed.data }).returning();
+  return c.json({ memo: row });
+});
+meRoute.put("/memos/:mid", async (c) => {
+  const user = c.get("user");
+  const note = (await c.req.json().catch(() => ({}))).note;
+  if (typeof note !== "string" || !note.trim()) return c.json({ error: "note 필요" }, 400);
+  const [row] = await db
+    .update(memos)
+    .set({ note: note.slice(0, 4000) })
+    .where(and(eq(memos.id, c.req.param("mid")), eq(memos.userId, user.id)))
+    .returning();
+  return c.json({ memo: row ?? null });
+});
+meRoute.delete("/memos/:mid", async (c) => {
+  const user = c.get("user");
+  await db.delete(memos).where(and(eq(memos.id, c.req.param("mid")), eq(memos.userId, user.id)));
   return c.json({ ok: true });
 });
 
