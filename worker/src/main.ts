@@ -41,6 +41,9 @@ async function tick(): Promise<boolean> {
 
 async function main() {
   console.log(`worker 시작 · provider=${env.llmProvider} · once=${once}`);
+  // 크래시/재시작으로 'parsing' 에 멈춘 리포트를 pending 으로 복구(자동 재처리).
+  const recovered = await db.update(reports).set({ parseStatus: "pending" }).where(eq(reports.parseStatus, "parsing")).returning({ id: reports.id });
+  if (recovered.length) console.log(`중단됐던 리포트 ${recovered.length}건 재처리 복구`);
   if (once) {
     await tick();
     process.exit(0);

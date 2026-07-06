@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, type Memo } from "@/lib/api";
 
 // 본문 선택 → 메모 작성. 본문엔 점선 밑줄만, 내용은 우측 메모란. 위치는 highlights 와 동일 offset 기준.
@@ -72,8 +73,25 @@ export function MemoLayer({
   const [palette, setPalette] = useState<{ x: number; y: number; start: number; end: number; text: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const [open, setOpen] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [positions, setPositions] = useState<Record<string, { top: number; left: number }>>({});
+
+  // 각 메모를 앵커 오른쪽 여백에 배치(문서 절대좌표 → 스크롤 동행). 리플로우/리사이즈 시 재계산.
+  const recompute = useCallback(() => {
+    const root = getRoot(rootRef);
+    const contentEl = rootRef.current;
+    if (!root || !contentEl) return;
+    const cr = contentEl.getBoundingClientRect();
+    const left = cr.right + window.scrollX + 12;
+    const pos: Record<string, { top: number; left: number }> = {};
+    root.querySelectorAll("mark[data-memo-id]").forEach((el) => {
+      const id = (el as HTMLElement).dataset.memoId!;
+      if (pos[id]) return;
+      const r = el.getBoundingClientRect();
+      pos[id] = { top: r.top + window.scrollY, left };
+    });
+    setPositions(pos);
+  }, [rootRef]);
 
   const applyAll = useCallback(async () => {
     const root = getRoot(rootRef);
@@ -90,6 +108,17 @@ export function MemoLayer({
     const t = setTimeout(() => applyAll(), 60);
     return () => clearTimeout(t);
   }, [ready, reloadKey, applyAll]);
+
+  // 메모/레이아웃 변화 시 여백 노트 위치 재계산
+  useEffect(() => {
+    const t = setTimeout(recompute, 80);
+    const on = () => recompute();
+    window.addEventListener("resize", on);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", on);
+    };
+  }, [memos, recompute]);
 
   // 선택 → 메모 팔레트
   useEffect(() => {
@@ -122,7 +151,6 @@ export function MemoLayer({
     const onClick = (e: MouseEvent) => {
       const m = (e.target as HTMLElement)?.closest?.("mark[data-memo-id]") as HTMLElement | null;
       if (!m) return;
-      setOpen(true);
       setActiveId(m.dataset.memoId ?? null);
     };
     root.addEventListener("click", onClick);
@@ -141,7 +169,6 @@ export function MemoLayer({
       if (root) markMemo(root, start, end, memo.id);
       setMemos((m) => [...m, memo].sort((a, b) => a.startOffset - b.startOffset));
       setActiveId(memo.id);
-      setOpen(true);
     }
   }
   async function remove(id: string) {
@@ -156,13 +183,6 @@ export function MemoLayer({
     });
     setMemos((l) => l.filter((x) => x.id !== id));
   }
-  function scrollToAnchor(id: string) {
-    setActiveId(id);
-    const root = getRoot(rootRef);
-    const el = root?.querySelector(`mark[data-memo-id="${id}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
   return (
     <>
       {/* 선택 → 메모(작은 버튼 → 입력창) */}
@@ -199,37 +219,36 @@ export function MemoLayer({
         </div>
       )}
 
-      {/* 우측 메모란 */}
-      {memos.length > 0 &&
-        (open ? (
-          <aside className="fixed right-4 top-20 z-20 max-h-[70vh] w-64 overflow-y-auto rounded-card border border-line bg-card/95 p-3 shadow-card backdrop-blur print:hidden">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold">📝 메모 ({memos.length})</span>
-              <button onClick={() => setOpen(false)} className="text-xs text-ink-muted hover:text-ink">접기</button>
-            </div>
-            <div className="space-y-2">
-              {memos.map((m) => (
+      {/* 여백 노트: 단어 옆(오른쪽)에 붙어 스크롤 동행 */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {memos.map((m) => {
+              const p = positions[m.id];
+              if (!p) return null;
+              return (
                 <div
                   key={m.id}
-                  className={`rounded-lg border p-2 text-xs ${activeId === m.id ? "border-primary bg-primary/5" : "border-line"}`}
+                  onMouseEnter={() => setActiveId(m.id)}
+                  style={{ position: "absolute", top: p.top, left: p.left, width: 220 }}
+                  className={`group/memo z-10 rounded-lg border bg-card p-2 text-xs shadow-sm transition print:hidden ${
+                    activeId === m.id ? "border-primary ring-1 ring-primary/30" : "border-line"
+                  }`}
                 >
-                  <button onClick={() => scrollToAnchor(m.id)} className="block w-full text-left">
-                    <div className="truncate font-medium text-primary">“{m.anchorText}”</div>
-                    <div className="mt-0.5 whitespace-pre-wrap text-ink-sub">{m.note}</div>
+                  <div className="truncate text-[11px] font-medium text-primary">“{m.anchorText}”</div>
+                  <div className="mt-0.5 whitespace-pre-wrap text-ink-sub">{m.note}</div>
+                  <button
+                    onClick={() => remove(m.id)}
+                    className="absolute right-1 top-1 hidden text-[11px] text-ink-muted hover:text-red-500 group-hover/memo:block"
+                  >
+                    ✕
                   </button>
-                  <button onClick={() => remove(m.id)} className="mt-1 text-[11px] text-ink-muted hover:text-red-500">삭제</button>
                 </div>
-              ))}
-            </div>
-          </aside>
-        ) : (
-          <button
-            onClick={() => setOpen(true)}
-            className="fixed right-4 top-20 z-20 rounded-full border border-line bg-card/95 px-3 py-2 text-sm font-medium shadow-card backdrop-blur print:hidden"
-          >
-            📝 메모 {memos.length}
-          </button>
-        ))}
+              );
+            })}
+          </>,
+          document.body,
+        )}
     </>
   );
 }
