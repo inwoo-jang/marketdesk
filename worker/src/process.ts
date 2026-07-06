@@ -8,6 +8,16 @@ import { getProvider } from "./providers/index.js";
 
 type Report = typeof reports.$inferSelect;
 
+// 제목에서 출처·시리즈 코드 군더더기 제거(예: "(EPS LIVE #218)", 끝의 "#12", "Vol.3").
+function cleanTitle(t: string | null | undefined): string | null {
+  if (!t) return t ?? null;
+  return t
+    .replace(/\s*[([][^)\]]*(#\d+|LIVE|Vol\.?\s*\d+|리서치센터|데일리|위클리|weekly|daily)[^)\]]*[)\]]\s*$/gi, "")
+    .replace(/\s*[-–|]\s*#?\d+\s*$/g, "")
+    .replace(/\s+#\d+\s*$/g, "")
+    .trim();
+}
+
 // 리포트 1건 처리: 파싱 → 산업·타입 AI분류 → 렌즈/직무별 추출 → 가드레일 → 기록.
 export async function processReport(report: Report): Promise<void> {
   await db.update(reports).set({ parseStatus: "parsing" }).where(eq(reports.id, report.id));
@@ -49,7 +59,7 @@ export async function processReport(report: Report): Promise<void> {
       .set({
         docType: meta.docType,
         summary: meta.summary,
-        title: meta.title ?? report.title,
+        title: cleanTitle(meta.title) ?? report.title,
         company: meta.company,
         ...(meta.pubDate ? { pubDate: meta.pubDate } : {}),
         ...(report.industryConfirmed ? {} : { industryId: primaryId }),

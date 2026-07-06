@@ -34,7 +34,10 @@ export const JOB_ROLE_PERSONA: Record<string, string> = {
 export function buildAnalyzePrompt(document: string, industries: string[]): string {
   return (
     `아래 문서의 메타데이터를 추출하라. JSON 으로만 답한다.\n` +
-    `1) title: 문서 핵심을 담은 제목(한 줄, 날짜·기자명 등 군더더기 빼고).\n` +
+    `1) title: 이 문서가 무슨 내용인지 비전문가도 한눈에 아는, 쉽고 자연스러운 한국어 한 줄 제목.\n` +
+    `   - 애널리스트 약어·전문용어 금지: '1Q26 리뷰', '연결 현금흐름', '존재감 부각', '컨콜', '가이던스', '멀티플', 'OP' 등은 쉬운 말로 풀거나 빼기.\n` +
+    `   - 날짜·기자명·발행사·시리즈코드('EPS LIVE #218', 'Vol.3', 티커·문서번호) 금지.\n` +
+    `   - 핵심 메시지(무엇이 어떻게 됐는지)를 평범한 문장처럼. 예) 나쁨: 'SK 1Q26 리뷰: 하이닉스 연결 현금흐름과 에코플랜트 존재감 부각' → 좋음: 'SK, 하이닉스 실적 덕에 현금흐름 개선…건설 자회사도 성장'.\n` +
     `2) pub_date: 발간/작성 일자 YYYY-MM-DD. 없으면 null.\n` +
     `3) summary: 한 줄 요약(40자 내외).\n` +
     `4) doc_type: 'industry'(산업 리포트) | 'company'(기업 리포트) | 'news'(경제뉴스).\n` +
