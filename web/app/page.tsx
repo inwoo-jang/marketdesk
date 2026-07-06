@@ -61,6 +61,21 @@ function writeFeedUrl(s: FeedState) {
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
 
+// 눈 아이콘(off=감김 = 공공 숨김 상태)
+function EyeIcon({ off }: { off: boolean }) {
+  return off ? (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19M6.61 6.61A18.5 18.5 0 0 0 2 12s3 8 10 8a9.12 9.12 0 0 0 5.39-1.61" />
+      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 // 기간 선택 UI: 연도 → 월 → 일 (미선택=최근 3개월)
 function DateRange({ sel, onChange }: { sel: DateSel; onChange: (d: DateSel) => void }) {
   const nowY = new Date().getFullYear();
@@ -442,22 +457,21 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {view === "all" && docFilter === "all" && (
               <button
                 onClick={toggleHidePublic}
-                className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  hidePublic ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub hover:bg-bg-deep"
-                }`}
+                className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/70"
                 title="전체 목록에서 공공 콘텐츠를 감춰요"
               >
+                <EyeIcon off={hidePublic} />
                 {hidePublic ? "공공 보기" : "공공 숨기기"}
               </button>
             )}
-            {isDev && view === "all" && (docFilter === "all" || docFilter === "public") && (
+            {isDev && view === "all" && docFilter === "public" && (
               <button
                 onClick={runIngestPublic}
-                className="rounded-full border border-line px-3 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+                className="text-xs font-semibold text-primary hover:text-primary/70"
                 title="공개 소스(정책브리핑 등)에서 최신 공공 콘텐츠를 불러와요 (개발자)"
               >
                 공공 불러오기

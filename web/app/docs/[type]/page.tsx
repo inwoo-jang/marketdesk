@@ -84,7 +84,13 @@ export default function DocsFeed() {
     await api.deleteReport(rid);
     load();
   };
-  const groupOf = (co?: string | null) => (co ? groupMap[co.trim()] ?? "기타" : "기타");
+  // 계열 미매칭 기업은 한글 포함 여부로 국내/해외 기타로 분리
+  const groupOf = (co?: string | null) => {
+    if (!co) return "국내 기타";
+    const c = co.trim();
+    return groupMap[c] ?? (/[가-힣]/.test(c) ? "국내 기타" : "해외 기타");
+  };
+  const isMisc = (k: string) => k === "국내 기타" || k === "해외 기타" || k === "기타" || k === "_none";
   const newsFor = (companies: string[]) => news.filter((r) => companies.some((n) => newsMentions(r, n)));
 
   const followedIds = followed.map((f) => f.id);
@@ -101,7 +107,7 @@ export default function DocsFeed() {
   // 계열 칩
   const groupCount = new Map<string, number>();
   if (type === "company") for (const r of reports) groupCount.set(groupOf(r.company), (groupCount.get(groupOf(r.company)) ?? 0) + 1);
-  const groupChips = [...groupCount.entries()].sort((a, b) => (a[0] === "기타" ? 1 : b[0] === "기타" ? -1 : b[1] - a[1])).map(([g]) => g);
+  const groupChips = [...groupCount.entries()].sort((a, b) => (isMisc(a[0]) ? 1 : isMisc(b[0]) ? -1 : b[1] - a[1])).map(([g]) => g);
 
   // 기업리포트 상위 필터(계열 또는 산업)
   const cFilter = companyBy === "group" ? groupFilter : indFilter;
@@ -157,7 +163,7 @@ export default function DocsFeed() {
           const merged = [...v.reports, ...newsFor(companies)].sort(byDateDesc);
           return { key, label: v.label, star: followedIds.includes(key), reports: merged, count: v.reports.length };
         })
-        .sort((a, b) => (a.key === "기타" || a.key === "_none" ? 1 : b.key === "기타" || b.key === "_none" ? -1 : b.count - a.count));
+        .sort((a, b) => (isMisc(a.key) ? 1 : isMisc(b.key) ? -1 : b.count - a.count));
       body = <Grouped groups={sections} onDelete={onDelete} />;
     }
   } else {
@@ -212,18 +218,33 @@ export default function DocsFeed() {
           ))}
         </div>
       )}
-      {/* tier2: 기업 칩 */}
+      {/* tier2: 개별 기업 — 큰 카테고리와 색·섹션으로 구분(tint 패널) */}
       {type === "company" && cFilter && companyChips.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5 border-l-2 border-line pl-2">
-          <Chip
-            label={`${companyBy === "group" ? cFilter : (indChips.find((ch) => ch.key === cFilter)?.label ?? "산업")} 전체`}
-            active={!company}
-            onClick={() => setCompany(null)}
-            small
-          />
-          {companyChips.map((c) => (
-            <Chip key={c} label={c} active={company === c} onClick={() => setCompany(c)} small />
-          ))}
+        <div className="mt-3 rounded-card bg-primary/5 p-3 ring-1 ring-primary/15">
+          <div className="mb-2 text-xs font-semibold text-primary">
+            {companyBy === "group" ? cFilter : indChips.find((ch) => ch.key === cFilter)?.label ?? "산업"} · 개별 기업 ({companyChips.length})
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setCompany(null)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                !company ? "bg-primary text-white" : "bg-card text-ink-sub ring-1 ring-primary/20 hover:bg-primary/10"
+              }`}
+            >
+              전체
+            </button>
+            {companyChips.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCompany(c)}
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  company === c ? "bg-primary text-white" : "bg-card text-ink-sub ring-1 ring-primary/20 hover:bg-primary/10"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
