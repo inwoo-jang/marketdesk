@@ -21,10 +21,15 @@ export default function BoardPage() {
   const [rows, setRows] = useState<BoardRow[] | null>(null);
   const [rowFilter, setRowFilter] = useState<string | null>(null); // 산업=산업키, 기업=계열명
   const [groupMap, setGroupMap] = useState<Record<string, string>>({}); // 회사→계열
+  const [companyInds, setCompanyInds] = useState<Record<string, { id: string; name: string }[]>>({}); // 회사→산업들
+  const [companyBy, setCompanyBy] = useState<"group" | "industry">("group"); // 기업별 상위 분류(계열/산업)
   const [favGroups, setFavGroups] = useState<Set<string>>(new Set());
   const [favCompanies, setFavCompanies] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const groupOf = (co: string) => groupMap[co] ?? "기타";
+  // 기업별 상위 필터 매칭(계열 또는 산업)
+  const companyMatch = (co: string, filter: string) =>
+    companyBy === "group" ? groupOf(co) === filter : (companyInds[co] ?? []).some((i) => i.id === filter);
   // 기업 별표 여부: 그 기업이 직접 별표됐거나, 소속 계열이 별표된 경우
   const isFavCompany = (co: string) => favCompanies.has(co) || favGroups.has(groupOf(co));
 
@@ -42,6 +47,12 @@ export default function BoardPage() {
       }
       api.companyGroups().then((r) => setGroupMap(r.map)).catch(() => {});
       api.companyFavorites().then((f) => { setFavGroups(new Set(f.groups)); setFavCompanies(new Set(f.companies)); }).catch(() => {});
+      // 기업→산업 매핑(기업별 산업 필터용)
+      api.myReports({ docType: "company" }).then(({ reports }) => {
+        const m: Record<string, { id: string; name: string }[]> = {};
+        for (const r of reports) if (r.company?.trim()) m[r.company.trim()] = r.industries ?? [];
+        setCompanyInds(m);
+      }).catch(() => {});
       load();
     })();
   }, [load]);
@@ -109,6 +120,25 @@ export default function BoardPage() {
             </button>
           ))}
         </div>
+        {/* 기업별: 계열별/산업별 상위 필터(기업리포트 메뉴와 동일) */}
+        {dim === "company" && (
+          <div className="flex gap-1 rounded-lg border border-line p-1">
+            {([
+              { k: "group", label: "계열별" },
+              { k: "industry", label: "산업별" },
+            ] as const).map((m) => (
+              <button
+                key={m.k}
+                onClick={() => { setCompanyBy(m.k); setRowFilter(null); }}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  companyBy === m.k ? "bg-primary/10 text-primary" : "text-ink-sub hover:bg-bg-deep"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={generateAll}
           disabled={busy || !rows || rows.length === 0}
@@ -123,17 +153,25 @@ export default function BoardPage() {
         rows.length > 1 &&
         dim !== "news" &&
         (() => {
-          // 기업 차원은 계열로 묶어 필터
+          // 산업명 조회용(기업별-산업 모드)
+          const indName = new Map<string, string>();
+          for (const arr of Object.values(companyInds)) for (const i of arr) indName.set(i.id, i.name);
+          // 기업 차원: 계열별 또는 산업별로 묶어 필터(기업리포트 메뉴와 동일)
           const chips =
             dim === "company"
-              ? [...new Set(rows.map((r) => groupOf(r.label)))].sort((a, b) => {
-                  const fa = favGroups.has(a);
-                  const fb = favGroups.has(b);
-                  if (fa !== fb) return fa ? -1 : 1; // 별표 계열 우선
-                  return a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b);
-                })
+              ? companyBy === "group"
+                ? [...new Set(rows.map((r) => groupOf(r.label)))].sort((a, b) => {
+                    const fa = favGroups.has(a);
+                    const fb = favGroups.has(b);
+                    if (fa !== fb) return fa ? -1 : 1; // 별표 계열 우선
+                    return a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b);
+                  })
+                : [...new Set(rows.flatMap((r) => (companyInds[r.label] ?? []).map((i) => i.id)))].sort((a, b) =>
+                    (indName.get(a) ?? "").localeCompare(indName.get(b) ?? ""),
+                  )
               : rows.map((r) => r.key);
-          const chipLabel = (k: string) => (dim === "company" ? k : rows.find((r) => r.key === k)?.label ?? k);
+          const chipLabel = (k: string) =>
+            dim === "company" ? (companyBy === "group" ? k : indName.get(k) ?? k) : rows.find((r) => r.key === k)?.label ?? k;
           return (
             <div className="mt-4 flex flex-wrap gap-1.5">
               <button
@@ -145,7 +183,12 @@ export default function BoardPage() {
                 전체
               </button>
               {chips.map((k) => {
-                const starred = dim === "industry" ? (rows.find((r) => r.key === k)?.star ?? false) : dim === "company" ? favGroups.has(k) : false;
+                const starred =
+                  dim === "industry"
+                    ? (rows.find((r) => r.key === k)?.star ?? false)
+                    : dim === "company" && companyBy === "group"
+                      ? favGroups.has(k)
+                      : false;
                 return (
                   <button
                     key={k}
@@ -182,7 +225,7 @@ export default function BoardPage() {
       ) : (
         <div className="mt-6 space-y-6">
           {rows
-            .filter((row) => !rowFilter || (dim === "company" ? groupOf(row.label) === rowFilter : row.key === rowFilter))
+            .filter((row) => !rowFilter || (dim === "company" ? companyMatch(row.label, rowFilter) : row.key === rowFilter))
             .sort((a, b) => {
               // 별표 우선(산업=row.star, 기업=직접 별표 또는 소속 계열 별표)
               const fa = dim === "company" ? isFavCompany(a.label) : !!a.star;
