@@ -204,13 +204,14 @@ function Cell({
   const empty = (r.oneLiner ?? "").startsWith("이 기간");
   // done: 키워드 칩 위주 + 클릭 → 근거 내용
   return (
-    <a href={href} className={`${base} transition hover:ring-1 hover:ring-primary/40`}>
+    <a href={href} className={`${base} group/cell transition hover:ring-1 hover:ring-primary/40`}>
       {head}
       {empty ? (
         <p className="text-xs text-ink-muted">기록 없음</p>
       ) : (
         <div className="space-y-2">
-          <p className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{r.oneLiner ?? "-"}</p>
+          {/* 요약: 한눈에 파악 */}
+          <p className="text-[13px] font-medium leading-snug text-ink">{r.oneLiner ?? "-"}</p>
           {common.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {common.map((f) => (
@@ -233,7 +234,7 @@ function Cell({
               ))}
             </div>
           )}
-          <span className="text-[11px] text-primary">내용 보기 →</span>
+          <span className="mt-1 inline-block text-[11px] text-primary opacity-0 transition group-hover/cell:opacity-100">원문 보기 →</span>
         </div>
       )}
     </a>
