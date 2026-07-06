@@ -10,9 +10,13 @@ const DIMS: { k: BoardDim; label: string }[] = [
 ];
 const fmtPeriod = (k: string, period: "month" | "year") =>
   period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`;
-// 셀 클릭 → 근거 내용으로. 산업=산업 대시보드, 기업=그 회사 리포트, 경제흐름=뉴스 피드.
+// 셀 클릭 → 원문 리포트 피드으로. 산업=산업리포트(그 산업), 기업=그 회사 리포트, 경제흐름=뉴스 피드.
 const cellHref = (dim: BoardDim, key: string) =>
-  dim === "industry" ? `/industry/${key}` : dim === "company" ? `/docs/company?c=${encodeURIComponent(key)}` : `/docs/news`;
+  dim === "industry"
+    ? `/docs/industry?i=${encodeURIComponent(key)}`
+    : dim === "company"
+      ? `/docs/company?c=${encodeURIComponent(key)}`
+      : `/docs/news`;
 
 // 흐름 보드: 산업 선택 없이 관심 산업/기업/뉴스를 각각 타임라인 행으로. "빈 칸 모두 생성"으로 한 번에.
 export default function BoardPage() {

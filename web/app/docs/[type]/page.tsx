@@ -39,8 +39,11 @@ export default function DocsFeed() {
     load().catch(() => setLoaded(true));
   }, [load]);
   useEffect(() => {
-    const c = new URLSearchParams(window.location.search).get("c");
+    const q = new URLSearchParams(window.location.search);
+    const c = q.get("c");
+    const i = q.get("i");
     if (c) setCompany(c);
+    if (i) setIndFilter(i);
   }, []);
   useEffect(() => {
     if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
