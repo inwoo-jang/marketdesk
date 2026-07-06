@@ -183,17 +183,22 @@ async function enqueueFlowRollups(report: Report, entryDate: string, docType: st
       ];
       if (scope === "industry" && opts.industryId) match.push(eq(rollups.industryId, opts.industryId));
       else if (scope === "company" && opts.companyName) match.push(eq(rollups.companyName, opts.companyName));
-      await db.delete(rollups).where(and(...match));
-      await db.insert(rollups).values({
-        userId: report.userId,
-        scope,
-        industryId: opts.industryId ?? null,
-        companyName: opts.companyName ?? null,
-        periodType: p.periodType,
-        periodKey: p.periodKey,
-        llmProvider: report.llmProvider,
-        status: "pending",
-      });
+      const [existing] = await db.select({ id: rollups.id }).from(rollups).where(and(...match)).limit(1);
+      if (existing) {
+        // 기존 요약·팩트는 그대로 두고 상태만 pending 으로 재큐잉 → 재생성 완료 시점에 교체(그 전까진 옛 내용 유지)
+        await db.update(rollups).set({ status: "pending", llmProvider: report.llmProvider }).where(eq(rollups.id, existing.id));
+      } else {
+        await db.insert(rollups).values({
+          userId: report.userId,
+          scope,
+          industryId: opts.industryId ?? null,
+          companyName: opts.companyName ?? null,
+          periodType: p.periodType,
+          periodKey: p.periodKey,
+          llmProvider: report.llmProvider,
+          status: "pending",
+        });
+      }
     }
   };
   const indRows = await db

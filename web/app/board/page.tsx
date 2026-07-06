@@ -294,10 +294,18 @@ function Cell({
   const r = cell.rollup;
   const common = r?.facts.filter((f) => f.factType === "common") ?? [];
   const conflict = r?.facts.filter((f) => f.factType === "conflict") ?? [];
-  const head = (
-    <div className="mb-2 text-xs font-bold text-ink-muted">{fmtPeriod(cell.periodKey, period)}</div>
-  );
   const base = "flex w-72 shrink-0 flex-col rounded-card bg-card p-4 shadow-card";
+  const hasContent = !!r?.oneLiner && !r.oneLiner.startsWith("이 기간");
+  const updating = r?.status === "pending";
+  const failed = r?.status === "failed";
+  const head = (
+    <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-ink-muted">
+      <span>{fmtPeriod(cell.periodKey, period)}</span>
+      {updating && hasContent && (
+        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">갱신 중</span>
+      )}
+    </div>
+  );
 
   if (!r)
     return (
@@ -311,31 +319,24 @@ function Cell({
         </button>
       </div>
     );
-  if (r.status === "pending")
-    return (
-      <div className={base}>
-        {head}
-        <p className="mt-1 text-xs text-ink-muted">생성 중...</p>
-      </div>
-    );
-  if (r.status === "failed")
-    return (
-      <div className={base}>
-        {head}
-        <button onClick={onGenerate} className="mt-1 text-xs text-red-500 hover:underline">
-          실패 · 다시
-        </button>
-      </div>
-    );
+  // 내용이 아직 없을 때만 상태 문구. 기존 내용이 있으면 갱신 중에도 그대로 보여준다.
+  if (!hasContent) {
+    if (updating) return <div className={base}>{head}<p className="mt-1 text-xs text-ink-muted">생성 중...</p></div>;
+    if (failed)
+      return (
+        <div className={base}>
+          {head}
+          <button onClick={onGenerate} className="mt-1 text-xs text-red-500 hover:underline">실패 · 다시</button>
+        </div>
+      );
+    return <div className={base}>{head}<p className="text-xs text-ink-muted">기록 없음</p></div>;
+  }
 
-  const empty = (r.oneLiner ?? "").startsWith("이 기간");
-  // done: 키워드 칩 위주 + 클릭 → 근거 내용
+  // 내용 있음(done 또는 갱신 중): 요약 + 핵심 포인트. 클릭 → 근거 원문
   return (
-    <a href={href} className={`${base} group/cell transition hover:ring-1 hover:ring-primary/40`}>
+    <a href={href} className={`${base} group/cell transition hover:ring-1 hover:ring-primary/40 ${updating ? "opacity-90" : ""}`}>
       {head}
-      {empty ? (
-        <p className="text-xs text-ink-muted">기록 없음</p>
-      ) : (
+      {(
         <div className="space-y-2.5">
           {/* 요약: 한눈에 파악(가독성 우선) */}
           <p className="line-clamp-3 text-sm font-semibold leading-snug text-ink">{r.oneLiner ?? "-"}</p>
