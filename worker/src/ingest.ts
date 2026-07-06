@@ -37,7 +37,7 @@ function runClaude(prompt: string, timeoutMs = 120_000): Promise<string> {
 // 저작권 안전: 원문 재호스팅 없이 제목 + 우리 요약 + 출처 링크만 저장. 산업 매칭 안 되면 스킵(노이즈 제거).
 // 키: GROUP_API_KEY(공정위와 동일한 data.go.kr 키). 이 API 활용신청 필요(자동승인) → data ID 15095335.
 const SOURCE = "정책브리핑";
-const ENDPOINT = "http://apis.data.go.kr/1371000/policyNewsService/policyNewsList";
+const ENDPOINT = "https://apis.data.go.kr/1371000/policyNewsService/policyNewsList";
 const LOOKBACK_DAYS = 30;
 
 type RssItem = { title: string; link: string; pubDate: string; description: string };

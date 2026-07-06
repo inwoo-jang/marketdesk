@@ -25,6 +25,7 @@ export default function BoardPage() {
   const [companyBy, setCompanyBy] = useState<"group" | "industry">("group"); // 기업별 상위 분류(계열/산업)
   const [favGroups, setFavGroups] = useState<Set<string>>(new Set());
   const [favCompanies, setFavCompanies] = useState<Set<string>>(new Set());
+  const [favIndOrder, setFavIndOrder] = useState<Map<string, number>>(new Map()); // 관심 산업 id→순서
   const [busy, setBusy] = useState(false);
   const groupOf = (co: string) => groupMap[co] ?? "기타";
   // 기업별 상위 필터 매칭(계열 또는 산업)
@@ -32,6 +33,9 @@ export default function BoardPage() {
     companyBy === "group" ? groupOf(co) === filter : (companyInds[co] ?? []).some((i) => i.id === filter);
   // 기업 별표 여부: 그 기업이 직접 별표됐거나, 소속 계열이 별표된 경우
   const isFavCompany = (co: string) => favCompanies.has(co) || favGroups.has(groupOf(co));
+  // 기업 행의 별표 우선 여부: 계열별=기업 별표, 산업별=소속 산업이 관심 산업
+  const companyRowFav = (co: string) =>
+    companyBy === "group" ? isFavCompany(co) : (companyInds[co] ?? []).some((i) => favIndOrder.has(i.id));
 
   const load = useCallback(async () => {
     const r = await api.boardRows({ dim, period }).catch(() => ({ rows: [] as BoardRow[] }));
@@ -47,6 +51,7 @@ export default function BoardPage() {
       }
       api.companyGroups().then((r) => setGroupMap(r.map)).catch(() => {});
       api.companyFavorites().then((f) => { setFavGroups(new Set(f.groups)); setFavCompanies(new Set(f.companies)); }).catch(() => {});
+      api.myIndustries().then(({ industries }) => setFavIndOrder(new Map(industries.map((i, idx) => [i.id, idx])))).catch(() => {});
       // 기업→산업 매핑(기업별 산업 필터용)
       api.myReports({ docType: "company" }).then(({ reports }) => {
         const m: Record<string, { id: string; name: string }[]> = {};
@@ -166,9 +171,13 @@ export default function BoardPage() {
                     if (fa !== fb) return fa ? -1 : 1; // 별표 계열 우선
                     return a === "기타" ? 1 : b === "기타" ? -1 : a.localeCompare(b);
                   })
-                : [...new Set(rows.flatMap((r) => (companyInds[r.label] ?? []).map((i) => i.id)))].sort((a, b) =>
-                    (indName.get(a) ?? "").localeCompare(indName.get(b) ?? ""),
-                  )
+                : [...new Set(rows.flatMap((r) => (companyInds[r.label] ?? []).map((i) => i.id)))].sort((a, b) => {
+                    const fa = favIndOrder.has(a);
+                    const fb = favIndOrder.has(b);
+                    if (fa !== fb) return fa ? -1 : 1; // 관심 산업 우선
+                    if (fa && fb) return (favIndOrder.get(a) ?? 0) - (favIndOrder.get(b) ?? 0);
+                    return (indName.get(a) ?? "").localeCompare(indName.get(b) ?? "");
+                  })
               : rows.map((r) => r.key);
           const chipLabel = (k: string) =>
             dim === "company" ? (companyBy === "group" ? k : indName.get(k) ?? k) : rows.find((r) => r.key === k)?.label ?? k;
@@ -188,7 +197,9 @@ export default function BoardPage() {
                     ? (rows.find((r) => r.key === k)?.star ?? false)
                     : dim === "company" && companyBy === "group"
                       ? favGroups.has(k)
-                      : false;
+                      : dim === "company" && companyBy === "industry"
+                        ? favIndOrder.has(k)
+                        : false;
                 return (
                   <button
                     key={k}
@@ -227,13 +238,13 @@ export default function BoardPage() {
           {rows
             .filter((row) => !rowFilter || (dim === "company" ? companyMatch(row.label, rowFilter) : row.key === rowFilter))
             .sort((a, b) => {
-              // 별표 우선(산업=row.star, 기업=직접 별표 또는 소속 계열 별표)
-              const fa = dim === "company" ? isFavCompany(a.label) : !!a.star;
-              const fb = dim === "company" ? isFavCompany(b.label) : !!b.star;
+              // 별표 우선(산업=row.star, 기업=계열별→기업별표/산업별→관심 산업)
+              const fa = dim === "company" ? companyRowFav(a.label) : !!a.star;
+              const fb = dim === "company" ? companyRowFav(b.label) : !!b.star;
               return fa === fb ? 0 : fa ? -1 : 1;
             })
             .map((row) => {
-              const starred = dim === "company" ? isFavCompany(row.label) : !!row.star;
+              const starred = dim === "company" ? companyRowFav(row.label) : !!row.star;
               return (
             <div key={row.key}>
               <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary">
