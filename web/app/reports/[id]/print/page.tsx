@@ -11,14 +11,15 @@ export default function ReportPrintPage() {
   const { id } = useParams<{ id: string }>();
   const [report, setReport] = useState<Report | null>(null);
   const [entry, setEntry] = useState<EntryFull | null>(null);
+  const [memo, setMemo] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    api
-      .reportEntries(id)
-      .then((d) => {
+    Promise.all([api.reportEntries(id), api.getNotepad("report", id).catch(() => ({ content: "" }))])
+      .then(([d, note]) => {
         setReport(d.report);
         setEntry(d.entries[0] ?? null);
+        setMemo(note.content ?? "");
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -106,6 +107,14 @@ export default function ReportPrintPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* 내 메모(있으면 함께 내보내기) */}
+      {memo.replace(/<[^>]+>/g, "").trim() && (
+        <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+          <h2 className="mb-1 text-xs font-semibold text-amber-700">📝 내 메모</h2>
+          <div className="rich-note text-[15px] leading-relaxed text-ink" dangerouslySetInnerHTML={{ __html: memo }} />
+        </section>
       )}
 
       <footer className="mt-8 border-t border-line pt-3 text-[11px] text-ink-muted">
