@@ -20,6 +20,11 @@ function computeRange(d: DateSel): { from: string; to: string } {
   if (!d.day) return { from: `${d.year}-${pad(d.month)}-01`, to: `${d.year}-${pad(d.month)}-${pad(last)}` };
   return { from: `${d.year}-${pad(d.month)}-${pad(d.day)}`, to: `${d.year}-${pad(d.month)}-${pad(d.day)}` };
 }
+// 업로드순 기준: 최근 3개월 업로드분(createdAt)
+const recent3mUpload = () => {
+  const now = new Date();
+  return ymd(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()));
+};
 const DOC_FILTERS = [
   { k: "all", label: "전체" },
   { k: "industry", label: "산업" },
@@ -38,9 +43,9 @@ const CHIP_TONE: Record<DocFilter, string> = {
 };
 
 // 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
-type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean };
+type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean; sortBy: "pub" | "created" };
 function readFeedUrl(): FeedState {
-  const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: true };
+  const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: true, sortBy: "pub" };
   if (typeof window === "undefined") return def;
   const q = new URLSearchParams(window.location.search);
   const v = q.get("view");
@@ -53,6 +58,7 @@ function readFeedUrl(): FeedState {
     dateSel: { year: num(q.get("y")), month: num(q.get("m")), day: num(q.get("d")) },
     page: p && p > 0 ? p : 1,
     hidePublic: q.get("sp") !== "1", // 기본 숨김. sp=1 이면 공공 표시
+    sortBy: q.get("sort") === "created" ? "created" : "pub",
   };
 }
 function writeFeedUrl(s: FeedState) {
@@ -65,6 +71,7 @@ function writeFeedUrl(s: FeedState) {
   if (s.dateSel.day) q.set("d", String(s.dateSel.day));
   if (s.page !== 1) q.set("page", String(s.page));
   if (!s.hidePublic) q.set("sp", "1"); // 공공 표시일 때만 URL 에 기록(기본은 숨김)
+  if (s.sortBy === "created") q.set("sort", "created");
   const qs = q.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
@@ -147,14 +154,18 @@ export default function Home() {
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 20;
 
-  // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드. hp=공공 숨기기(전체 뷰에서만 적용).
-  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel, hp: boolean) => {
-    const { from, to } = computeRange(ds);
+  // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드. hp=공공 숨기기(전체 뷰). sort=정렬(업로드순은 기간 무시·최신 100개).
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel, hp: boolean, sort: "pub" | "created") => {
+    // 발간일순=기간 필터(pubDate). 업로드순=최근 3개월 업로드분(createdAt)만, 업로드순 정렬.
+    const range = computeRange(ds);
+    const from = sort === "created" ? undefined : range.from;
+    const to = sort === "created" ? undefined : range.to;
+    const uploadedFrom = sort === "created" ? recent3mUpload() : undefined;
     const dt = df === "industry" || df === "company" || df === "news" ? df : undefined;
     const repP =
       df === "public"
         ? Promise.resolve({ reports: [] as Report[], total: 0 })
-        : api.myReports({ view: v, docType: dt, from, to, page: p });
+        : api.myReports({ view: v, docType: dt, from, to, uploadedFrom, page: p });
     // 공공: 전체 뷰(all)에서 df=all(숨기기 아닐 때) 또는 df=public 일 때 로드. 저장/숨김 탭은 각 목록.
     const wantPublic = v === "all" && (df === "public" || (df === "all" && !hp));
     const pubP =
@@ -204,9 +215,10 @@ export default function Home() {
         setDateSel(init.dateSel);
         setPage(init.page);
         setHidePublic(init.hidePublic);
+        setSortBy(init.sortBy);
         await Promise.all([
           loadData().catch(() => {}),
-          loadFeed(init.view, init.page, init.docFilter, init.dateSel, init.hidePublic).catch(() => {}),
+          loadFeed(init.view, init.page, init.docFilter, init.dateSel, init.hidePublic, init.sortBy).catch(() => {}),
         ]);
       }
       setLoaded(true);
@@ -216,33 +228,45 @@ export default function Home() {
   function switchView(v: "all" | "bookmarks" | "hidden") {
     setView(v);
     setPage(1);
-    writeFeedUrl({ view: v, docFilter, dateSel, page: 1, hidePublic });
-    loadFeed(v, 1, docFilter, dateSel, hidePublic).catch(() => {});
+    writeFeedUrl({ view: v, docFilter, dateSel, page: 1, hidePublic, sortBy });
+    loadFeed(v, 1, docFilter, dateSel, hidePublic, sortBy).catch(() => {});
   }
   function goPage(p: number) {
     setPage(p);
-    writeFeedUrl({ view, docFilter, dateSel, page: p, hidePublic });
-    loadFeed(view, p, docFilter, dateSel, hidePublic).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: p, hidePublic, sortBy });
+    loadFeed(view, p, docFilter, dateSel, hidePublic, sortBy).catch(() => {});
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function applyDoc(df: DocFilter) {
+    // 공공은 업로드순 비활성화 → 발간일순으로 강제
+    const sb = df === "public" ? "pub" : sortBy;
     setDocFilter(df);
+    setSortBy(sb);
     setPage(1);
-    writeFeedUrl({ view, docFilter: df, dateSel, page: 1, hidePublic });
-    loadFeed(view, 1, df, dateSel, hidePublic).catch(() => {});
+    writeFeedUrl({ view, docFilter: df, dateSel, page: 1, hidePublic, sortBy: sb });
+    loadFeed(view, 1, df, dateSel, hidePublic, sb).catch(() => {});
   }
   function applyDate(ds: DateSel) {
     setDateSel(ds);
     setPage(1);
-    writeFeedUrl({ view, docFilter, dateSel: ds, page: 1, hidePublic });
-    loadFeed(view, 1, docFilter, ds, hidePublic).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel: ds, page: 1, hidePublic, sortBy });
+    loadFeed(view, 1, docFilter, ds, hidePublic, sortBy).catch(() => {});
+  }
+  function applySort(sb: "pub" | "created") {
+    setSortBy(sb);
+    setPage(1);
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic, sortBy: sb });
+    loadFeed(view, 1, docFilter, dateSel, hidePublic, sb).catch(() => {});
   }
   function toggleHidePublic() {
     const hp = !hidePublic;
+    // 공공을 보이게 하면 업로드순 비활성 → 발간일순으로
+    const sb = !hp ? "pub" : sortBy;
     setHidePublic(hp);
+    setSortBy(sb);
     setPage(1);
-    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic: hp });
-    loadFeed(view, 1, docFilter, dateSel, hp).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic: hp, sortBy: sb });
+    loadFeed(view, 1, docFilter, dateSel, hp, sb).catch(() => {});
   }
   async function runIngestPublic() {
     try {
@@ -256,10 +280,10 @@ export default function Home() {
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic).catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic, sortBy).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic]);
+  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic, sortBy]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -518,22 +542,35 @@ export default function Home() {
                 공공 불러오기
               </button>
             )}
-            {/* 정렬: 발간일순 / 최신 업로드순 */}
+            {/* 정렬: 발간일순 / 업로드순(공공은 업로드순 비활성). 업로드순=최근 3개월 업로드분 */}
             <div className="flex gap-1 rounded-lg border border-line p-0.5">
               {([
                 { k: "pub", label: "발간일순" },
                 { k: "created", label: "업로드순" },
-              ] as const).map((s) => (
-                <button
-                  key={s.k}
-                  onClick={() => setSortBy(s.k)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${sortBy === s.k ? "bg-primary/10 text-primary" : "text-ink-sub hover:bg-bg-deep"}`}
-                >
-                  {s.label}
-                </button>
-              ))}
+              ] as const).map((s) => {
+                // 공공이 보이면(공공 필터 또는 전체에서 공공 보기) 업로드순 비활성
+                const publicShown = docFilter === "public" || (docFilter === "all" && !hidePublic);
+                const disabled = s.k === "created" && publicShown;
+                return (
+                  <button
+                    key={s.k}
+                    onClick={() => !disabled && applySort(s.k)}
+                    disabled={disabled}
+                    title={disabled ? "공공은 업로드순을 지원하지 않아요" : undefined}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                      sortBy === s.k ? "bg-primary/10 text-primary" : "text-ink-sub hover:bg-bg-deep"
+                    } ${disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent" : ""}`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
             </div>
-            <DateRange sel={dateSel} onChange={applyDate} />
+            {sortBy === "created" ? (
+              <span className="text-xs text-ink-muted">최근 3개월 업로드</span>
+            ) : (
+              <DateRange sel={dateSel} onChange={applyDate} />
+            )}
           </div>
         </div>
 

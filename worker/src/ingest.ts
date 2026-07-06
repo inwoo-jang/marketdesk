@@ -92,15 +92,18 @@ async function fetchPolicyNews(startDate: string, endDate: string, pageNo: numbe
   return parsePolicyNews(text);
 }
 
-type Classified = { i: number; industry: string | null; summary: string; docType: string };
+type Classified = { i: number; industry: string | null; summary: string; docType: string; invest?: string; career?: string };
 
 async function batchClassify(items: RssItem[], names: string[]): Promise<Classified[]> {
   const list = items.map((it, i) => `${i}. ${it.title} — ${it.description.slice(0, 120)}`).join("\n");
   const prompt =
     `다음 뉴스 항목들을 우리 산업 분류에 매칭하라. 명확히 해당하는 산업이 없으면 industry=null(일반 행정·복지·생활 뉴스 등은 제외).\n` +
     `산업 후보(정확한 이름만): [${names.join(", ")}]\n` +
-    `각 항목: i(번호), industry(후보 중 하나 또는 null), summary(뉴스처럼 핵심만 한두 문장, 60~90자 한국어), docType("news").\n` +
-    `출력 JSON 하나만(코드펜스·머리말 금지): {"results":[{"i":0,"industry":"","summary":"","docType":"news"}]}\n\n항목:\n${list}`;
+    `각 항목 필드: i(번호), industry(후보 중 하나 또는 null), summary(뉴스처럼 핵심만 한두 문장, 60~90자 한국어), ` +
+    `invest(투자 관점 한 줄: 이 소식이 투자에 주는 시사점, 40자 내외. 없으면 ""), ` +
+    `career(취업 관점 한 줄: 취업·커리어 시사점, 40자 내외. 없으면 ""), docType("news").\n` +
+    `단정·과장 금지, 근거 있는 톤. industry=null 인 항목은 invest/career 생략 가능.\n` +
+    `출력 JSON 하나만(코드펜스·머리말 금지): {"results":[{"i":0,"industry":"","summary":"","invest":"","career":"","docType":"news"}]}\n\n항목:\n${list}`;
   const o = extractJson(await runClaude(prompt));
   return Array.isArray(o.results) ? (o.results as Classified[]) : [];
 }
@@ -188,6 +191,8 @@ async function run() {
             sourceUrl: it.link,
             title: it.title,
             summary: r.summary ?? null,
+            investNote: r.invest?.trim() || null,
+            careerNote: r.career?.trim() || null,
             industryId: id,
             docType: (["industry", "company", "news"].includes(r.docType) ? r.docType : "news") as "news",
             pubDate: toYmd(it.pubDate),

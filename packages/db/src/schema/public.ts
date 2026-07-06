@@ -13,6 +13,8 @@ export const publicContents = pgTable(
     sourceUrl: text("source_url").notNull().unique(), // 원문 링크(중복 방지 키)
     title: text("title").notNull(),
     summary: text("summary"), // 우리 AI 한줄요약
+    investNote: text("invest_note"), // 투자 관점 한 줄(우리 코멘트)
+    careerNote: text("career_note"), // 취업 관점 한 줄(우리 코멘트)
     industryId: uuid("industry_id").references(() => industries.id), // AI 매칭 산업(핵심만 적재)
     docType: docType("doc_type"), // industry|company|news
     pubDate: date("pub_date"), // 발간일(= 추가일)

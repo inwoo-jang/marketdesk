@@ -77,6 +77,22 @@ export function PublicCard({
         </div>
         <div className="mt-1.5 font-semibold leading-snug">{content.title}</div>
         {content.summary && <p className="mt-1 text-sm leading-relaxed text-ink-sub">{content.summary}</p>}
+        {(content.investNote || content.careerNote) && (
+          <div className="mt-2 space-y-1">
+            {content.investNote && (
+              <div className="flex items-start gap-1.5 text-xs leading-snug">
+                <span className="mt-0.5 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">투자</span>
+                <span className="text-ink-sub">{content.investNote}</span>
+              </div>
+            )}
+            {content.careerNote && (
+              <div className="flex items-start gap-1.5 text-xs leading-snug">
+                <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">취업</span>
+                <span className="text-ink-sub">{content.careerNote}</span>
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
           {date && <span>발간 {date}</span>}
           <span>· 출처 {content.source}</span>

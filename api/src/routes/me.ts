@@ -246,6 +246,8 @@ const shapePublic = (r: typeof publicContents.$inferSelect & { industryName: str
   sourceUrl: r.sourceUrl,
   title: r.title,
   summary: r.summary,
+  investNote: r.investNote,
+  careerNote: r.careerNote,
   industryId: r.industryId,
   industryName: r.industryName,
   docType: r.docType,
@@ -262,6 +264,8 @@ async function fetchPublic(where: ReturnType<typeof and> | ReturnType<typeof eq>
       sourceUrl: publicContents.sourceUrl,
       title: publicContents.title,
       summary: publicContents.summary,
+      investNote: publicContents.investNote,
+      careerNote: publicContents.careerNote,
       industryId: publicContents.industryId,
       industryName: industries.name,
       docType: publicContents.docType,
@@ -943,6 +947,9 @@ meRoute.get("/reports", async (c) => {
   const to = c.req.query("to");
   if (from) conds.push(sql`COALESCE(${reports.pubDate}, ${reports.createdAt}::date) >= ${from}`);
   if (to) conds.push(sql`COALESCE(${reports.pubDate}, ${reports.createdAt}::date) <= ${to}`);
+  // 업로드순 전용: 업로드일(createdAt) 하한 필터
+  const uploadedFrom = c.req.query("uploadedFrom");
+  if (uploadedFrom) conds.push(sql`${reports.createdAt} >= ${uploadedFrom}`);
   const pageQ = Number(c.req.query("page"));
   const page = Number.isInteger(pageQ) && pageQ >= 1 ? pageQ : 0; // 0=페이지네이션 안함(전체)
   const pageSize = 20;

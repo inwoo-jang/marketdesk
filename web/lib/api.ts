@@ -53,7 +53,7 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string }) => {
+  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string; uploadedFrom?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
@@ -61,6 +61,7 @@ export const api = {
     if (params?.page) q.set("page", String(params.page));
     if (params?.from) q.set("from", params.from);
     if (params?.to) q.set("to", params.to);
+    if (params?.uploadedFrom) q.set("uploadedFrom", params.uploadedFrom);
     const qs = q.toString();
     return get<{ reports: Report[]; total?: number; page?: number; pageSize?: number }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
   },
@@ -195,6 +196,8 @@ export type PublicContent = {
   sourceUrl: string;
   title: string;
   summary: string | null;
+  investNote?: string | null;
+  careerNote?: string | null;
   industryId: string | null;
   industryName: string | null;
   docType: "industry" | "company" | "news" | null;
