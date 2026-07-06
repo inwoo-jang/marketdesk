@@ -1,4 +1,5 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,4 +7,26 @@
 
 body {
   @apply bg-bg text-ink font-sans;
+}
+
+/* 메모 손글씨 폰트(귀여운 필기체) */
+.font-hand {
+  font-family: "Gaegu", "Pretendard", sans-serif;
+  font-size: 1.15em;
+  letter-spacing: 0.01em;
+}
+
+/* 서식 메모: Tailwind preflight 로 초기화된 제목 태그를 메모 안에서만 복원 */
+.rich-note h1 {
+  @apply mb-1 mt-2 text-2xl font-bold;
+}
+.rich-note h2 {
+  @apply mb-1 mt-2 text-xl font-bold;
+}
+.rich-note h3 {
+  @apply mb-1 mt-1.5 text-lg font-semibold;
+}
+.rich-note:empty::before {
+  content: attr(data-placeholder);
+  @apply text-ink-muted;
 }

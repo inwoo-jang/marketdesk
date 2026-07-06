@@ -20,6 +20,7 @@ import {
   userPublicBookmark,
   companyGroups,
   userCompanyFavorites,
+  notepads,
   normCompany,
   memos,
   JOB_ROLES,
@@ -657,6 +658,50 @@ meRoute.delete("/company-favorites", async (c) => {
   await db
     .delete(userCompanyFavorites)
     .where(and(eq(userCompanyFavorites.userId, user.id), eq(userCompanyFavorites.kind, kind), eq(userCompanyFavorites.value, value)));
+  return c.json({ ok: true });
+});
+
+// ---- 노트패드(자유 서식 메모): 흐름보드 월/년, 리포트별 ----
+
+// 저장된 HTML 위생 처리(자기 자신에게만 렌더되지만 stored XSS 최소화): script/이벤트핸들러/js: 제거.
+function sanitizeNote(html: string): string {
+  return html
+    .slice(0, 100_000)
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*(iframe|object|embed|link|meta)[\s\S]*?>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "");
+}
+const noteScope = (type: string, key: string) => ({
+  type: type === "report" ? "report" : "board",
+  key: (key || "").slice(0, 80),
+});
+
+// GET /api/me/notepad?type=&key= - 컨텍스트 메모 조회
+meRoute.get("/notepad", async (c) => {
+  const user = c.get("user");
+  const { type, key } = noteScope(c.req.query("type") ?? "", c.req.query("key") ?? "");
+  const [row] = await db
+    .select({ content: notepads.content, updatedAt: notepads.updatedAt })
+    .from(notepads)
+    .where(and(eq(notepads.userId, user.id), eq(notepads.scopeType, type), eq(notepads.scopeKey, key)))
+    .limit(1);
+  return c.json({ content: row?.content ?? "", updatedAt: row?.updatedAt ?? null });
+});
+
+// PUT /api/me/notepad - 컨텍스트 메모 저장(업서트). { type, key, content }
+meRoute.put("/notepad", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const { type, key } = noteScope(String(body["type"] ?? ""), String(body["key"] ?? ""));
+  const content = sanitizeNote(typeof body["content"] === "string" ? body["content"] : "");
+  await db
+    .insert(notepads)
+    .values({ userId: user.id, scopeType: type, scopeKey: key, content, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [notepads.userId, notepads.scopeType, notepads.scopeKey],
+      set: { content, updatedAt: new Date() },
+    });
   return c.json({ ok: true });
 });
 

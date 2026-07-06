@@ -6,6 +6,7 @@ import { api, type Report, type EntryFull, type EntryFrame, type Industry, type 
 import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
 import { MemoLayer } from "@/components/memo";
+import { RichNote } from "@/components/rich-note";
 
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
 
@@ -106,6 +107,11 @@ export default function ReportReviewPage() {
           <WordLookup targetRef={contentRef} contextText={`${report.title ?? ""} ${entry.frame?.summary ?? ""}`} />
         </>
       )}
+
+      {/* 기사 밑 자유 메모(서식·손글씨) */}
+      <div className="mt-10">
+        <RichNote scopeType="report" scopeKey={id} title="이 리포트 메모" />
+      </div>
     </main>
   );
 }

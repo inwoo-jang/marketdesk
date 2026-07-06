@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type BoardRow, type BoardCell, type BoardDim } from "@/lib/api";
+import { RichNote } from "@/components/rich-note";
 
 const DIMS: { k: BoardDim; label: string }[] = [
   { k: "industry", label: "산업별" },
@@ -267,6 +268,11 @@ export default function BoardPage() {
             })}
         </div>
       )}
+
+      {/* 흐름 메모: 월별/연별 각각(맨 밑) */}
+      <div className="mt-10">
+        <RichNote scopeType="board" scopeKey={period} title={period === "month" ? "월별 흐름 메모" : "연별 흐름 메모"} />
+      </div>
     </main>
   );
 }

@@ -119,6 +119,10 @@ export const api = {
   hiddenContents: () => get<{ contents: PublicContent[] }>("/api/me/public/hidden"),
   bookmarkedContents: () => get<{ contents: PublicContent[] }>("/api/me/public/bookmarks"),
   ingestPublic: () => post<{ ok: true; started?: boolean; already?: boolean }>("/api/me/public/ingest"),
+  getNotepad: (type: "board" | "report", key: string) =>
+    get<{ content: string; updatedAt: string | null }>(`/api/me/notepad?type=${type}&key=${encodeURIComponent(key)}`),
+  saveNotepad: (type: "board" | "report", key: string, content: string) =>
+    put<{ ok: true }>("/api/me/notepad", { type, key, content }),
   hidePublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/hide`),
   unhidePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/hide`),
   bookmarkPublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/bookmark`),
