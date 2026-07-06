@@ -10,13 +10,9 @@ const DIMS: { k: BoardDim; label: string }[] = [
 ];
 const fmtPeriod = (k: string, period: "month" | "year") =>
   period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`;
-// 셀 클릭 → 원문 리포트 피드으로. 산업=산업리포트(그 산업), 기업=그 회사 리포트, 경제흐름=뉴스 피드.
-const cellHref = (dim: BoardDim, key: string) =>
-  dim === "industry"
-    ? `/docs/industry?i=${encodeURIComponent(key)}`
-    : dim === "company"
-      ? `/docs/company?c=${encodeURIComponent(key)}`
-      : `/docs/news`;
+// 셀 클릭 → 그 칸의 흐름 피드(요약 + 근거 원문). 거기서 리포트 클릭 → 원문.
+const cellHref = (dim: BoardDim, key: string, period: "month" | "year", periodKey: string) =>
+  `/board/feed?dim=${dim}&key=${encodeURIComponent(key)}&period=${period}&periodKey=${periodKey}`;
 
 // 흐름 보드: 산업 선택 없이 관심 산업/기업/뉴스를 각각 타임라인 행으로. "빈 칸 모두 생성"으로 한 번에.
 export default function BoardPage() {
@@ -137,7 +133,7 @@ export default function BoardPage() {
                     key={cell.periodKey}
                     cell={cell}
                     period={period}
-                    href={cellHref(dim, row.key)}
+                    href={cellHref(dim, row.key, period, cell.periodKey)}
                     onGenerate={() => generateCell(row.key, cell.periodKey)}
                   />
                 ))}
@@ -234,7 +230,7 @@ function Cell({
               ))}
             </div>
           )}
-          <span className="mt-1 inline-block text-[11px] text-primary opacity-0 transition group-hover/cell:opacity-100">원문 보기 →</span>
+          <span className="mt-1 inline-block text-[11px] text-primary opacity-0 transition group-hover/cell:opacity-100">자세히 · 원문 →</span>
         </div>
       )}
     </a>

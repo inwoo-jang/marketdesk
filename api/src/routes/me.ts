@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray, desc, sql, isNull, getTableColumns } from "drizzle-orm";
+import { eq, and, inArray, desc, sql, isNull, gte, lt, getTableColumns } from "drizzle-orm";
 import {
   lenses,
   userLenses,
@@ -293,6 +293,18 @@ function periodKeys(period: "month" | "year", n: number): string[] {
   return keys;
 }
 
+// periodType+periodKey → [start,end)
+function periodRange(period: "month" | "year", periodKey: string): { start: string; end: string } {
+  if (period === "year") {
+    const y = Number(periodKey);
+    return { start: `${y}-01-01`, end: `${y + 1}-01-01` };
+  }
+  const [y, m] = periodKey.split("-").map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return { start: `${periodKey}-01`, end: `${ny}-${String(nm).padStart(2, "0")}-01` };
+}
+
 function boardMatch(userId: string, dim: Dim, key: string, periodType: "month" | "year") {
   const conds = [eq(rollups.userId, userId), eq(rollups.scope, dim), eq(rollups.periodType, periodType)];
   if (dim === "industry") conds.push(eq(rollups.industryId, key));
@@ -361,6 +373,57 @@ meRoute.get("/board/rows", async (c) => {
   const rows = [];
   for (const k of keys) rows.push({ dim, key: k.key, label: k.label, cells: await buildCells(user.id, dim, k.key, period) });
   return c.json({ dim, period, rows });
+});
+
+// GET /api/me/board/feed?dim=&key=&period=&periodKey= - 한 칸의 흐름 요약 + 근거 원문 리포트
+meRoute.get("/board/feed", async (c) => {
+  const user = c.get("user");
+  const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
+  const period = c.req.query("period") === "year" ? "year" : "month";
+  const key = c.req.query("key") ?? "all";
+  const periodKey = c.req.query("periodKey") ?? "";
+  if (!periodKey) return c.json({ error: "periodKey 필요" }, 400);
+  const { start, end } = periodRange(period, periodKey);
+
+  let label = "경제흐름";
+  let scopeCond;
+  if (dim === "company") {
+    scopeCond = eq(reports.company, key);
+    label = key;
+  } else if (dim === "news") {
+    scopeCond = eq(reports.docType, "news");
+  } else {
+    scopeCond = eq(entries.industryId, key);
+    const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, key)).limit(1);
+    label = ind?.name ?? "산업";
+  }
+
+  // 근거 리포트(엔트리 기준 그 기간·scope)
+  const rows = await db
+    .selectDistinct({ id: reports.id })
+    .from(entries)
+    .innerJoin(reports, eq(entries.reportId, reports.id))
+    .where(and(eq(entries.userId, user.id), scopeCond, gte(entries.entryDate, start), lt(entries.entryDate, end)));
+  const ids = rows.map((r) => r.id);
+  const reps = ids.length ? await attachIndustries(await db.select().from(reports).where(inArray(reports.id, ids))) : [];
+  reps.sort((a, b) => new Date(b.pubDate ?? b.createdAt).getTime() - new Date(a.pubDate ?? a.createdAt).getTime());
+
+  const [ru] = await db
+    .select()
+    .from(rollups)
+    .where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, periodKey)))
+    .limit(1);
+  const facts = ru ? await db.select().from(rollupFacts).where(eq(rollupFacts.rollupId, ru.id)) : [];
+
+  return c.json({
+    dim,
+    key,
+    period,
+    periodKey,
+    label,
+    rollup: ru ? { oneLiner: ru.oneLiner, status: ru.status, facts } : null,
+    reports: reps,
+  });
 });
 
 // POST /api/me/board/generate-all - 대상×기간의 빈 칸을 한 번에 pending 으로(워커가 이어 처리). { dim, period }
