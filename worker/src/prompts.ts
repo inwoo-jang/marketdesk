@@ -102,14 +102,13 @@ export function buildExtractPrompt(document: string, ctx: { docType: string; len
 export function buildRollupPrompt(industryName: string, period: string, digest: string): string {
   return (
     `아래는 '${industryName}'의 ${period} 기간 분석 엔트리(내 리포트·공공) 모음이다.\n` +
-    `이 엔트리들만 근거로(새 사실·숫자 생성 금지), 유저에게 유용한 '사실·정보'를 정리하라.\n` +
-    `- one_liner: 이 기간 핵심 흐름 한 줄. '${period}', '2026년 7월' 같은 기간 머리말 금지. 짧고 명확하게.\n` +
-    `- facts: [{type, content}] 배열. 이 기간의 중요한 사실·이슈를 폭넓게 담되, 각 항목은 짧고 깔끔한 한 문장(군더더기·수식 최소).\n` +
-    `  · 한 리포트에만 나와도 중요하면 반드시 포함(여러 리포트가 겹치는 것만 뽑지 말 것). 서로 다른 종목·주제·이벤트를 골고루 커버.\n` +
-    `  · content 는 정보 자체만. 절대 금지: '두 리포트 모두', '리포트들은', '~라고 분석/제시/지목한다', 발행사·리포트 개수 언급.\n` +
-    `  · type='common' = 이 기간의 핵심 사실/이슈. type='conflict' = 리포트 간 엇갈리는 지점.\n` +
-    `  · 예) 나쁨: '두 리포트 모두 국내 AI SW 종목으로 코난테크놀로지와 솔트룩스를 지목한다' → 좋음: '국내 AI SW 대표주로 코난테크놀로지·솔트룩스 부각'.\n` +
-    `  · 핵심만 4~8개, 중복 없이. 각 문장은 되도록 40자 이내.\n` +
+    `이 엔트리들만 근거로(새 사실·숫자 생성 금지), '${industryName}' 산업 관점에서 그 기간의 흐름을 종합하라.\n` +
+    `- one_liner: 이 기간 '${industryName}' 산업의 핵심 흐름 한 줄. '${period}' 같은 기간 머리말 금지. 짧고 명확하게.\n` +
+    `- facts: [{type, content}] 배열. 기사별 요약을 그대로 나열하지 말고, 관련된 내용은 묶어 '${industryName}' 산업 관점의 핵심 흐름으로 종합하라.\n` +
+    `  · '${industryName}' 산업에 의미 있는 것 위주. 산업과 직접 관련이 적은 개별 종목 세부·부수 정보(예: 특정 회사의 지엽적 수치, 타 산업 이슈)는 노이즈이니 과감히 제외.\n` +
+    `  · 각 항목은 짧고 깔끔한 한 문장(정보 자체만). 절대 금지: '두 리포트 모두', '리포트들은', '~라고 분석/제시/지목한다', 발행사·개수 언급.\n` +
+    `  · type='common' = 산업의 핵심 흐름·이슈. type='conflict' = 엇갈리는 지점.\n` +
+    `  · 압축이 핵심: 3~5개로 종합(비슷한 건 하나로 합침). 8개씩 잘게 쪼개지 말 것. 각 문장 40자 이내.\n` +
     `출력 JSON: {"one_liner":"","facts":[{"type":"common","content":""}]}` +
     STRICT_JSON +
     `\n\n--- 엔트리 모음 ---\n${digest}`
