@@ -6,6 +6,7 @@ import { ReportCard } from "@/components/report-card";
 import { RichNote } from "@/components/rich-note";
 import { FlowEditor } from "@/components/flow-editor";
 import { WordLookup } from "@/components/word-lookup";
+import { knownCountryOf } from "@/lib/companies";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
 const stripPeriodLead = (text: string, periodKey: string) => {
@@ -66,7 +67,12 @@ export default function BoardFeedPage() {
         ← 흐름 보드
       </button>
       <div className="mt-3 flex items-center gap-2">
-        <h1 className="text-2xl font-bold">{feed.label}</h1>
+        <h1 className="text-2xl font-bold">
+          {feed.label}
+          {feed.dim === "company" && knownCountryOf(feed.label) && (
+            <span className="ml-2 text-base font-normal text-ink-muted">({knownCountryOf(feed.label)})</span>
+          )}
+        </h1>
         <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(feed.periodKey, feed.period)}</span>
       </div>
 

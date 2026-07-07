@@ -4,26 +4,12 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Report, type MyIndustry } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
+import { foreignCountryOf, isForeignName } from "@/lib/companies";
 
 const TYPE_LABEL: Record<string, string> = { industry: "산업리포트", company: "기업리포트", news: "뉴스" };
 const dnum = (r: Report) => new Date(r.pubDate ?? r.createdAt).getTime();
 const byDateDesc = (a: Report, b: Report) => dnum(b) - dnum(a);
 const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
-// 한글로 음차돼 국내로 오인되는 대표 해외 기업(정규화된 이름). 라틴 표기는 한글 없음으로 이미 해외 처리됨.
-// 한글 음차돼 국내로 오인되는 대표 해외 기업 → 국가(UI 에 "(국가)" 표기). 라틴 표기는 한글 없음으로 이미 해외 처리됨.
-const FOREIGN_BY_COUNTRY: Record<string, string[]> = {
-  미국: ["인텔", "엔비디아", "알파벳", "구글", "애플", "마이크로소프트", "마소", "아마존", "테슬라", "메타", "페이스북", "마이크론", "퀄컴", "브로드컴", "에이엠디", "amd", "텍사스인스트루먼트", "온세미", "마벨", "램리서치", "어플라이드머티리얼즈", "케이엘에이", "넷플릭스", "디즈니", "오라클", "세일즈포스", "어도비", "시스코", "아이비엠", "ibm", "우버", "에어비앤비", "팔란티어", "스타벅스", "나이키", "코카콜라", "보잉", "록히드마틴", "포드", "지엠"],
-  대만: ["티에스엠씨", "tsmc"],
-  네덜란드: ["에이에스엠엘", "asml"],
-  일본: ["도쿄일렉트론", "소니", "도요타", "혼다", "닛산", "니콘"],
-  독일: ["인피니언", "폭스바겐", "bmw", "벤츠"],
-  영국: ["arm", "암홀딩스"],
-  중국: ["화웨이", "샤오미", "비야디", "byd", "알리바바", "텐센트", "니오"],
-};
-// 정규화된 이름 → 국가
-const FOREIGN_COMPANY_COUNTRY: Record<string, string> = Object.fromEntries(
-  Object.entries(FOREIGN_BY_COUNTRY).flatMap(([country, names]) => names.map((n) => [n.replace(/\s/g, "").toLowerCase(), country])),
-);
 const newsMentions = (r: Report, name: string) => norm(`${r.title ?? ""} ${r.summary ?? ""}`).includes(norm(name));
 
 // 기업리포트: (계열별 또는 산업별) → 기업. 관련 뉴스는 리스트에 함께([뉴스] 배지·색차별). 산업리포트=산업별.
@@ -105,20 +91,18 @@ export default function DocsFeed() {
     load();
   };
   // 계열 미매칭 기업은 국내/해외 기타로 분리. 라틴명 또는 알려진 해외 기업(한글 음차) → 해외.
-  const isForeign = (co: string) => FOREIGN_COMPANY_COUNTRY[norm(co)] !== undefined || !/[가-힣]/.test(co);
-  // 해외 기업 국가(알려진 곳만). 라틴명 미상은 "해외".
+  // 해외 기업 국가(알려진 곳만). 라틴명 미상은 "해외". 계열 매핑된 국내 기업은 국가 표기 안 함.
   const foreignCountry = (co?: string | null) => {
     if (!co) return "";
     const c = co.trim();
     if (groupMap[c]) return ""; // 계열 매핑된 국내 기업
-    if (!isForeign(c)) return "";
-    return FOREIGN_COMPANY_COUNTRY[norm(c)] ?? "해외";
+    return foreignCountryOf(c);
   };
   const groupOf = (co?: string | null) => {
     if (!co) return "국내 기타";
     const c = co.trim();
     if (groupMap[c]) return groupMap[c];
-    return isForeign(c) ? "해외 기타" : "국내 기타";
+    return isForeignName(c) ? "해외 기타" : "국내 기타";
   };
   const isMisc = (k: string) => k === "국내 기타" || k === "해외 기타" || k === "기타" || k === "_none";
   const newsFor = (companies: string[]) => news.filter((r) => companies.some((n) => newsMentions(r, n)));
@@ -302,11 +286,11 @@ export default function DocsFeed() {
       )}
       {/* tier2: 개별 기업 — 큰 카테고리와 색·섹션으로 구분(tint 패널) */}
       {type === "company" && cFilter && companyChips.length > 0 && (
-        <div className="mt-3 rounded-card bg-primary/5 p-3 ring-1 ring-primary/15">
-          <div className="mb-2 text-xs font-semibold text-primary">
+        <div className="mt-4 rounded-card bg-primary/5 p-4 ring-1 ring-primary/15">
+          <div className="mb-3 text-xs font-semibold text-primary">
             {companyBy === "group" ? cFilter : indChips.find((ch) => ch.key === cFilter)?.label ?? "산업"} · 개별 기업 ({companyChips.length})
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setCompany(null)}
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
