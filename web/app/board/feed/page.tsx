@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type BoardFeed, type BoardDim } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
+import { RichNote } from "@/components/rich-note";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
 const stripPeriodLead = (text: string, periodKey: string) => {
@@ -126,6 +127,15 @@ export default function BoardFeedPage() {
           ))}
         </div>
       )}
+
+      {/* 이 달/연 흐름 메모(피드별) */}
+      <div className="mt-10">
+        <RichNote
+          scopeType="board"
+          scopeKey={`${data.dim}:${data.key}:${data.period}:${data.periodKey}`}
+          title={`${data.label} ${fmt(data.periodKey, data.period)} 메모`}
+        />
+      </div>
     </main>
   );
 }
