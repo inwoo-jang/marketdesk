@@ -203,7 +203,14 @@ export default function Home() {
     const [rep, pc] = await Promise.all([repP, pubP.catch(() => ({ contents: [] as PublicContent[] }))]);
     setRecent(rep.reports);
     setTotal(rep.total ?? rep.reports.length);
-    setPub(pc.contents);
+    // 숨김/저장 탭의 공공도 docType·기간 필터 적용(리포트와 동일하게)
+    let contents = pc.contents;
+    if (v !== "all") {
+      if (df === "industry" || df === "company" || df === "news") contents = contents.filter((cc) => cc.docType === df);
+      if (sort === "pub" && from) contents = contents.filter((cc) => (cc.pubDate ?? "") >= from);
+      if (sort === "pub" && to) contents = contents.filter((cc) => (cc.pubDate ?? "") <= to);
+    }
+    setPub(contents);
   }, []);
 
   const loadData = useCallback(async () => {
