@@ -132,7 +132,7 @@ export function PublicCard({
           onClick={remove}
           disabled={busy}
           title="삭제 (다시 불러와도 이 항목은 제외)"
-          className="text-[11px] text-ink-muted hover:text-red-500"
+          className="hidden text-[11px] text-ink-muted hover:text-red-500 group-hover:inline"
         >
           삭제
         </button>
