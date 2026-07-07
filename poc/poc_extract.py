@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-리포트렌즈 PoC - 리포트 PDF를 정해진 틀 + 렌즈별로 구조화 추출.
+마켓데스크 PoC - 리포트 PDF를 정해진 틀 + 렌즈별로 구조화 추출.
 
 실행 전:
   pip install pymupdf anthropic
@@ -92,7 +92,7 @@ def main():
     document = build_document(pages)
     client = anthropic.Anthropic()
 
-    blocks = [f"# 리포트렌즈 추출: {os.path.basename(args.pdf)}\n"]
+    blocks = [f"# 마켓데스크 추출: {os.path.basename(args.pdf)}\n"]
     for lens in args.lenses:  # 멀티 렌즈 = 렌즈별 섹션
         print(f"[추출중] {lens} 렌즈...", file=sys.stderr)
         blocks.append(f"\n## 〈{lens} 렌즈〉\n\n{extract(client, document, lens)}\n")

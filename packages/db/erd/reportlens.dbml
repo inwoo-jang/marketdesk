@@ -1,4 +1,4 @@
-// 리포트렌즈 ERD (DBML)
+// 마켓데스크 ERD (DBML)
 // dbdiagram.io 용 표준 포맷. 원천(source of truth)은 Drizzle 스키마(../src/schema).
 // 사용법: https://dbdiagram.io → 새 다이어그램 → 좌측 에디터에 이 파일 전체 붙여넣기.
 // (ERDCloud 는 DBML import 미지원 → ERDCloud 는 reportlens_erdcloud.sql 사용)

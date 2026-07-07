@@ -1,4 +1,4 @@
--- 리포트렌즈 ERD import 스냅샷 (ERDCloud 용)
+-- 마켓데스크 ERD import 스냅샷 (ERDCloud 용)
 -- 원천(source of truth)은 Drizzle 스키마(packages/db/src/schema). 이 파일은 ERDCloud Import 전용 스냅샷.
 -- 사용법: ERDCloud → 좌하단 Import → 아래 전체 붙여넣기.
 -- ERDCloud 파서 호환을 위해 CREATE TYPE(enum) 제거하고 컬럼에 MySQL식 enum 인라인, FK는 테이블 내부 인라인.
