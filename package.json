@@ -20,6 +20,8 @@
     "db:generate": "pnpm --filter @reportlens/db generate",
     "db:migrate": "pnpm --filter @reportlens/db migrate",
     "db:push": "pnpm --filter @reportlens/db push",
-    "db:studio": "pnpm --filter @reportlens/db studio"
+    "db:studio": "pnpm --filter @reportlens/db studio",
+    "data:dump": "bash scripts/data-bundle.sh dump",
+    "data:restore": "bash scripts/data-bundle.sh restore"
   }
 }

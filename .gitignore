@@ -30,6 +30,10 @@ infra/.cdk.staging/
 # 로컬 업로드 스토리지(개발용)
 api/.uploads/
 
+# 데이터 번들(DB 덤프 + 원본) - git 커밋 금지, 별도 전달
+marketdesk-data-bundle.tgz
+*-data-bundle.tgz
+
 # Claude Code 로컬 설정(개인)
 .claude/settings.local.json
 
