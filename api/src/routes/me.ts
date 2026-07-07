@@ -541,24 +541,32 @@ meRoute.get("/board/feed", async (c) => {
   const { start, end } = periodRange(period, periodKey);
 
   let label = "경제흐름";
-  let scopeCond;
+  const dateRange = and(gte(entries.entryDate, start), lt(entries.entryDate, end));
+  // 근거 리포트: 산업은 다중 태그(reportIndustries)로 대시보드와 동일 커버리지, 기업/뉴스는 scope 조건.
+  let rows: { id: string }[];
   if (dim === "company") {
-    scopeCond = eq(reports.company, key);
     label = key;
+    rows = await db
+      .selectDistinct({ id: reports.id })
+      .from(entries)
+      .innerJoin(reports, eq(entries.reportId, reports.id))
+      .where(and(eq(entries.userId, user.id), eq(reports.company, key), dateRange));
   } else if (dim === "news") {
-    scopeCond = eq(reports.docType, "news");
+    rows = await db
+      .selectDistinct({ id: reports.id })
+      .from(entries)
+      .innerJoin(reports, eq(entries.reportId, reports.id))
+      .where(and(eq(entries.userId, user.id), eq(reports.docType, "news"), dateRange));
   } else {
-    scopeCond = eq(entries.industryId, key);
     const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, key)).limit(1);
     label = ind?.name ?? "산업";
+    rows = await db
+      .selectDistinct({ id: reports.id })
+      .from(entries)
+      .innerJoin(reports, eq(entries.reportId, reports.id))
+      .innerJoin(reportIndustries, and(eq(reportIndustries.reportId, reports.id), eq(reportIndustries.industryId, key)))
+      .where(and(eq(entries.userId, user.id), dateRange));
   }
-
-  // 근거 리포트(엔트리 기준 그 기간·scope)
-  const rows = await db
-    .selectDistinct({ id: reports.id })
-    .from(entries)
-    .innerJoin(reports, eq(entries.reportId, reports.id))
-    .where(and(eq(entries.userId, user.id), scopeCond, gte(entries.entryDate, start), lt(entries.entryDate, end)));
   const ids = rows.map((r) => r.id);
   const reps = ids.length ? await attachIndustries(await db.select().from(reports).where(inArray(reports.id, ids))) : [];
   reps.sort((a, b) => new Date(b.pubDate ?? b.createdAt).getTime() - new Date(a.pubDate ?? a.createdAt).getTime());
