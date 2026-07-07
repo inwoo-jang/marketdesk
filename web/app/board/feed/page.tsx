@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type BoardFeed, type BoardDim } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { RichNote } from "@/components/rich-note";
+import { FlowEditor } from "@/components/flow-editor";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
 const stripPeriodLead = (text: string, periodKey: string) => {
@@ -27,6 +28,16 @@ const stripPeriodLead = (text: string, periodKey: string) => {
 export default function BoardFeedPage() {
   const [data, setData] = useState<BoardFeed | null | "error">(null);
 
+  const load = useCallback(async () => {
+    const q = new URLSearchParams(window.location.search);
+    const dim = (q.get("dim") ?? "industry") as BoardDim;
+    const key = q.get("key") ?? "all";
+    const period = q.get("period") === "year" ? "year" : "month";
+    const periodKey = q.get("periodKey") ?? "";
+    const r = await api.boardFeed({ dim, key, period, periodKey }).catch(() => null);
+    setData(r ?? "error");
+  }, []);
+
   useEffect(() => {
     (async () => {
       const me = await api.me().catch(() => ({ user: null }));
@@ -34,63 +45,36 @@ export default function BoardFeedPage() {
         window.location.href = "/login";
         return;
       }
-      const q = new URLSearchParams(window.location.search);
-      const dim = (q.get("dim") ?? "industry") as BoardDim;
-      const key = q.get("key") ?? "all";
-      const period = q.get("period") === "year" ? "year" : "month";
-      const periodKey = q.get("periodKey") ?? "";
-      const r = await api.boardFeed({ dim, key, period, periodKey }).catch(() => null);
-      setData(r ?? "error");
+      await load();
     })();
-  }, []);
+  }, [load]);
 
   if (data === null) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (data === "error") return <main className="p-12 text-ink-sub">불러오지 못했어요. <a href="/board" className="text-primary">흐름 보드</a></main>;
 
-  const common = data.rollup?.facts.filter((f) => f.factType === "common") ?? [];
-  const conflict = data.rollup?.facts.filter((f) => f.factType === "conflict") ?? [];
-  const empty = (data.rollup?.oneLiner ?? "").startsWith("이 기간");
-  const oneLiner = data.rollup?.oneLiner ? stripPeriodLead(data.rollup.oneLiner, data.periodKey) : "";
+  const feed = data;
+  const displayOne = feed.rollup?.oneLiner ? stripPeriodLead(feed.rollup.oneLiner, feed.periodKey) : "";
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <a href="/board" className="text-sm text-ink-sub hover:text-ink">← 흐름 보드</a>
       <div className="mt-3 flex items-center gap-2">
-        <h1 className="text-2xl font-bold">{data.label}</h1>
-        <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(data.periodKey, data.period)}</span>
+        <h1 className="text-2xl font-bold">{feed.label}</h1>
+        <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(feed.periodKey, feed.period)}</span>
       </div>
 
-      {/* 흐름 요약 */}
-      {data.rollup && !empty ? (
-        <section className="mt-4 rounded-card bg-card p-5 shadow-card">
-          <div className="mb-1 text-xs font-semibold text-primary">이 기간 흐름</div>
-          <p className="text-[15px] font-medium leading-snug text-ink">{oneLiner}</p>
-          {common.length > 0 && (
-            <div className="mt-3">
-              <div className="text-xs font-semibold text-primary">✓ 핵심</div>
-              <ul className="mt-1 space-y-0.5 text-sm text-ink-sub">
-                {common.map((f) => (
-                  <li key={f.id}>· {f.content}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {conflict.length > 0 && (
-            <div className="mt-3">
-              <div className="text-xs font-semibold text-amber-600">엇갈림</div>
-              <ul className="mt-1 space-y-0.5 text-sm text-ink-sub">
-                {conflict.map((f) => (
-                  <li key={f.id}>· {f.content}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      ) : (
-        <p className="mt-4 rounded-card bg-card p-5 text-sm text-ink-sub shadow-card">
-          이 기간 흐름 요약이 아직 없어요. 아래 원문을 바로 볼 수 있어요.
-        </p>
-      )}
+      {/* 흐름 요약(직접 편집 가능) */}
+      <section className="mt-4 rounded-card bg-card p-5 shadow-card">
+        <FlowEditor
+          dim={feed.dim}
+          factKey={feed.key}
+          period={feed.period}
+          periodKey={feed.periodKey}
+          oneLiner={displayOne || feed.rollup?.oneLiner || ""}
+          facts={feed.rollup?.facts ?? []}
+          onSaved={load}
+        />
+      </section>
 
       {/* 근거 원문 */}
       <h2 className="mb-2 mt-8 text-sm font-semibold text-ink-muted">원문 ({data.reports.length})</h2>

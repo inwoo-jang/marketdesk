@@ -1,5 +1,5 @@
 import { and, eq, gte, lt } from "drizzle-orm";
-import { rollups, rollupFacts, rollupSources, entries, reports, industries, publicContents } from "@reportlens/db";
+import { rollups, rollupFacts, rollupSources, entries, reports, industries, reportIndustries, publicContents } from "@reportlens/db";
 import { db } from "./db.js";
 import { getProvider } from "./providers/index.js";
 
@@ -42,27 +42,36 @@ export async function processRollup(r: Rollup): Promise<void> {
   try {
     const { start, end } = periodRange(r.periodType, r.periodKey);
 
-    let scopeCond;
     let label: string;
+    let rows: { id: string; frame: (typeof entries.$inferSelect)["frame"]; title: string | null }[];
+    const dateRange = and(gte(entries.entryDate, start), lt(entries.entryDate, end));
     if (r.scope === "company") {
       if (!r.companyName) throw new Error("company_name 없음");
-      scopeCond = eq(reports.company, r.companyName);
       label = r.companyName;
+      rows = await db
+        .select({ id: entries.id, frame: entries.frame, title: reports.title })
+        .from(entries)
+        .innerJoin(reports, eq(entries.reportId, reports.id))
+        .where(and(eq(entries.userId, r.userId), eq(reports.company, r.companyName), dateRange));
     } else if (r.scope === "news") {
-      scopeCond = eq(reports.docType, "news");
       label = "경제뉴스";
+      rows = await db
+        .select({ id: entries.id, frame: entries.frame, title: reports.title })
+        .from(entries)
+        .innerJoin(reports, eq(entries.reportId, reports.id))
+        .where(and(eq(entries.userId, r.userId), eq(reports.docType, "news"), dateRange));
     } else {
       if (!r.industryId) throw new Error("industry_id 없음");
-      scopeCond = eq(entries.industryId, r.industryId);
       const [ind] = await db.select({ name: industries.name }).from(industries).where(eq(industries.id, r.industryId)).limit(1);
       label = ind?.name ?? "산업";
+      // 그 산업으로 태그된 모든 리포트(primary 아니어도) 포함 → 그 기간 전체 커버
+      rows = await db
+        .select({ id: entries.id, frame: entries.frame, title: reports.title })
+        .from(entries)
+        .innerJoin(reports, eq(entries.reportId, reports.id))
+        .innerJoin(reportIndustries, and(eq(reportIndustries.reportId, reports.id), eq(reportIndustries.industryId, r.industryId)))
+        .where(and(eq(entries.userId, r.userId), dateRange));
     }
-
-    const rows = await db
-      .select({ id: entries.id, frame: entries.frame, title: reports.title })
-      .from(entries)
-      .innerJoin(reports, eq(entries.reportId, reports.id))
-      .where(and(eq(entries.userId, r.userId), scopeCond, gte(entries.entryDate, start), lt(entries.entryDate, end)));
 
     const industryName = label;
 

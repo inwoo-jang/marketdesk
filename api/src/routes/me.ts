@@ -470,6 +470,53 @@ meRoute.get("/board", async (c) => {
   return c.json({ dim, key, period, label, cells: await buildCells(user.id, dim, key, period) });
 });
 
+// PUT /api/me/board/rollup - 흐름 요약 직접 편집. { dim, key, period, periodKey, oneLiner, facts:[{type,content}] }
+meRoute.put("/board/rollup", async (c) => {
+  const user = c.get("user");
+  const b = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const dim: Dim = isDim(b.dim) ? (b.dim as Dim) : "industry";
+  const period = b.period === "year" ? "year" : "month";
+  const key = typeof b.key === "string" ? b.key : "all";
+  const periodKey = typeof b.periodKey === "string" ? b.periodKey : "";
+  if (!periodKey) return c.json({ error: "periodKey 필요" }, 400);
+  const oneLiner = typeof b.oneLiner === "string" ? b.oneLiner.trim().slice(0, 1000) : "";
+  const rawFacts: unknown[] = Array.isArray(b.facts) ? (b.facts as unknown[]) : [];
+  const facts = rawFacts
+    .filter((f): f is { type?: string; content: string } => !!f && typeof (f as { content?: unknown }).content === "string")
+    .map((f) => ({ type: f.type === "conflict" ? "conflict" : "common", content: f.content.trim().slice(0, 500) }))
+    .filter((f) => f.content)
+    .slice(0, 30);
+
+  let [ru] = await db
+    .select()
+    .from(rollups)
+    .where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, periodKey)))
+    .limit(1);
+  if (ru) {
+    await db.update(rollups).set({ oneLiner, status: "done", updatedAt: new Date() }).where(eq(rollups.id, ru.id));
+  } else {
+    // 흐름이 없으면 사용자가 직접 작성한 것으로 새로 생성
+    [ru] = await db
+      .insert(rollups)
+      .values({
+        userId: user.id,
+        scope: dim,
+        industryId: dim === "industry" ? key : null,
+        companyName: dim === "company" ? key : null,
+        periodType: period,
+        periodKey,
+        status: "done",
+        oneLiner,
+      })
+      .returning();
+  }
+  await db.delete(rollupFacts).where(eq(rollupFacts.rollupId, ru.id));
+  if (facts.length > 0) {
+    await db.insert(rollupFacts).values(facts.map((f, i) => ({ rollupId: ru.id, factType: f.type as "common" | "conflict", content: f.content, sort: i })));
+  }
+  return c.json({ ok: true });
+});
+
 // GET /api/me/board/rows?dim=&period= - 산업 선택 없이 모든 대상(관심 산업/기업/뉴스)의 타임라인 행
 meRoute.get("/board/rows", async (c) => {
   const user = c.get("user");

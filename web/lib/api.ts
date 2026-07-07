@@ -158,6 +158,14 @@ export const api = {
     ),
   generateAllBoard: (input: { dim: BoardDim; period: "month" | "year"; year?: number; regenerate?: boolean; cells?: { key?: string; periodKey: string }[] }) =>
     post<{ queued: number }>("/api/me/board/generate-all", input),
+  editRollup: (input: {
+    dim: BoardDim;
+    key: string;
+    period: "month" | "year";
+    periodKey: string;
+    oneLiner: string;
+    facts: { type: "common" | "conflict"; content: string }[];
+  }) => put<{ ok: true }>("/api/me/board/rollup", input),
   boardFeed: (params: { dim: BoardDim; key: string; period: "month" | "year"; periodKey: string }) => {
     const q = new URLSearchParams({ dim: params.dim, key: params.key, period: params.period, periodKey: params.periodKey });
     return get<BoardFeed>(`/api/me/board/feed?${q.toString()}`);

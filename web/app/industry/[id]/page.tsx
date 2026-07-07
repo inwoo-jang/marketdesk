@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type MyIndustry, type Industry, type Report, type Rollup, type PublicContent } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
+import { FlowEditor } from "@/components/flow-editor";
 
 const monthKey = (r: Report) => (r.pubDate ?? r.createdAt).slice(0, 7);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -165,23 +166,15 @@ export default function IndustryDashboard() {
                     </span>
                   )}
                 </div>
-                {ru.oneLiner && <p className="text-sm text-ink">{ru.oneLiner}</p>}
-                {ru.facts.length > 0 && (
-                  <div className="mt-3 space-y-1.5">
-                    {ru.facts.map((f) => (
-                      <div key={f.id} className="flex items-start gap-2 text-sm">
-                        <span
-                          className={`mt-0.5 flex shrink-0 items-center gap-0.5 self-start rounded-md px-1.5 py-0.5 text-xs font-medium ${
-                            f.factType === "common" ? "bg-primary/10 text-primary" : "bg-amber-50 text-amber-600"
-                          }`}
-                        >
-                          {f.factType === "common" ? "✓ 핵심" : "⚡ 엇갈림"}
-                        </span>
-                        <span className="leading-relaxed text-ink">{f.content}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <FlowEditor
+                  dim="industry"
+                  factKey={id}
+                  period="month"
+                  periodKey={ru.periodKey}
+                  oneLiner={ru.oneLiner}
+                  facts={ru.facts}
+                  onSaved={load}
+                />
                 {/* 이 달 원문 바로보기(접기/펼치기) */}
                 {cntOf(ru.periodKey) > 0 && (
                   <details className="group/orig mt-3 border-t border-line pt-2">
