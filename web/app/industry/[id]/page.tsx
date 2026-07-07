@@ -175,7 +175,7 @@ export default function IndustryDashboard() {
                             f.factType === "common" ? "bg-primary/10 text-primary" : "bg-amber-50 text-amber-600"
                           }`}
                         >
-                          {f.factType === "common" ? "✓ 공통" : "⚡ 엇갈림"}
+                          {f.factType === "common" ? "✓ 핵심" : "⚡ 엇갈림"}
                         </span>
                         <span className="leading-relaxed text-ink">{f.content}</span>
                       </div>
