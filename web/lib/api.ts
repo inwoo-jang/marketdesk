@@ -152,11 +152,11 @@ export const api = {
   },
   generateBoardCell: (input: { dim: BoardDim; key?: string; period: "month" | "year"; periodKey: string }) =>
     post<{ rollup: { id: string } }>("/api/me/board/generate", input),
-  boardRows: (params: { dim: BoardDim; period: "month" | "year" }) =>
+  boardRows: (params: { dim: BoardDim; period: "month" | "year"; year?: number }) =>
     get<{ dim: BoardDim; period: "month" | "year"; rows: BoardRow[] }>(
-      `/api/me/board/rows?dim=${params.dim}&period=${params.period}`,
+      `/api/me/board/rows?dim=${params.dim}&period=${params.period}${params.year ? `&year=${params.year}` : ""}`,
     ),
-  generateAllBoard: (input: { dim: BoardDim; period: "month" | "year"; regenerate?: boolean; cells?: { key?: string; periodKey: string }[] }) =>
+  generateAllBoard: (input: { dim: BoardDim; period: "month" | "year"; year?: number; regenerate?: boolean; cells?: { key?: string; periodKey: string }[] }) =>
     post<{ queued: number }>("/api/me/board/generate-all", input),
   boardFeed: (params: { dim: BoardDim; key: string; period: "month" | "year"; periodKey: string }) => {
     const q = new URLSearchParams({ dim: params.dim, key: params.key, period: params.period, periodKey: params.periodKey });

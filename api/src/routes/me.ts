@@ -428,7 +428,16 @@ async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label
 }
 
 // 한 (dim,key)의 기간 시리즈 칸들
-async function buildCells(userId: string, dim: Dim, key: string, period: "month" | "year") {
+// 특정 연도의 월 키(최신월 먼저). 현재 연도는 이번 달까지, 과거 연도는 12→1월.
+function monthKeysForYear(year: number): string[] {
+  const now = new Date();
+  const lastMonth = year >= now.getFullYear() ? now.getMonth() + 1 : 12;
+  const keys: string[] = [];
+  for (let m = lastMonth; m >= 1; m--) keys.push(`${year}-${String(m).padStart(2, "0")}`);
+  return keys;
+}
+
+async function buildCells(userId: string, dim: Dim, key: string, period: "month" | "year", year?: number) {
   const rows = await db.select().from(rollups).where(boardMatch(userId, dim, key, period));
   const ids = rows.map((r) => r.id);
   const facts = ids.length ? await db.select().from(rollupFacts).where(inArray(rollupFacts.rollupId, ids)) : [];
@@ -436,7 +445,8 @@ async function buildCells(userId: string, dim: Dim, key: string, period: "month"
   for (const f of facts) factsBy.set(f.rollupId, [...(factsBy.get(f.rollupId) ?? []), f]);
   const byKey = new Map(rows.map((r) => [r.periodKey, r]));
   const n = period === "year" ? 5 : 12;
-  return periodKeys(period, n).map((pk) => {
+  const pks = period === "month" && year ? monthKeysForYear(year) : periodKeys(period, n);
+  return pks.map((pk) => {
     const r = byKey.get(pk);
     return {
       periodKey: pk,
@@ -465,9 +475,11 @@ meRoute.get("/board/rows", async (c) => {
   const user = c.get("user");
   const dim: Dim = isDim(c.req.query("dim")) ? (c.req.query("dim") as Dim) : "industry";
   const period = c.req.query("period") === "year" ? "year" : "month";
+  const yq = Number(c.req.query("year"));
+  const year = Number.isInteger(yq) && yq >= 2000 ? yq : undefined;
   const keys = await boardKeys(user.id, dim);
   const rows = [];
-  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, star: k.star ?? false, cells: await buildCells(user.id, dim, k.key, period) });
+  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, star: k.star ?? false, cells: await buildCells(user.id, dim, k.key, period, year) });
   return c.json({ dim, period, rows });
 });
 
@@ -569,7 +581,9 @@ meRoute.post("/board/generate-all", async (c) => {
 
   const keys = await boardKeys(user.id, dim);
   const n = period === "year" ? 5 : 12;
-  const pks = periodKeys(period, n);
+  const yq = Number(b.year);
+  const year = Number.isInteger(yq) && yq >= 2000 ? yq : undefined;
+  const pks = period === "month" && year ? monthKeysForYear(year) : periodKeys(period, n);
   let queued = 0;
   for (const k of keys) {
     const existing = await db.select().from(rollups).where(boardMatch(user.id, dim, k.key, period));
@@ -582,9 +596,12 @@ meRoute.post("/board/generate-all", async (c) => {
       continue;
     }
     const byPeriod = new Map(existing.map((r) => [r.periodKey, r]));
-    const doneKeys = new Set(existing.filter((r) => r.status === "done").map((r) => r.periodKey));
+    // 실제 내용이 있는 칸만 건너뜀(빈칸=미생성/실패/내용없음은 채움). 내용없음 placeholder 도 재생성 대상.
+    const filledKeys = new Set(
+      existing.filter((r) => r.status === "done" && r.oneLiner && !r.oneLiner.startsWith("이 기간")).map((r) => r.periodKey),
+    );
     for (const pk of pks) {
-      if (doneKeys.has(pk)) continue; // 이미 생성된 칸은 건너뜀(빈 칸만)
+      if (filledKeys.has(pk)) continue; // 이미 내용이 있는 칸은 건너뜀
       const current = byPeriod.get(pk);
       if (current) {
         await db
