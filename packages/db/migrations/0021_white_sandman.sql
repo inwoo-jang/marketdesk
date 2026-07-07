@@ -1,0 +1,1 @@
+ALTER TABLE "public_contents" ADD COLUMN "deleted" boolean DEFAULT false NOT NULL;

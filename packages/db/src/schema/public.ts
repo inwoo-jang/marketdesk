@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, date, timestamp, index, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, date, boolean, timestamp, index, primaryKey } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { industries } from "./industries";
 import { docType } from "./enums";
@@ -18,6 +18,7 @@ export const publicContents = pgTable(
     industryId: uuid("industry_id").references(() => industries.id), // AI 매칭 산업(핵심만 적재)
     docType: docType("doc_type"), // industry|company|news
     pubDate: date("pub_date"), // 발간일(= 추가일)
+    deleted: boolean("deleted").default(false).notNull(), // 삭제(소프트) — 피드 제외 + 재수집 시 재삽입 방지(행 유지=중복키)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("public_contents_industry_idx").on(t.industryId, t.pubDate)],

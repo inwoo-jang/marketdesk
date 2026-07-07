@@ -59,6 +59,16 @@ export function PublicCard({
       setBusy(false);
     }
   }
+  async function remove() {
+    if (!confirm("이 공공 콘텐츠를 삭제할까요? 다시 불러와도 이 항목은 안 들어옵니다.")) return;
+    setBusy(true);
+    try {
+      await api.deletePublic(content.id);
+      onRemoved?.(content.id);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="group relative rounded-card bg-card p-4 pr-12 shadow-card transition hover:ring-1 hover:ring-primary/30">
@@ -116,26 +126,26 @@ export function PublicCard({
       >
         <BookmarkIcon filled={bm} />
       </button>
-      {/* 숨김/복원: 우하단(저장과 분리) */}
-      {variant === "hidden" ? (
+      {/* 삭제 + 숨김/복원: 우하단(저장과 분리) */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-2.5">
         <button
-          onClick={unhide}
+          onClick={remove}
           disabled={busy}
-          title="다시 표시"
-          className="absolute bottom-3 right-3 text-ink-muted hover:text-ink"
+          title="삭제 (다시 불러와도 이 항목은 제외)"
+          className="text-[11px] text-ink-muted hover:text-red-500"
         >
-          <HideIcon slashed={false} />
+          삭제
         </button>
-      ) : (
-        <button
-          onClick={hide}
-          disabled={busy}
-          title="숨기기"
-          className="absolute bottom-3 right-3 text-ink-muted hover:text-ink"
-        >
-          <HideIcon slashed />
-        </button>
-      )}
+        {variant === "hidden" ? (
+          <button onClick={unhide} disabled={busy} title="다시 표시" className="text-ink-muted hover:text-ink">
+            <HideIcon slashed={false} />
+          </button>
+        ) : (
+          <button onClick={hide} disabled={busy} title="숨기기" className="text-ink-muted hover:text-ink">
+            <HideIcon slashed />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

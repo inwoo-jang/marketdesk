@@ -272,11 +272,12 @@ async function fetchPublic(where: ReturnType<typeof and> | ReturnType<typeof eq>
       industryName: industries.name,
       docType: publicContents.docType,
       pubDate: publicContents.pubDate,
+      deleted: publicContents.deleted,
       createdAt: publicContents.createdAt,
     })
     .from(publicContents)
     .leftJoin(industries, eq(industries.id, publicContents.industryId))
-    .where(where)
+    .where(where ? and(eq(publicContents.deleted, false), where) : eq(publicContents.deleted, false))
     .orderBy(desc(publicContents.pubDate), desc(publicContents.createdAt))
     .limit(200);
 }
@@ -316,6 +317,12 @@ meRoute.get("/public/bookmarks", async (c) => {
   if (bookmarked.size === 0) return c.json({ contents: [] });
   const rows = await fetchPublic(inArray(publicContents.id, [...bookmarked]));
   return c.json({ contents: rows.map((r) => shapePublic(r, true)) });
+});
+
+// 삭제(소프트) — 피드에서 완전히 빼고, 재수집 시 다시 안 들어오게(행은 tombstone 으로 남겨 sourceUrl 중복키 유지)
+meRoute.delete("/public/:id", async (c) => {
+  await db.update(publicContents).set({ deleted: true }).where(eq(publicContents.id, c.req.param("id")));
+  return c.json({ ok: true });
 });
 
 // 숨김 추가/해제

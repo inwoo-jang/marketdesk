@@ -130,6 +130,7 @@ export const api = {
     get<{ content: string; updatedAt: string | null }>(`/api/me/notepad?type=${type}&key=${encodeURIComponent(key)}`),
   saveNotepad: (type: "board" | "report", key: string, content: string) =>
     put<{ ok: true }>("/api/me/notepad", { type, key, content }),
+  deletePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}`),
   hidePublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/hide`),
   unhidePublic: (id: string) => del<{ ok: true }>(`/api/me/public/${id}/hide`),
   bookmarkPublic: (id: string) => post<{ ok: true }>(`/api/me/public/${id}/bookmark`),

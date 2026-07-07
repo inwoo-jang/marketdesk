@@ -81,7 +81,14 @@ export async function processRollup(r: Rollup): Promise<void> {
         ? await db
             .select({ title: publicContents.title, summary: publicContents.summary })
             .from(publicContents)
-            .where(and(eq(publicContents.industryId, r.industryId), gte(publicContents.pubDate, start), lt(publicContents.pubDate, end)))
+            .where(
+              and(
+                eq(publicContents.industryId, r.industryId),
+                eq(publicContents.deleted, false),
+                gte(publicContents.pubDate, start),
+                lt(publicContents.pubDate, end),
+              ),
+            )
         : [];
 
     if (rows.length === 0 && pubRows.length === 0) {
