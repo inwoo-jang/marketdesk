@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type BoardFeed, type BoardDim } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { RichNote } from "@/components/rich-note";
 import { FlowEditor } from "@/components/flow-editor";
+import { WordLookup } from "@/components/word-lookup";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
 const stripPeriodLead = (text: string, periodKey: string) => {
@@ -27,6 +28,7 @@ const stripPeriodLead = (text: string, periodKey: string) => {
 // 흐름 보드 셀 → 피드: 그 기간·대상의 흐름 요약 + 근거 원문 리포트. 리포트 클릭 → 원문.
 export default function BoardFeedPage() {
   const [data, setData] = useState<BoardFeed | null | "error">(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const q = new URLSearchParams(window.location.search);
@@ -68,8 +70,8 @@ export default function BoardFeedPage() {
         <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(feed.periodKey, feed.period)}</span>
       </div>
 
-      {/* 흐름 요약(직접 편집 가능) */}
-      <section className="mt-4 rounded-card bg-card p-5 shadow-card">
+      {/* 흐름 요약 — 단어 클릭/검색 시 AI 용어풀이(WordLookup 대상) */}
+      <section ref={contentRef} className="mt-4 rounded-card bg-card p-5 shadow-card">
         <FlowEditor
           dim={feed.dim}
           factKey={feed.key}
@@ -125,6 +127,8 @@ export default function BoardFeedPage() {
           title={`${data.label} ${fmt(data.periodKey, data.period)} 메모`}
         />
       </div>
+
+      <WordLookup targetRef={contentRef} contextText={`${feed.label} ${displayOne}`} />
     </main>
   );
 }
