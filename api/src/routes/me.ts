@@ -522,19 +522,52 @@ meRoute.get("/board/feed", async (c) => {
   });
 });
 
-// POST /api/me/board/generate-all - 대상×기간의 빈 칸을 한 번에 pending 으로(워커가 이어 처리). { dim, period, regenerate? }
-// regenerate=true 면 빈 칸이 아니라 이미 생성된 흐름까지 전부 다시 생성(내용은 유지되고 워커가 새로 교체).
+// POST /api/me/board/generate-all - 대상×기간의 칸 생성/재생성. { dim, period, regenerate?, cells? }
+// cells=[{key, periodKey}] 면 선택한 칸만 재생성. regenerate=true 면 전체 재생성. 둘 다 없으면 빈 칸만.
 meRoute.post("/board/generate-all", async (c) => {
   const user = c.get("user");
   const b = await c.req.json().catch(() => ({}));
   const dim: Dim = isDim(b.dim) ? b.dim : "industry";
   const period = b.period === "year" ? "year" : "month";
   const regenerate = b.regenerate === true;
+  const cells: { key?: string; periodKey?: string }[] | null = Array.isArray(b.cells) ? b.cells : null;
   const quota = await consumeAnalysis(user);
   if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
 
-  const keys = await boardKeys(user.id, dim);
   const provider = await resolveProvider(user);
+
+  // 선택한 칸만 재생성(부분)
+  if (cells && cells.length > 0) {
+    let queued = 0;
+    for (const cell of cells) {
+      const key = typeof cell.key === "string" && cell.key ? cell.key : "all";
+      const pk = typeof cell.periodKey === "string" ? cell.periodKey : "";
+      if (!pk) continue;
+      const [existing] = await db
+        .select()
+        .from(rollups)
+        .where(and(boardMatch(user.id, dim, key, period), eq(rollups.periodKey, pk)))
+        .limit(1);
+      if (existing) {
+        await db.update(rollups).set({ llmProvider: provider, status: "pending", updatedAt: new Date() }).where(eq(rollups.id, existing.id));
+      } else {
+        await db.insert(rollups).values({
+          userId: user.id,
+          scope: dim,
+          industryId: dim === "industry" ? key : null,
+          companyName: dim === "company" ? key : null,
+          periodType: period,
+          periodKey: pk,
+          llmProvider: provider,
+          status: "pending",
+        });
+      }
+      queued++;
+    }
+    return c.json({ queued });
+  }
+
+  const keys = await boardKeys(user.id, dim);
   const n = period === "year" ? 5 : 12;
   const pks = periodKeys(period, n);
   let queued = 0;
