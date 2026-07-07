@@ -416,15 +416,14 @@ async function boardKeys(userId: string, dim: Dim): Promise<{ key: string; label
   const inds = await db.select({ id: industries.id, name: industries.name }).from(industries).where(inArray(industries.id, ids));
   return inds
     .map((i) => ({ key: i.id, label: i.name, star: followedOrder.has(i.id) }))
-    .sort((a, b) =>
-      a.star !== b.star
-        ? a.star
-          ? -1
-          : 1
-        : a.star
-          ? (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0)
-          : a.label.localeCompare(b.label),
-    );
+    .sort((a, b) => {
+      const am = a.label === "기타";
+      const bm = b.label === "기타";
+      if (am !== bm) return am ? 1 : -1; // '기타'는 항상 맨 밑
+      if (a.star !== b.star) return a.star ? -1 : 1; // 관심(★) 우선
+      if (a.star) return (followedOrder.get(a.key) ?? 0) - (followedOrder.get(b.key) ?? 0);
+      return a.label.localeCompare(b.label);
+    });
 }
 
 // 한 (dim,key)의 기간 시리즈 칸들
