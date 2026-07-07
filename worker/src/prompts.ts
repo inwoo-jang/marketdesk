@@ -102,9 +102,13 @@ export function buildExtractPrompt(document: string, ctx: { docType: string; len
 export function buildRollupPrompt(industryName: string, period: string, digest: string): string {
   return (
     `아래는 '${industryName}'의 ${period} 기간 분석 엔트리 모음이다.\n` +
-    `이 엔트리들만 근거로(새 사실·숫자 생성 금지) 해당 기간의 흐름을 정리하라.\n` +
+    `이 엔트리들만 근거로(새 사실·숫자 생성 금지) 해당 기간의 흐름을 유저에게 유용한 '사실·정보' 위주로 정리하라.\n` +
     `- one_liner: 흐름 한 줄. UI에서 기간은 따로 표시되므로 '${period}', '2026년 7월' 같은 기간 머리말로 시작하지 말 것.\n` +
-    `- facts: [{type, content}] 배열. 여러 리포트가 같은 방향이면 type='common'(공통 팩트), 엇갈리면 type='conflict'(엇갈림).\n` +
+    `- facts: [{type, content}] 배열. content 는 사실·정보 자체를 서술(무엇이 어떻게 됐는지, 어떤 종목·수치·이벤트인지).\n` +
+    `  · 절대 금지(메타 표현): '두 리포트 모두', '리포트들은', '~라고 분석/제시/지목한다', '유안타증권이 발간', '두 곳 다' 같은 리포트·발행사·개수 언급.\n` +
+    `  · type='common' = 여러 근거에서 반복 확인되는 핵심 사실/테마를 '정보'로 서술. type='conflict' = 엇갈리는 지점을 서술.\n` +
+    `  · 예) 나쁨: '두 리포트 모두 국내 AI SW 종목으로 코난테크놀로지와 솔트룩스를 지목한다' → 좋음: '국내 AI 소프트웨어 대표주로 코난테크놀로지·솔트룩스가 부각됐다'.\n` +
+    `  · 예) 나쁨: '두 리포트 모두 생성형 AI 확산이 성장을 촉발한 것으로 분석한다' → 좋음: '생성형 AI 확산으로 AI 소프트웨어 수요가 커지며 산업 성장이 가속됐다'.\n` +
     `출력 JSON: {"one_liner":"","facts":[{"type":"common","content":""}]}` +
     STRICT_JSON +
     `\n\n--- 엔트리 모음 ---\n${digest}`
