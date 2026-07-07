@@ -101,6 +101,16 @@ export default function BoardPage() {
       setBusy(false);
     }
   }
+  async function regenerateAll() {
+    if (!confirm("이미 만들어진 흐름을 모두 다시 생성할까요? (분석 1건 차감, 갱신 중에도 기존 내용은 보여요)")) return;
+    setBusy(true);
+    try {
+      await api.generateAllBoard({ dim, period, regenerate: true }).catch(() => null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const pendingCount = rows?.reduce((n, r) => n + r.cells.filter((c) => c.rollup?.status === "pending").length, 0) ?? 0;
 
@@ -160,13 +170,23 @@ export default function BoardPage() {
             ))}
           </div>
         )}
-        <button
-          onClick={generateAll}
-          disabled={busy || !rows || rows.length === 0}
-          className="ml-auto rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:brightness-105 disabled:opacity-50"
-        >
-          {busy ? "생성 요청 중..." : pendingCount > 0 ? `생성 중 ${pendingCount}` : "빈 칸 모두 생성"}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={regenerateAll}
+            disabled={busy || !rows || rows.length === 0}
+            title="이미 만들어진 흐름을 모두 다시 생성(최신 요약 방식 반영)"
+            className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-sub hover:bg-bg-deep disabled:opacity-50"
+          >
+            모두 다시 생성
+          </button>
+          <button
+            onClick={generateAll}
+            disabled={busy || !rows || rows.length === 0}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:brightness-105 disabled:opacity-50"
+          >
+            {busy ? "생성 요청 중..." : pendingCount > 0 ? `생성 중 ${pendingCount}` : "빈 칸 모두 생성"}
+          </button>
+        </div>
       </div>
 
       {/* 행 필터: 산업=산업, 기업=계열별 */}

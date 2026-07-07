@@ -156,7 +156,7 @@ export const api = {
     get<{ dim: BoardDim; period: "month" | "year"; rows: BoardRow[] }>(
       `/api/me/board/rows?dim=${params.dim}&period=${params.period}`,
     ),
-  generateAllBoard: (input: { dim: BoardDim; period: "month" | "year" }) =>
+  generateAllBoard: (input: { dim: BoardDim; period: "month" | "year"; regenerate?: boolean }) =>
     post<{ queued: number }>("/api/me/board/generate-all", input),
   boardFeed: (params: { dim: BoardDim; key: string; period: "month" | "year"; periodKey: string }) => {
     const q = new URLSearchParams({ dim: params.dim, key: params.key, period: params.period, periodKey: params.periodKey });

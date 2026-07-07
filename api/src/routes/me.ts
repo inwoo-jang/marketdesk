@@ -522,12 +522,14 @@ meRoute.get("/board/feed", async (c) => {
   });
 });
 
-// POST /api/me/board/generate-all - 대상×기간의 빈 칸을 한 번에 pending 으로(워커가 이어 처리). { dim, period }
+// POST /api/me/board/generate-all - 대상×기간의 빈 칸을 한 번에 pending 으로(워커가 이어 처리). { dim, period, regenerate? }
+// regenerate=true 면 빈 칸이 아니라 이미 생성된 흐름까지 전부 다시 생성(내용은 유지되고 워커가 새로 교체).
 meRoute.post("/board/generate-all", async (c) => {
   const user = c.get("user");
   const b = await c.req.json().catch(() => ({}));
   const dim: Dim = isDim(b.dim) ? b.dim : "industry";
   const period = b.period === "year" ? "year" : "month";
+  const regenerate = b.regenerate === true;
   const quota = await consumeAnalysis(user);
   if (!quota.ok) return c.json({ error: QUOTA_MSG, quota }, 402);
 
@@ -538,6 +540,14 @@ meRoute.post("/board/generate-all", async (c) => {
   let queued = 0;
   for (const k of keys) {
     const existing = await db.select().from(rollups).where(boardMatch(user.id, dim, k.key, period));
+    // 다시 생성: 이미 있는 흐름을 전부 pending 으로 재큐잉(내용 유지, 워커가 새 프롬프트로 교체)
+    if (regenerate) {
+      for (const r of existing) {
+        await db.update(rollups).set({ llmProvider: provider, status: "pending", updatedAt: new Date() }).where(eq(rollups.id, r.id));
+        queued++;
+      }
+      continue;
+    }
     const byPeriod = new Map(existing.map((r) => [r.periodKey, r]));
     const doneKeys = new Set(existing.filter((r) => r.status === "done").map((r) => r.periodKey));
     for (const pk of pks) {
