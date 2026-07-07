@@ -71,7 +71,14 @@ export function normCompany(name: string): string {
   return ALIAS[s] ?? s;
 }
 
-// 그룹(기업집단) 표시명: 음차→영문(에스케이→SK, 엘지→LG, 엘에스→LS ...).
+// 계열 표시명 오버라이드(음차/한글 공식명 → UI 표기).
+const GROUP_DISPLAY: Record<string, string> = {
+  "에쓰-오일": "S-OIL",
+  에쓰오일: "S-OIL",
+};
+
+// 그룹(기업집단) 표시명: 음차→영문(에스케이→SK, 엘지→LG, 엘에스→LS ...) + 표시 오버라이드.
 export function displayGroupName(name: string): string {
-  return transliterate(name.trim());
+  const t = transliterate(name.trim());
+  return GROUP_DISPLAY[t] ?? t;
 }
