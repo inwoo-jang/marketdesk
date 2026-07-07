@@ -57,7 +57,12 @@ export default function BoardFeedPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <a href="/board" className="text-sm text-ink-sub hover:text-ink">← 흐름 보드</a>
+      <button
+        onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/board"))}
+        className="text-sm text-ink-sub hover:text-ink"
+      >
+        ← 흐름 보드
+      </button>
       <div className="mt-3 flex items-center gap-2">
         <h1 className="text-2xl font-bold">{feed.label}</h1>
         <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(feed.periodKey, feed.period)}</span>
