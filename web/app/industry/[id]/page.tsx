@@ -1,11 +1,12 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type MyIndustry, type Industry, type Report, type Rollup, type PublicContent } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
 import { FlowEditor } from "@/components/flow-editor";
+import { WordLookup } from "@/components/word-lookup";
 
 const monthKey = (r: Report) => (r.pubDate ?? r.createdAt).slice(0, 7);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -21,6 +22,7 @@ export default function IndustryDashboard() {
   const [period, setPeriod] = useState(thisMonth());
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const flowRef = useRef<HTMLElement>(null);
 
   const load = useCallback(async () => {
     const me = await api.me().catch(() => ({ user: null }));
@@ -132,8 +134,8 @@ export default function IndustryDashboard() {
         </div>
       </div>
 
-      {/* 월별 흐름(롤업) */}
-      <section className="mt-8">
+      {/* 월별 흐름(롤업) — 단어 클릭/검색 시 AI 용어풀이(WordLookup 대상) */}
+      <section ref={flowRef} className="mt-8">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-ink-muted">월별 흐름</h2>
           <input
@@ -247,6 +249,8 @@ export default function IndustryDashboard() {
           이 산업으로 분류된 자료가 아직 없어요. 업로드하면 AI 가 이 산업으로 매칭하고, 공공 콘텐츠도 함께 모아드려요.
         </p>
       )}
+
+      <WordLookup targetRef={flowRef} contextText={industry?.name ?? ""} />
     </main>
   );
 }
