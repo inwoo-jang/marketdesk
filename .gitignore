@@ -34,6 +34,10 @@ api/.uploads/
 marketdesk-data-bundle.tgz
 *-data-bundle.tgz
 
+# 흐름 스냅샷 MD(데이터 파생물, 앱에서 내려받음) - 커밋 금지
+흐름_스냅샷_*.md
+marketdesk-flow-*.md
+
 # Claude Code 로컬 설정(개인)
 .claude/settings.local.json
 
