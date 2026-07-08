@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage, type PublicContent } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
 import { LoginPanel } from "@/components/login-panel";
 import { UsageBadge } from "@/components/usage-badge";
+import { hasReportSearch, matchesReportSearch } from "@/components/report-search-controls";
 
 // 기간 선택(연도→월→일). 미선택이면 최근 3개월.
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -43,7 +44,7 @@ const CHIP_TONE: Record<DocFilter, string> = {
 };
 
 // 필터 상태를 URL 에 저장/복원(리포트 클릭 → 뒤로가기 시 필터 유지). 카드가 전체 이동이라 URL 필수.
-type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean; sortBy: "pub" | "created" };
+type FeedState = { view: "all" | "bookmarks" | "hidden"; docFilter: DocFilter; dateSel: DateSel; page: number; hidePublic: boolean; sortBy: "pub" | "created"; q?: string };
 function readFeedUrl(): FeedState {
   const def: FeedState = { view: "all", docFilter: "all", dateSel: { year: null, month: null, day: null }, page: 1, hidePublic: true, sortBy: "pub" };
   if (typeof window === "undefined") return def;
@@ -59,6 +60,7 @@ function readFeedUrl(): FeedState {
     page: p && p > 0 ? p : 1,
     hidePublic: q.get("sp") !== "1", // 기본 숨김. sp=1 이면 공공 표시
     sortBy: q.get("sort") === "created" ? "created" : "pub",
+    q: q.get("q") ?? "",
   };
 }
 function writeFeedUrl(s: FeedState) {
@@ -72,6 +74,9 @@ function writeFeedUrl(s: FeedState) {
   if (s.page !== 1) q.set("page", String(s.page));
   if (!s.hidePublic) q.set("sp", "1"); // 공공 표시일 때만 URL 에 기록(기본은 숨김)
   if (s.sortBy === "created") q.set("sort", "created");
+  const currentQ = new URLSearchParams(window.location.search).get("q") ?? "";
+  const searchQ = s.q ?? currentQ;
+  if (searchQ.trim()) q.set("q", searchQ.trim());
   const qs = q.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
@@ -167,6 +172,7 @@ export default function Home() {
   const [total, setTotal] = useState(0);
   const [hidePublic, setHidePublic] = useState(true);
   const [sortBy, setSortBy] = useState<"pub" | "created">("pub");
+  const [feedQuery, setFeedQuery] = useState("");
   const [isDev, setIsDev] = useState(false);
   const [favGroups, setFavGroups] = useState<string[]>([]);
   const [favCompanies, setFavCompanies] = useState<string[]>([]);
@@ -174,10 +180,12 @@ export default function Home() {
   const [drag, setDrag] = useState<{ kind: "ind" | "group" | "company"; idx: number } | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const feedReqSeq = useRef(0);
   const PAGE_SIZE = 20;
 
   // 탭(view)·docType·기간·페이지에 맞는 리포트+공공 로드. hp=공공 숨기기(전체 뷰). sort=정렬(업로드순은 기간 무시·최신 100개).
-  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel, hp: boolean, sort: "pub" | "created") => {
+  const loadFeed = useCallback(async (v: "all" | "bookmarks" | "hidden", p: number, df: DocFilter, ds: DateSel, hp: boolean, sort: "pub" | "created", q = "") => {
+    const reqSeq = ++feedReqSeq.current;
     // 발간일순=기간 필터(pubDate). 업로드순=최근 3개월 업로드분(createdAt)만, 업로드순 정렬.
     const range = computeRange(ds);
     const from = sort === "created" ? undefined : range.from;
@@ -187,7 +195,7 @@ export default function Home() {
     const repP =
       df === "public"
         ? Promise.resolve({ reports: [] as Report[], total: 0 })
-        : api.myReports({ view: v, docType: dt, from, to, uploadedFrom, page: p });
+        : api.myReports({ view: v, docType: dt, from, to, uploadedFrom, page: p, q: q.trim() || undefined });
     // 공공: 전체 뷰(all)에서 df=all(숨기기 아닐 때) 또는 df=public 일 때 로드. 저장/숨김 탭은 각 목록.
     const wantPublic = v === "all" && (df === "public" || (df === "all" && !hp));
     const pubP =
@@ -201,6 +209,7 @@ export default function Home() {
             ? api.bookmarkedContents()
             : api.hiddenContents();
     const [rep, pc] = await Promise.all([repP, pubP.catch(() => ({ contents: [] as PublicContent[] }))]);
+    if (reqSeq !== feedReqSeq.current) return;
     setRecent(rep.reports);
     setTotal(rep.total ?? rep.reports.length);
     // 숨김/저장 탭의 공공도 docType·기간 필터 적용(리포트와 동일하게)
@@ -245,9 +254,10 @@ export default function Home() {
         setPage(init.page);
         setHidePublic(init.hidePublic);
         setSortBy(init.sortBy);
+        setFeedQuery(init.q ?? "");
         await Promise.all([
           loadData().catch(() => {}),
-          loadFeed(init.view, init.page, init.docFilter, init.dateSel, init.hidePublic, init.sortBy).catch(() => {}),
+          loadFeed(init.view, init.page, init.docFilter, init.dateSel, init.hidePublic, init.sortBy, init.q ?? "").catch(() => {}),
         ]);
       }
       setLoaded(true);
@@ -257,13 +267,13 @@ export default function Home() {
   function switchView(v: "all" | "bookmarks" | "hidden") {
     setView(v);
     setPage(1);
-    writeFeedUrl({ view: v, docFilter, dateSel, page: 1, hidePublic, sortBy });
-    loadFeed(v, 1, docFilter, dateSel, hidePublic, sortBy).catch(() => {});
+    writeFeedUrl({ view: v, docFilter, dateSel, page: 1, hidePublic, sortBy, q: feedQuery });
+    loadFeed(v, 1, docFilter, dateSel, hidePublic, sortBy, feedQuery).catch(() => {});
   }
   function goPage(p: number) {
     setPage(p);
-    writeFeedUrl({ view, docFilter, dateSel, page: p, hidePublic, sortBy });
-    loadFeed(view, p, docFilter, dateSel, hidePublic, sortBy).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: p, hidePublic, sortBy, q: feedQuery });
+    loadFeed(view, p, docFilter, dateSel, hidePublic, sortBy, feedQuery).catch(() => {});
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function applyDoc(df: DocFilter) {
@@ -272,20 +282,20 @@ export default function Home() {
     setDocFilter(df);
     setSortBy(sb);
     setPage(1);
-    writeFeedUrl({ view, docFilter: df, dateSel, page: 1, hidePublic, sortBy: sb });
-    loadFeed(view, 1, df, dateSel, hidePublic, sb).catch(() => {});
+    writeFeedUrl({ view, docFilter: df, dateSel, page: 1, hidePublic, sortBy: sb, q: feedQuery });
+    loadFeed(view, 1, df, dateSel, hidePublic, sb, feedQuery).catch(() => {});
   }
   function applyDate(ds: DateSel) {
     setDateSel(ds);
     setPage(1);
-    writeFeedUrl({ view, docFilter, dateSel: ds, page: 1, hidePublic, sortBy });
-    loadFeed(view, 1, docFilter, ds, hidePublic, sortBy).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel: ds, page: 1, hidePublic, sortBy, q: feedQuery });
+    loadFeed(view, 1, docFilter, ds, hidePublic, sortBy, feedQuery).catch(() => {});
   }
   function applySort(sb: "pub" | "created") {
     setSortBy(sb);
     setPage(1);
-    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic, sortBy: sb });
-    loadFeed(view, 1, docFilter, dateSel, hidePublic, sb).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic, sortBy: sb, q: feedQuery });
+    loadFeed(view, 1, docFilter, dateSel, hidePublic, sb, feedQuery).catch(() => {});
   }
   function toggleHidePublic() {
     const hp = !hidePublic;
@@ -294,8 +304,8 @@ export default function Home() {
     setHidePublic(hp);
     setSortBy(sb);
     setPage(1);
-    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic: hp, sortBy: sb });
-    loadFeed(view, 1, docFilter, dateSel, hp, sb).catch(() => {});
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic: hp, sortBy: sb, q: feedQuery });
+    loadFeed(view, 1, docFilter, dateSel, hp, sb, feedQuery).catch(() => {});
   }
   async function runIngestPublic() {
     try {
@@ -305,14 +315,20 @@ export default function Home() {
       alert(e instanceof Error ? e.message : "실행 실패");
     }
   }
+  function applyFeedQuery(q: string) {
+    setFeedQuery(q);
+    setPage(1);
+    writeFeedUrl({ view, docFilter, dateSel, page: 1, hidePublic, sortBy, q });
+    loadFeed(view, 1, docFilter, dateSel, hidePublic, sortBy, q).catch(() => {});
+  }
 
   // 분석중 리포트 있으면 폴링
   useEffect(() => {
     if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic, sortBy).catch(() => {}), 2500);
+      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic, sortBy, feedQuery).catch(() => {}), 2500);
       return () => clearInterval(t);
     }
-  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic, sortBy]);
+  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic, sortBy, feedQuery]);
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
@@ -425,6 +441,27 @@ export default function Home() {
           </a>
         </div>
       </header>
+
+      <section className="mb-8 rounded-card border border-line bg-card p-4 shadow-card">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-ink-muted">검색</span>
+          <div className="flex gap-2">
+            <input
+              value={feedQuery}
+              onChange={(e) => applyFeedQuery(e.target.value)}
+              placeholder="제목이나 부제목 검색"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={() => applyFeedQuery("")}
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-sub hover:bg-bg-deep"
+            >
+              초기화
+            </button>
+          </div>
+        </label>
+      </section>
 
       {/* 내 산업(핀) = 펼치기 전 보이는 산업 */}
       <section className="mb-8">
@@ -703,9 +740,10 @@ export default function Home() {
         </div>
 
         {(() => {
+          const search = { q: feedQuery, from: "", to: "" };
           // 정렬 키: 발간일순=pubDate(없으면 생성일), 업로드순=생성일(createdAt)
           const items = [
-            ...recent.map((r) => ({
+            ...recent.filter((r) => matchesReportSearch(r, search)).map((r) => ({
               k: `r-${r.id}`,
               d: sortBy === "created" ? r.createdAt : (r.pubDate ?? r.createdAt),
               n: (
@@ -713,7 +751,7 @@ export default function Home() {
               ),
             })),
             ...(page === 1
-              ? pub.map((c) => ({
+              ? pub.filter((c) => matchesReportSearch(c, search)).map((c) => ({
                   k: `p-${c.id}`,
                   d: sortBy === "created" ? (c.createdAt ?? c.pubDate ?? "") : (c.pubDate ?? c.createdAt ?? ""),
                   n: <PublicCard content={c} variant={view === "all" ? "feed" : view} onRemoved={(id) => setPub((p) => p.filter((x) => x.id !== id))} />,
@@ -722,7 +760,9 @@ export default function Home() {
           ].sort((a, b) => new Date(b.d || 0).getTime() - new Date(a.d || 0).getTime());
           return items.length === 0 ? (
             <p className="rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
-              {view === "all" ? "이 기간·분류에 표시할 자료가 없어요. 기간을 넓히거나 “+ 업로드” 해보세요." : view === "bookmarks" ? "저장한 항목이 없어요." : "숨긴 항목이 없어요."}
+              {hasReportSearch(search)
+                ? "조건에 맞는 결과가 없어요."
+                : view === "all" ? "이 기간·분류에 표시할 자료가 없어요. 기간을 넓히거나 “+ 업로드” 해보세요." : view === "bookmarks" ? "저장한 항목이 없어요." : "숨긴 항목이 없어요."}
             </p>
           ) : (
             <div className="space-y-2">{items.map((x) => <div key={x.k}>{x.n}</div>)}</div>

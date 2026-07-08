@@ -4,13 +4,16 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Report, type MyIndustry } from "@/lib/api";
 import { ReportCard } from "@/components/report-card";
-import { foreignCountryOf, isForeignName } from "@/lib/companies";
+import { companyAliases, foreignCountryOf, isForeignName, KNOWN_COMPANY_CHIPS } from "@/lib/companies";
+import { hasReportSearch, matchesReportSearch, ReportSearchControls, type ReportSearchState } from "@/components/report-search-controls";
 
 const TYPE_LABEL: Record<string, string> = { industry: "산업리포트", company: "기업리포트", news: "뉴스" };
 const dnum = (r: Report) => new Date(r.pubDate ?? r.createdAt).getTime();
 const byDateDesc = (a: Report, b: Report) => dnum(b) - dnum(a);
 const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
 const newsMentions = (r: Report, name: string) => norm(`${r.title ?? ""} ${r.summary ?? ""}`).includes(norm(name));
+const newsMentionsCompany = (r: Report, name: string) => companyAliases(name).some((alias) => newsMentions(r, alias));
+const sameCompanyName = (value: string, name: string) => companyAliases(name).some((alias) => norm(value) === norm(alias));
 
 // 기업리포트: (계열별 또는 산업별) → 기업. 관련 뉴스는 리스트에 함께([뉴스] 배지·색차별). 산업리포트=산업별.
 export default function DocsFeed() {
@@ -25,6 +28,7 @@ export default function DocsFeed() {
   const [indFilter, setIndFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [company, setCompany] = useState<string | null>(null);
+  const [search, setSearch] = useState<ReportSearchState>({ q: "", from: "", to: "" });
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -57,6 +61,7 @@ export default function DocsFeed() {
     if (q.get("c")) setCompany(q.get("c"));
     if (q.get("i")) setIndFilter(q.get("i"));
     if (q.get("g")) setGroupFilter(q.get("g"));
+    setSearch({ q: q.get("q") ?? "", from: q.get("from") ?? "", to: q.get("to") ?? "" });
   }, []);
   // 필터 변경 시 URL 저장
   useEffect(() => {
@@ -66,9 +71,12 @@ export default function DocsFeed() {
     if (indFilter) q.set("i", indFilter);
     if (groupFilter) q.set("g", groupFilter);
     if (company) q.set("c", company);
+    if (search.q.trim()) q.set("q", search.q.trim());
+    if (search.from) q.set("from", search.from);
+    if (search.to) q.set("to", search.to);
     const qs = q.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [loaded, type, companyBy, indFilter, groupFilter, company]);
+  }, [loaded, type, companyBy, indFilter, groupFilter, company, search]);
   useEffect(() => {
     if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
       const t = setInterval(() => load().catch(() => {}), 2500);
@@ -84,8 +92,9 @@ export default function DocsFeed() {
       </main>
     );
 
-  const reports = all.filter((r) => r.docType === type);
-  const news = all.filter((r) => r.docType === "news");
+  const baseReports = all.filter((r) => r.docType === type);
+  const reports = baseReports.filter((r) => matchesReportSearch(r, search));
+  const news = all.filter((r) => r.docType === "news" && matchesReportSearch(r, search));
   const onDelete = async (rid: string) => {
     await api.deleteReport(rid);
     load();
@@ -105,7 +114,7 @@ export default function DocsFeed() {
     return isForeignName(c) ? "해외 기타" : "국내 기타";
   };
   const isMisc = (k: string) => k === "국내 기타" || k === "해외 기타" || k === "기타" || k === "_none";
-  const newsFor = (companies: string[]) => news.filter((r) => companies.some((n) => newsMentions(r, n)));
+  const newsFor = (companies: string[]) => news.filter((r) => companies.some((n) => newsMentionsCompany(r, n)));
 
   async function toggleFav(kind: "group" | "company", value: string) {
     const cur = kind === "group" ? favGroups : favCompanies;
@@ -135,6 +144,13 @@ export default function DocsFeed() {
   // 계열 칩
   const groupCount = new Map<string, number>();
   if (type === "company") for (const r of reports) groupCount.set(groupOf(r.company), (groupCount.get(groupOf(r.company)) ?? 0) + 1);
+  if (type === "company")
+    for (const c of KNOWN_COMPANY_CHIPS) {
+      if (!reports.some((r) => r.company && sameCompanyName(r.company.trim(), c)) && news.some((r) => newsMentionsCompany(r, c))) {
+        const g = groupOf(c);
+        groupCount.set(g, (groupCount.get(g) ?? 0) + 1);
+      }
+    }
   const groupChips = [...groupCount.entries()]
     .sort((a, b) => {
       const fa = favGroups.has(a[0]);
@@ -149,15 +165,22 @@ export default function DocsFeed() {
   const cFilter = companyBy === "group" ? groupFilter : indFilter;
   const inScope = (r: Report) =>
     companyBy === "group" ? groupOf(r.company) === cFilter : (r.industries ?? []).some((i) => i.id === cFilter);
-  const companyChips =
-    type === "company"
-      ? [...new Set(reports.filter((r) => !cFilter || inScope(r)).map((r) => r.company?.trim()).filter((c): c is string => !!c))].sort((a, b) => {
-          const fa = favCompanies.has(a);
-          const fb = favCompanies.has(b);
-          if (fa !== fb) return fa ? -1 : 1; // 별표 우선
-          return a.localeCompare(b);
-        })
+  const companyChipSort = (a: string, b: string) => {
+    const fa = favCompanies.has(a);
+    const fb = favCompanies.has(b);
+    if (fa !== fb) return fa ? -1 : 1; // 별표 우선
+    return a.localeCompare(b);
+  };
+  const reportCompanyChips =
+    type === "company" ? [...new Set(reports.filter((r) => !cFilter || inScope(r)).map((r) => r.company?.trim()).filter((c): c is string => !!c))] : [];
+  const knownNewsCompanyChips =
+    type === "company" && companyBy === "group" && cFilter
+      ? KNOWN_COMPANY_CHIPS.filter(
+          (c) => !reportCompanyChips.some((name) => sameCompanyName(name, c)) && groupOf(c) === cFilter && news.some((r) => newsMentionsCompany(r, c)),
+        )
       : [];
+  const companyChips =
+    type === "company" ? [...new Set([...reportCompanyChips, ...knownNewsCompanyChips])].sort(companyChipSort) : [];
 
   const relatedCompanyReports =
     type === "industry" && indFilter
@@ -166,10 +189,16 @@ export default function DocsFeed() {
 
   // ── 본문 ──
   let body: React.ReactNode;
-  if (reports.length === 0) {
+  if (baseReports.length === 0) {
     body = (
       <p className="mt-6 rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
         아직 {label}로 분류된 문서가 없어요. <a href="/upload" className="text-primary">업로드</a> 하면 AI 가 자동 분류합니다.
+      </p>
+    );
+  } else if (reports.length === 0 && (type !== "company" || news.length === 0)) {
+    body = (
+      <p className="mt-6 rounded-card bg-card p-6 text-sm text-ink-sub shadow-card">
+        조건에 맞는 결과가 없어요.
       </p>
     );
   } else if (type === "news") {
@@ -184,12 +213,12 @@ export default function DocsFeed() {
             {company}
             {cc && <span className="ml-1.5 text-sm font-normal text-ink-muted">({cc})</span>}
           </h2>
-          <List reports={[...reports.filter((r) => r.company?.trim() === company), ...newsFor([company])].sort(byDateDesc)} onDelete={onDelete} />
+          <List reports={[...reports.filter((r) => r.company && sameCompanyName(r.company.trim(), company)), ...newsFor([company])].sort(byDateDesc)} onDelete={onDelete} />
         </>
       );
     } else if (cFilter) {
       const inReports = reports.filter(inScope);
-      const companies = [...new Set(inReports.map((r) => r.company?.trim()).filter((c): c is string => !!c))];
+      const companies = companyBy === "group" ? companyChips : [...new Set(inReports.map((r) => r.company?.trim()).filter((c): c is string => !!c))];
       body = <List reports={[...inReports, ...newsFor(companies)].sort(byDateDesc)} onDelete={onDelete} />;
     } else {
       // 전체: 계열/산업별 그룹 + 각 그룹의 뉴스 함께
@@ -232,6 +261,22 @@ export default function DocsFeed() {
             ? "계열별/산업별 → 기업 순으로 보고, 관련 뉴스도 함께 떠요."
             : "산업별로 골라 보거나 전체를 발간일 최신순으로."}
       </p>
+
+      <div className="mt-5">
+        <ReportSearchControls
+          value={search}
+          onChange={(next) => {
+            setSearch(next);
+            setCompany(null);
+          }}
+          placeholder="제목이나 부제목 검색"
+        />
+        {hasReportSearch(search) && (
+          <p className="mt-2 text-xs text-ink-muted">
+            검색 결과 {reports.length}건
+          </p>
+        )}
+      </div>
 
       {/* 기업: 계열별/산업별 토글 */}
       {type === "company" && (
