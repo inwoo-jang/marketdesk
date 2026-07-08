@@ -1,13 +1,14 @@
-import { eq, and, isNull, ne, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, ne, isNotNull, inArray } from "drizzle-orm";
 import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses, rollups } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
 import { verifyNumbers } from "./guardrail.js";
 import { getProvider } from "./providers/index.js";
-import { simhash, hamming } from "./simhash.js";
+import { simhash, hamming, tokenCount } from "./simhash.js";
 
-const SIMHASH_DUP_THRESHOLD = 6; // Hamming 거리 이하면 유사 중복으로 판단(64bit 중)
+const SIMHASH_DUP_THRESHOLD = 4; // Hamming 거리 이하면 유사 중복(64bit 중). 오탐 줄이려 6→4.
+const SIMHASH_MIN_TOKENS = 200; // 짧은 문서는 SimHash 오탐이 잦아 유사 판정에서 제외
 
 type Report = typeof reports.$inferSelect;
 
@@ -48,27 +49,7 @@ export async function processReport(report: Report): Promise<void> {
     const document = buildDocument(pages);
     const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=로컬 CLI 가능)
 
-    // 유사 중복 감지: 본문 SimHash 로 내 다른 리포트와 비교(가장 가까운 것 하나)
     const sim = simhash(document);
-    let dupOf: string | null = null;
-    const others = await db
-      .select({ id: reports.id, simhash: reports.simhash })
-      .from(reports)
-      .where(
-        and(
-          eq(reports.userId, report.userId),
-          eq(reports.parseStatus, "parsed"),
-          ne(reports.id, report.id),
-          isNull(reports.dupOf),
-          isNotNull(reports.simhash),
-        ),
-      );
-    for (const o of others) {
-      if (o.simhash && hamming(sim, o.simhash) <= SIMHASH_DUP_THRESHOLD) {
-        dupOf = o.id;
-        break;
-      }
-    }
 
     // AI 메타 추출(제목·발간일·요약·타입·멀티산업) + 카탈로그 매칭. 확인된 산업은 덮지 않음.
     const catalog = await db
@@ -78,6 +59,37 @@ export async function processReport(report: Report): Promise<void> {
     const meta = await provider.analyze(document, catalog.map((c) => c.name));
     const matchedRows = catalog.filter((c) => meta.industries.includes(c.name));
     const primaryId = report.industryConfirmed ? report.industryId : (matchedRows[0]?.id ?? report.industryId);
+
+    // 유사 중복 감지: 본문 SimHash 비교. 단, (1) 짧은 문서 제외 (2) 산업 카테고리가 겹치는 리포트만 후보.
+    // 산업이 정해진 뒤(메타 분석 후) 판정해야 카테고리 교집합을 확인할 수 있음.
+    const newIndIds = new Set<string>(matchedRows.map((r) => r.id));
+    if (report.industryId) newIndIds.add(report.industryId);
+    let dupOf: string | null = null;
+    if (tokenCount(document) >= SIMHASH_MIN_TOKENS && newIndIds.size > 0) {
+      const others = await db
+        .select({ id: reports.id, simhash: reports.simhash })
+        .from(reports)
+        .innerJoin(reportIndustries, eq(reportIndustries.reportId, reports.id))
+        .where(
+          and(
+            eq(reports.userId, report.userId),
+            eq(reports.parseStatus, "parsed"),
+            ne(reports.id, report.id),
+            isNull(reports.dupOf),
+            isNotNull(reports.simhash),
+            inArray(reportIndustries.industryId, [...newIndIds]),
+          ),
+        );
+      const seen = new Set<string>();
+      for (const o of others) {
+        if (seen.has(o.id)) continue; // 산업 조인으로 같은 리포트가 여러 번 나올 수 있음
+        seen.add(o.id);
+        if (o.simhash && hamming(sim, o.simhash) <= SIMHASH_DUP_THRESHOLD) {
+          dupOf = o.id;
+          break;
+        }
+      }
+    }
 
     await db
       .update(reports)

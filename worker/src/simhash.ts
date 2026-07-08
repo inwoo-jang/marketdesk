@@ -34,3 +34,13 @@ export function hamming(a: string, b: string): number {
   }
   return c;
 }
+
+// SimHash 와 동일한 정규화 기준 토큰 수(짧은 문서 유사판정 제외에 사용).
+export function tokenCount(text: string): number {
+  return text
+    .toLowerCase()
+    .replace(/[^0-9a-z가-힣]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean).length;
+}
