@@ -54,7 +54,7 @@ export const api = {
   createIndustry: (name: string, iconColor?: string) =>
     post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
-  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string; uploadedFrom?: string }) => {
+  myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string; uploadedFrom?: string; q?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
     if (params?.docType) q.set("docType", params.docType);
@@ -63,6 +63,7 @@ export const api = {
     if (params?.from) q.set("from", params.from);
     if (params?.to) q.set("to", params.to);
     if (params?.uploadedFrom) q.set("uploadedFrom", params.uploadedFrom);
+    if (params?.q) q.set("q", params.q);
     const qs = q.toString();
     return get<{ reports: Report[]; total?: number; page?: number; pageSize?: number }>(`/api/me/reports${qs ? `?${qs}` : ""}`);
   },
@@ -70,6 +71,22 @@ export const api = {
   unbookmarkReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/bookmark`),
   hideReport: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/hide`),
   unhideReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}/hide`),
+  notDup: (id: string) => post<{ ok: true }>(`/api/me/reports/${id}/not-dup`),
+  setPubDate: (id: string, pubDate: string | null) =>
+    post<{ ok: true }>(`/api/me/reports/${id}/pubdate`, { pubDate }),
+  downloadFlowExport: async () => {
+    const res = await fetch(`${API_URL}/api/me/flow-export.md`, { credentials: "include" });
+    if (!res.ok) throw new Error(`흐름 내보내기 실패: ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `marketdesk-flow-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
   report: (id: string) => get<{ report: Report }>(`/api/me/reports/${id}`),
   reportEntries: (id: string) =>
     get<{ report: Report; entries: EntryFull[]; dupInfo?: { id: string; title: string | null } | null }>(`/api/me/reports/${id}/entries`),
@@ -248,6 +265,7 @@ export type Report = {
   docType: "industry" | "company" | "news" | null;
   company?: string | null;
   pubDate: string | null;
+  fileKey?: string | null; // 스토리지 키({userId}/{uuid}-{원본파일명})
   fileSize: number | null;
   pageCount: number | null;
   requestedLenses: string[] | null;

@@ -6,7 +6,7 @@ import { ReportCard } from "@/components/report-card";
 import { RichNote } from "@/components/rich-note";
 import { FlowEditor } from "@/components/flow-editor";
 import { WordLookup } from "@/components/word-lookup";
-import { knownCountryOf } from "@/lib/companies";
+import { knownCountryOf, normco, companyAliases } from "@/lib/companies";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
 const stripPeriodLead = (text: string, periodKey: string) => {
@@ -29,6 +29,7 @@ const stripPeriodLead = (text: string, periodKey: string) => {
 // 흐름 보드 셀 → 피드: 그 기간·대상의 흐름 요약 + 근거 원문 리포트. 리포트 클릭 → 원문.
 export default function BoardFeedPage() {
   const [data, setData] = useState<BoardFeed | null | "error">(null);
+  const [companies, setCompanies] = useState<string[]>([]); // 내 리포트의 회사명(종목 스캔 사전)
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -49,6 +50,9 @@ export default function BoardFeedPage() {
         return;
       }
       await load();
+      // 종목 스캔용 사전: 내 리포트에 등장한 회사명(중복 제거)
+      const { reports } = await api.myReports().catch(() => ({ reports: [] }));
+      setCompanies([...new Set(reports.map((r) => r.company?.trim()).filter((c): c is string => !!c))]);
     })();
   }, [load]);
 
@@ -57,6 +61,21 @@ export default function BoardFeedPage() {
 
   const feed = data;
   const displayOne = feed.rollup?.oneLiner ? stripPeriodLead(feed.rollup.oneLiner, feed.periodKey) : "";
+
+  // 이 흐름에서 언급된 종목: 흐름 요약 텍스트 + 근거 원문 회사명에서 내 회사 사전과 매칭(추천 아님, 정보 정리).
+  const flowText = normco(`${feed.rollup?.oneLiner ?? ""} ${(feed.rollup?.facts ?? []).map((f) => f.content).join(" ")}`);
+  const reportCos = new Set(data.reports.map((r) => r.company?.trim()).filter((c): c is string => !!c).map((c) => normco(c)));
+  const mentioned =
+    feed.dim === "company"
+      ? []
+      : [...new Map(
+          companies
+            .filter((c) => c.length >= 2 && normco(c) !== normco(feed.label))
+            .filter((c) => reportCos.has(normco(c)) || companyAliases(c).some((a) => flowText.includes(normco(a))))
+            .map((c) => [normco(c), c]),
+        ).values()].sort((a, b) => a.localeCompare(b, "ko"));
+  const coHref = (c: string) =>
+    `/board/feed?dim=company&key=${encodeURIComponent(c)}&period=${feed.period}&periodKey=${feed.periodKey}`;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -88,6 +107,29 @@ export default function BoardFeedPage() {
           onSaved={load}
         />
       </section>
+
+      {/* 이 흐름에서 언급된 종목 — 흐름·원문에 등장한 회사(추천 아님, 정보 정리). 클릭 시 그 종목 흐름으로 이동 */}
+      {mentioned.length > 0 && (
+        <section className="mt-6 rounded-card border border-line bg-card/40 p-4">
+          <div className="mb-2 flex items-baseline gap-2">
+            <h2 className="text-sm font-semibold text-ink">이 흐름에서 언급된 종목</h2>
+            <span className="text-[11px] text-ink-muted">투자 추천이 아니라 흐름에 등장한 종목 정리예요</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {mentioned.map((c) => (
+              <a
+                key={c}
+                href={coHref(c)}
+                title={`${c} 흐름 보기`}
+                className="inline-flex items-center rounded-full border border-primary/25 bg-primary/[0.06] px-2.5 py-1 text-xs font-medium text-primary/90 hover:bg-primary/10"
+              >
+                {c}
+                {knownCountryOf(c) && <span className="ml-1 text-ink-muted">({knownCountryOf(c)})</span>}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 근거 원문 */}
       <h2 className="mb-2 mt-8 text-sm font-semibold text-ink-muted">원문 ({data.reports.length})</h2>

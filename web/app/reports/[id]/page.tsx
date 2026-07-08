@@ -7,6 +7,7 @@ import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
 import { MemoLayer } from "@/components/memo";
 import { RichNote } from "@/components/rich-note";
+import { BookmarkIcon } from "@/components/bookmark-icon";
 
 const DOC_TYPE_LABEL: Record<string, string> = { industry: "산업 리포트", company: "기업 리포트", news: "경제뉴스" };
 
@@ -19,6 +20,9 @@ export default function ReportReviewPage() {
   const [loaded, setLoaded] = useState(false);
   const [hlKey, setHlKey] = useState(0);
   const [dupInfo, setDupInfo] = useState<{ id: string; title: string | null } | null>(null);
+  const [editingPub, setEditingPub] = useState(false);
+  const [pubInput, setPubInput] = useState("");
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -56,6 +60,36 @@ export default function ReportReviewPage() {
     await api.hideReport(id).catch(() => {});
     router.push(dupInfo ? `/reports/${dupInfo.id}` : "/");
   }
+  async function notDup() {
+    // 오탐 해제 = dup_of 제거 → 유사중복 표시 사라짐
+    await api.notDup(id).catch(() => {});
+    setDupInfo(null);
+  }
+  async function savePubDate() {
+    const v = pubInput.trim();
+    try {
+      await api.setPubDate(id, v || null);
+      setEditingPub(false);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "발간일 저장 실패");
+    }
+  }
+  async function toggleBookmark() {
+    if (!report) return;
+    setBookmarkBusy(true);
+    try {
+      if (report.bookmarked) {
+        await api.unbookmarkReport(report.id);
+        setReport({ ...report, bookmarked: false });
+      } else {
+        await api.bookmarkReport(report.id);
+        setReport({ ...report, bookmarked: true });
+      }
+    } finally {
+      setBookmarkBusy(false);
+    }
+  }
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (!report)
@@ -70,6 +104,17 @@ export default function ReportReviewPage() {
       <div className="flex items-center justify-between">
         <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggleBookmark}
+            disabled={bookmarkBusy}
+            title={report.bookmarked ? "저장 해제" : "저장"}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
+              report.bookmarked ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep hover:text-ink"
+            }`}
+          >
+            <BookmarkIcon filled={!!report.bookmarked} className="h-4 w-4" />
+            {report.bookmarked ? "저장됨" : "저장"}
+          </button>
           {report.parseStatus === "parsed" && (
             <a href={`/reports/${id}/print`} className="text-sm text-primary hover:underline">PDF 내보내기</a>
           )}
@@ -82,8 +127,36 @@ export default function ReportReviewPage() {
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
         {report.docType && <span className="rounded bg-ink/5 px-2 py-0.5">{DOC_TYPE_LABEL[report.docType]}</span>}
-        {report.pubDate && <span>발간 {report.pubDate}</span>}
+        {editingPub ? (
+          <span className="inline-flex items-center gap-1">
+            <span>발간</span>
+            <input
+              type="date"
+              value={pubInput}
+              onChange={(e) => setPubInput(e.target.value)}
+              className="rounded border border-line bg-card px-1.5 py-0.5 text-xs outline-none focus:border-primary"
+            />
+            <button onClick={savePubDate} className="font-medium text-primary hover:underline">저장</button>
+            <button onClick={() => setEditingPub(false)} className="text-ink-muted hover:text-ink">취소</button>
+          </span>
+        ) : (
+          <button
+            onClick={() => {
+              setPubInput(report.pubDate ?? "");
+              setEditingPub(true);
+            }}
+            title="발간일 수정"
+            className={`rounded px-2 py-0.5 hover:bg-ink/10 ${report.pubDate ? "bg-ink/5" : "border border-dashed border-line text-ink-sub"}`}
+          >
+            발간 {report.pubDate ?? "-"}
+          </button>
+        )}
         <span>· 추가 {new Date(report.createdAt).toLocaleDateString("ko-KR")}</span>
+        {!report.pubDate && report.fileKey && (
+          <span className="text-ink-muted/80" title="원본 파일명(발간일 확인용)">
+            · 원본 {report.fileKey.replace(/^[^/]+\/[0-9a-f-]{36}-/, "")}
+          </span>
+        )}
       </div>
 
       <IndustryRow report={report} catalog={catalog} onSaved={load} />
@@ -99,6 +172,9 @@ export default function ReportReviewPage() {
             </a>
             <button onClick={mergeHide} className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-sub hover:bg-bg-deep">
               이 리포트 숨기기(병합)
+            </button>
+            <button onClick={notDup} className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-sub hover:bg-bg-deep">
+              유사 아님
             </button>
           </div>
         </div>

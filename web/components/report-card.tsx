@@ -37,7 +37,8 @@ export function ReportCard({
   onRemoved?: (id: string) => void;
 }) {
   const s = STATUS[report.parseStatus] ?? STATUS.pending;
-  const date = fmt(report.pubDate) ?? fmt(report.createdAt);
+  // 발간일은 업로드일로 폴백하지 않는다(없으면 "발간 -"). 폴백하면 업로드일을 발간일로 오인함.
+  const pubDate = fmt(report.pubDate);
   const processing = report.parseStatus === "pending" || report.parseStatus === "parsing";
   const [bm, setBm] = useState(!!report.bookmarked);
   const [busy, setBusy] = useState(false);
@@ -109,7 +110,7 @@ export function ReportCard({
               {i.name}
             </span>
           ))}
-          {date && <span>발간 {date}</span>}
+          <span>발간 {pubDate ?? "-"}</span>
         </div>
       </a>
 

@@ -1132,6 +1132,14 @@ meRoute.get("/reports", async (c) => {
   if (view === "hidden") conds.push(eq(reports.hidden, true));
   else conds.push(eq(reports.hidden, false)); // all·bookmarks 는 숨김 제외
   if (view === "bookmarks") conds.push(eq(reports.bookmarked, true));
+  const q = c.req.query("q")?.replace(/\s/g, "").trim().toLowerCase().slice(0, 80);
+  if (q) {
+    const pattern = `%${q}%`;
+    conds.push(sql`(
+      regexp_replace(lower(coalesce(${reports.title}, '')), '[[:space:]]+', '', 'g') like ${pattern}
+      or regexp_replace(lower(coalesce(${reports.summary}, '')), '[[:space:]]+', '', 'g') like ${pattern}
+    )`);
+  }
   // 기간 필터(발간일 기준, 없으면 추가일). from/to = YYYY-MM-DD
   const from = c.req.query("from");
   const to = c.req.query("to");
@@ -1189,6 +1197,114 @@ meRoute.post("/reports/:id/bookmark", async (c) => {
 meRoute.delete("/reports/:id/bookmark", async (c) => {
   await setReportFlag(c.get("user").id, c.req.param("id"), { bookmarked: false });
   return c.json({ ok: true });
+});
+
+// POST /api/me/reports/:id/not-dup - 유사 중복 오탐 해제. dup_of 를 비워 유사중복 표시 제거.
+meRoute.post("/reports/:id/not-dup", async (c) => {
+  const user = c.get("user");
+  await db
+    .update(reports)
+    .set({ dupOf: null })
+    .where(and(eq(reports.id, c.req.param("id")), eq(reports.userId, user.id)));
+  return c.json({ ok: true });
+});
+
+// POST /api/me/reports/:id/pubdate - 발간일 수동 수정. { pubDate: "YYYY-MM-DD" | null }
+// 발간일 변경 시 엔트리의 entry_date 도 함께 맞춰 대시보드·흐름보드 월 표기가 일치하게 한다.
+meRoute.post("/reports/:id/pubdate", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  const raw = (body as { pubDate?: unknown }).pubDate;
+  const pd = raw === null || raw === "" ? null : typeof raw === "string" ? raw : undefined;
+  if (pd !== null && !/^\d{4}-\d{2}-\d{2}$/.test(pd ?? "")) {
+    return c.json({ error: "발간일은 YYYY-MM-DD 형식이어야 합니다." }, 400);
+  }
+  const res = await db
+    .update(reports)
+    .set({ pubDate: pd })
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .returning({ id: reports.id });
+  if (res.length === 0) return c.json({ error: "리포트를 찾을 수 없습니다." }, 404);
+  if (pd) await db.update(entries).set({ entryDate: pd }).where(eq(entries.reportId, id));
+  return c.json({ ok: true });
+});
+
+// GET /api/me/flow-export.md - 산업·기업 흐름(롤업+facts)을 Markdown 파일로 내려받기.
+meRoute.get("/flow-export.md", async (c) => {
+  const user = c.get("user");
+  const isBlank = (s: string | null | undefined) =>
+    !s || !s.trim() || /분석된 자료가 없|아직 흐름|데이터가 없/.test(s);
+
+  const rows = await db
+    .select({
+      id: rollups.id,
+      scope: rollups.scope,
+      industryName: industries.name,
+      companyName: rollups.companyName,
+      periodType: rollups.periodType,
+      periodKey: rollups.periodKey,
+      oneLiner: rollups.oneLiner,
+    })
+    .from(rollups)
+    .leftJoin(industries, eq(industries.id, rollups.industryId))
+    .where(and(eq(rollups.userId, user.id), eq(rollups.status, "done"), inArray(rollups.scope, ["industry", "company"])));
+
+  const factRows = rows.length
+    ? await db
+        .select({ rollupId: rollupFacts.rollupId, content: rollupFacts.content, sort: rollupFacts.sort })
+        .from(rollupFacts)
+        .where(inArray(rollupFacts.rollupId, rows.map((r) => r.id)))
+    : [];
+  const factsBy = new Map<string, string[]>();
+  for (const f of [...factRows].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))) {
+    if (isBlank(f.content)) continue;
+    const arr = factsBy.get(f.rollupId) ?? [];
+    arr.push(f.content as string);
+    factsBy.set(f.rollupId, arr);
+  }
+
+  // 이름 → { year:[], month:[] } 로 묶기. 최신 기간이 위로.
+  type Item = { periodType: string; periodKey: string; oneLiner: string | null; facts: string[] };
+  const group = (scope: string) => {
+    const by = new Map<string, Item[]>();
+    for (const r of rows) {
+      if (r.scope !== scope) continue;
+      const name = scope === "industry" ? r.industryName : r.companyName;
+      if (!name) continue;
+      const facts = factsBy.get(r.id) ?? [];
+      if (isBlank(r.oneLiner) && facts.length === 0) continue;
+      (by.get(name) ?? by.set(name, []).get(name)!).push({ periodType: r.periodType, periodKey: r.periodKey, oneLiner: r.oneLiner, facts });
+    }
+    return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"));
+  };
+  const render = (entries: [string, Item[]][]) =>
+    entries
+      .map(([name, items]) => {
+        const ordered = [...items].sort((a, b) =>
+          a.periodType !== b.periodType ? (a.periodType === "year" ? -1 : 1) : b.periodKey.localeCompare(a.periodKey),
+        );
+        const lines = ordered.map((it) => {
+          const tag = it.periodType === "year" ? `${it.periodKey} 연간` : it.periodKey;
+          const head = `- **[${tag}]** ${isBlank(it.oneLiner) ? "" : it.oneLiner}`.trimEnd();
+          return [head, ...it.facts.map((f) => `  - ${f}`)].join("\n");
+        });
+        return `### ${name}\n\n${lines.join("\n")}\n`;
+      })
+      .join("\n");
+
+  const indSec = group("industry");
+  const compSec = group("company");
+  const today = new Date().toISOString().slice(0, 10);
+  const md =
+    `# 마켓데스크 흐름 스냅샷 (${today})\n\n` +
+    `> 업로드 리포트·공공 자료를 산업/기업별로 종합한 월별·연별 흐름 요약 모음.\n` +
+    `> 종목 분석용 입력 자료. **투자 자문이 아니라 공개·업로드 자료 기반 정보 정리이며, 투자 판단·책임은 본인에게 있습니다.**\n\n` +
+    `- 산업 ${indSec.length}개 · 기업 ${compSec.length}개\n\n---\n\n## 1. 산업별 흐름\n\n${render(indSec)}\n## 2. 기업별 흐름\n\n${render(compSec)}`;
+
+  c.header("Content-Type", "text/markdown; charset=utf-8");
+  c.header("Content-Disposition", `attachment; filename="marketdesk-flow-${today}.md"`);
+  return c.body(md);
 });
 
 // POST /api/me/reports - 업로드(multipart). PDF 파일 또는 텍스트 입력. report 생성(parse_status=pending).
