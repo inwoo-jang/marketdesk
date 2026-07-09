@@ -44,7 +44,7 @@ function TriggerRow({ f }: { f: FactItem }) {
                 <a href={`/reports/${h.reportId}`} className="text-rose-600 hover:underline">
                   ↳ {h.title ?? "관련 자료"}
                 </a>
-                {h.matched && <span className="ml-1 text-ink-muted">· 겹친 말: {h.matched}</span>}
+                {h.matched && <span className="ml-1 text-ink-muted">· 근거: {h.matched}</span>}
               </li>
             ))}
           </ul>

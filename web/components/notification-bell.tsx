@@ -108,7 +108,7 @@ export function NotificationBell() {
                         </div>
                         {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-ink-sub">{n.body}</p>}
                         {n.detail && <p className="mt-0.5 truncate text-[11px] text-ink-muted">자료: {n.detail}</p>}
-                        {n.matched && <p className="mt-0.5 truncate text-[11px] text-rose-500">겹친 말: {n.matched}</p>}
+                        {n.matched && <p className="mt-0.5 line-clamp-2 text-[11px] text-rose-500">근거: {n.matched}</p>}
                       </div>
                     </div>
                   </a>

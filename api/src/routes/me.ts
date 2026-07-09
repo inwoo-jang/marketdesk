@@ -1601,6 +1601,20 @@ meRoute.post("/notifications/read", async (c) => {
   return c.json({ ok: true });
 });
 
+// DELETE /api/me/notifications - 전체 삭제
+meRoute.delete("/notifications", async (c) => {
+  const user = c.get("user");
+  await db.delete(notifications).where(eq(notifications.userId, user.id));
+  return c.json({ ok: true });
+});
+
+// DELETE /api/me/notifications/:id - 한 건 삭제
+meRoute.delete("/notifications/:id", async (c) => {
+  const user = c.get("user");
+  await db.delete(notifications).where(and(eq(notifications.id, c.req.param("id")), eq(notifications.userId, user.id)));
+  return c.json({ ok: true });
+});
+
 // GET /api/me/reports/:id - 리포트 1건 + 추출 작업 상태(AI 요약 작업 상태 조회)
 meRoute.get("/reports/:id", async (c) => {
   const user = c.get("user");

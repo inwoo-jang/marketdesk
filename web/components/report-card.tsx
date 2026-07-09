@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api, type Report } from "@/lib/api";
 import { BookmarkIcon } from "@/components/bookmark-icon";
@@ -76,7 +77,7 @@ export function ReportCard({
     <div
       className={`group relative rounded-card shadow-card transition hover:ring-1 hover:ring-primary/30 ${tone?.card ?? "bg-card"}`}
     >
-      <a href={`/reports/${report.id}`} className="block p-4 pr-12">
+      <Link href={`/reports/${report.id}`} className="block p-4 pr-12">
         <div className="flex items-center gap-2">
           {report.docType && (
             <span className={`rounded px-1.5 py-0.5 text-[11px] ${tone?.badge ?? "bg-ink/5 text-ink-muted"}`}>
@@ -112,7 +113,7 @@ export function ReportCard({
           ))}
           <span>발간 {pubDate ?? "-"}</span>
         </div>
-      </a>
+      </Link>
 
       {/* 저장(책갈피): 우상단 */}
       <button
