@@ -115,7 +115,7 @@ export default function ReportReviewPage() {
           href={`/reports/${prevId}`}
           replace
           title="이전 자료"
-          className="fixed left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:left-4 lg:left-8"
+          className="fixed left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line/60 bg-card/50 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:left-4 lg:left-8"
         >
           ‹
         </Link>
@@ -125,7 +125,7 @@ export default function ReportReviewPage() {
           href={`/reports/${nextId}`}
           replace
           title="다음 자료"
-          className="fixed right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:right-4 lg:right-8"
+          className="fixed right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line/60 bg-card/50 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:right-4 lg:right-8"
         >
           ›
         </Link>
