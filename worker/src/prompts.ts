@@ -91,19 +91,26 @@ export function buildTriggerJudgePrompt(repText: string, triggers: string[]): st
   );
 }
 
-// 월별 롤업 프롬프트: 한 달 엔트리 모음 → 흐름 한 줄 + 공통/엇갈림. 하위 엔트리만 근거.
-export function buildRollupPrompt(industryName: string, period: string, digest: string): string {
+// 롤업 프롬프트: 한 기간 엔트리 모음 → 흐름 한 줄 + 공통/엇갈림/위험신호. periodKey 로 월(YYYY-MM)/연(YYYY) 판별.
+// 정보의 유효성·유용성이 최우선 — 과압축(구체 사실 손실) 금지. 모델 간 일관성을 위해 규칙을 명시적으로.
+export function buildRollupPrompt(industryName: string, periodKey: string, digest: string): string {
+  const isYear = /^\d{4}$/.test(periodKey);
+  const countRule = isYear
+    ? `common/conflict 합쳐 6~10개. 1년치이므로 과압축 금지 — 비슷한 것만 합치고, 서로 다른 중요한 흐름(분기별 전환·주요 사건·정책·기업 이벤트)은 각각 남긴다.`
+    : `common/conflict 합쳐 3~6개. 비슷한 건 하나로 합치되, 서로 다른 중요한 사실은 뭉뚱그리지 말고 각각 남긴다.`;
   return (
-    `아래는 '${industryName}'의 ${period} 기간 분석 엔트리(내 리포트·공공) 모음이다.\n` +
+    `아래는 '${industryName}'의 ${periodKey} 기간 분석 엔트리(내 리포트·공공) 모음이다.\n` +
     `이 엔트리들만 근거로(새 사실·숫자 생성 금지), '${industryName}' 산업 관점에서 그 기간의 흐름을 종합하라.\n` +
-    `- one_liner: 이 기간 '${industryName}' 산업의 핵심 흐름 한 줄. '${period}' 같은 기간 머리말 금지. 짧고 명확하게.\n` +
-    `- facts: [{type, content}] 배열. 기사별 요약을 그대로 나열하지 말고, 관련된 내용은 묶어 '${industryName}' 산업 관점의 핵심 흐름으로 종합하라.\n` +
-    `  · '${industryName}' 산업에 의미 있는 것 위주. 산업과 직접 관련이 적은 개별 종목 세부·부수 정보(예: 특정 회사의 지엽적 수치, 타 산업 이슈)는 노이즈이니 과감히 제외.\n` +
-    `  · 각 항목은 짧고 깔끔한 한 문장(정보 자체만). 절대 금지: '두 리포트 모두', '리포트들은', '~라고 분석/제시/지목한다', 발행사·개수 언급.\n` +
+    `**정보의 유효성·유용성이 최우선.** 뭉뚱그린 일반론이 아니라, 각 항목에 구체적 근거(수치·기업명·정책·사건)를 담아라. 길이를 위해 핵심 정보를 버리지 마라.\n` +
+    `동일 어조(간결한 평서문)로, 중요도 높은 순으로 정렬한다.\n` +
+    `- one_liner: 이 기간 '${industryName}' 산업의 핵심 흐름 한 줄. '${periodKey}' 같은 기간 머리말 금지.\n` +
+    `- facts: [{type, content}] 배열. 기사별 나열이 아니라 관련 내용을 묶어 '${industryName}' 산업 관점으로 종합.\n` +
+    `  · ${countRule}\n` +
+    `  · '${industryName}' 산업에 의미 있는 것 위주. 산업과 무관한 지엽 정보·타 산업 이슈는 노이즈이니 제외.\n` +
+    `  · 각 항목은 완결된 한 문장(구체 사실 포함). 절대 금지: '두 리포트 모두', '리포트들은', '~라고 분석/제시/지목한다', 발행사·개수 언급.\n` +
     `  · type='common' = 산업의 핵심 흐름·이슈. type='conflict' = 엇갈리는 지점.\n` +
-    `  · type='trigger' = 논리 붕괴 트리거. 지금 이 산업을 떠받치는 지배적 논리(상승/하락 내러티브)가 깨질 관찰 가능한 조건 1~3개.\n` +
+    `  · type='trigger' = 흐름 위험 신호. 지금 이 산업을 떠받치는 지배적 논리(상승/하락)가 깨질 관찰 가능한 조건 1~3개.\n` +
     `    반드시 위 엔트리가 언급한 리스크·전제에 근거(새 사실·의견·수치 생성 금지). 매수/매도 의견이 아니라 관측 신호 형태로. 근거 없으면 trigger 는 넣지 말 것.\n` +
-    `  · 압축이 핵심: common/conflict 는 합쳐 3~5개(비슷한 건 하나로 합침). 8개씩 잘게 쪼개지 말 것. 각 문장 40자 이내.\n` +
     `출력 JSON: {"one_liner":"","facts":[{"type":"common","content":""},{"type":"trigger","content":""}]}` +
     STRICT_JSON +
     `\n\n--- 엔트리 모음 ---\n${digest}`

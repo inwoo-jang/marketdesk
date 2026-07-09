@@ -37,7 +37,8 @@ export class GeminiProvider implements Provider {
   }
 
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
-    return parseRollup(await this.json(buildRollupPrompt(industryName, period, digest), 1500));
+    // 연별은 항목이 많아 여유 있게(과압축 방지). 온도 0.2 는 json() 공용으로 이미 적용.
+    return parseRollup(await this.json(buildRollupPrompt(industryName, period, digest), 2500));
   }
 
   async judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]> {
