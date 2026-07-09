@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage, type PublicContent } from "@/lib/api";
+import { useScrollRestore } from "@/lib/use-scroll-restore";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
@@ -155,6 +156,7 @@ function DateRange({ sel, onChange }: { sel: DateSel; onChange: (d: DateSel) => 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loaded, setLoaded] = useState(false);
+  useScrollRestore(loaded);
 
   const [lenses, setLenses] = useState<Lens[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);

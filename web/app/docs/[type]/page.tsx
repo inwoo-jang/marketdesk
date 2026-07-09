@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Report, type MyIndustry } from "@/lib/api";
+import { useScrollRestore } from "@/lib/use-scroll-restore";
 import { ReportCard } from "@/components/report-card";
 import { companyAliases, foreignCountryOf, isForeignName, KNOWN_COMPANY_CHIPS } from "@/lib/companies";
 import { hasReportSearch, matchesReportSearch, ReportSearchControls, type ReportSearchState } from "@/components/report-search-controls";
@@ -30,6 +31,7 @@ export default function DocsFeed() {
   const [company, setCompany] = useState<string | null>(null);
   const [search, setSearch] = useState<ReportSearchState>({ q: "", from: "", to: "" });
   const [loaded, setLoaded] = useState(false);
+  useScrollRestore(loaded);
 
   const load = useCallback(async () => {
     const me = await api.me().catch(() => ({ user: null }));
