@@ -72,6 +72,17 @@ export default function BoardFeedPage() {
     })();
   }, [load]);
 
+  // 이전/다음 기간 이동: 히스토리에 쌓지 않도록 replaceState + 데이터 리로드(피드는 한 칸 유지)
+  // → '← 흐름 보드'(history.back) 가 항상 보드로, 스크롤도 복원.
+  const goPeriod = (pk: string) => {
+    const q = new URLSearchParams(window.location.search);
+    q.set("periodKey", pk);
+    window.history.replaceState(null, "", `?${q.toString()}`);
+    setActiveFactId(null);
+    setData(null);
+    load();
+  };
+
   if (data === null) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (data === "error") return <main className="p-12 text-ink-sub">불러오지 못했어요. <a href="/board" className="text-primary">흐름 보드</a></main>;
 
@@ -150,19 +161,17 @@ export default function BoardFeedPage() {
           const prev = shiftPeriod(feed.periodKey, feed.period, -1);
           const next = shiftPeriod(feed.periodKey, feed.period, 1);
           const canNext = next <= nowPeriodKey(feed.period); // 미래는 막음
-          const href = (pk: string) =>
-            `/board/feed?dim=${feed.dim}&key=${encodeURIComponent(feed.key)}&period=${feed.period}&periodKey=${pk}`;
           const btn = "flex h-7 w-7 items-center justify-center rounded-full text-ink-sub hover:bg-bg-deep";
           return (
             <div className="flex items-center gap-0.5">
-              <a href={href(prev)} title={`이전 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
+              <button onClick={() => goPeriod(prev)} title={`이전 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
                 ‹
-              </a>
+              </button>
               <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted tabular-nums">{fmt(feed.periodKey, feed.period)}</span>
               {canNext ? (
-                <a href={href(next)} title={`다음 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
+                <button onClick={() => goPeriod(next)} title={`다음 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
                   ›
-                </a>
+                </button>
               ) : (
                 <span className={`${btn} cursor-default opacity-30`}>›</span>
               )}
