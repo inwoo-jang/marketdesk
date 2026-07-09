@@ -113,6 +113,7 @@ export default function ReportReviewPage() {
       {prevId && (
         <Link
           href={`/reports/${prevId}`}
+          replace
           title="이전 자료"
           className="fixed left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:left-4 lg:left-8"
         >
@@ -122,6 +123,7 @@ export default function ReportReviewPage() {
       {nextId && (
         <Link
           href={`/reports/${nextId}`}
+          replace
           title="다음 자료"
           className="fixed right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:right-4 lg:right-8"
         >
@@ -134,7 +136,7 @@ export default function ReportReviewPage() {
           onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/"))}
           className="text-sm text-ink-sub hover:text-ink"
         >
-          ← 뒤로
+          ← 목록으로
         </button>
         <div className="flex items-center gap-3">
           <button
