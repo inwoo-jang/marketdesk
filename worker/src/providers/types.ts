@@ -27,18 +27,22 @@ export type DocMeta = {
 };
 
 // 월별 롤업(요약의 요약): 한 달 엔트리 → 흐름 한 줄 + 공통/엇갈림.
-export type RollupFact = { type: "common" | "conflict"; content: string };
+export type RollupFact = { type: "common" | "conflict" | "trigger"; content: string };
 export type RollupResult = { oneLiner: string; facts: RollupFact[] };
 
 // LLM 라우터 추상화. 구현체: MockProvider(로컬), GeminiProvider(기본), ClaudeCliProvider, CodexCliProvider.
+// 분류+분석 통합 컨텍스트(문서타입은 호출 안에서 모델이 정하므로 렌즈·직무만).
+export type MergeCtx = { lenses: string[]; jobRole?: string };
+// 통합 호출 결과: 메타 + 구조화 프레임 + 가드레일용 numbers.
+export type AnalyzeExtractResult = { meta: DocMeta; frame: EntryFrame; numbers: ExtractedNumber[] };
+
 export interface Provider {
   // entries.provider 에 기록할 값(enum: gemini|claude|codex|mcp). mock 은 null.
   providerKey: "gemini" | "claude" | "codex" | "mcp" | null;
   model: string; // entries.model (예: gemini-2.0-flash-001, mock)
-  // 메타 추출(제목·발간일·요약·타입·멀티산업). industries = 카탈로그 후보 이름.
-  analyze(document: string, industries: string[]): Promise<DocMeta>;
-  // 구조화 분석(리포트당 1회): 공통 틀 + 관점 레이어(켠 렌즈만). 가드레일용 numbers 동반.
-  extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry>;
-  // 월별 롤업: digest(한 달 엔트리 요약 모음) → 흐름 한 줄 + 공통/엇갈림. 하위 엔트리만 근거.
+  // 분류+분석 통합(리포트당 1회): 메타 분류 + 구조화 틀 + 관점 레이어(켠 렌즈만) + 가드레일용 numbers.
+  // 문서를 2번 보내던 analyze/extract 2회 호출을 1회로 합침.
+  analyzeExtract(document: string, industries: string[], ctx: MergeCtx): Promise<AnalyzeExtractResult>;
+  // 월별 롤업: digest(한 달 엔트리 요약 모음) → 흐름 한 줄 + 공통/엇갈림/트리거. 하위 엔트리만 근거.
   rollup(industryName: string, period: string, digest: string): Promise<RollupResult>;
 }

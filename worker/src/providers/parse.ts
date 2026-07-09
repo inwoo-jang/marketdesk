@@ -103,7 +103,10 @@ export function parseRollup(o: Record<string, unknown>): RollupResult {
   const facts: RollupFact[] = Array.isArray(o.facts)
     ? o.facts
         .map((f) => (f ?? {}) as Record<string, unknown>)
-        .map((f) => ({ type: f.type === "conflict" ? ("conflict" as const) : ("common" as const), content: str(f.content) ?? "" }))
+        .map((f) => ({
+          type: f.type === "conflict" ? ("conflict" as const) : f.type === "trigger" ? ("trigger" as const) : ("common" as const),
+          content: str(f.content) ?? "",
+        }))
         .filter((f) => f.content)
     : [];
   return { oneLiner: str(o.one_liner) ?? str(o.oneLiner) ?? "", facts };

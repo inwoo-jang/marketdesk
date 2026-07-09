@@ -1,9 +1,8 @@
-import { eq, and, isNull, ne, isNotNull, inArray } from "drizzle-orm";
-import { reports, reportPages, entries, entryNumbers, industries, reportIndustries, userLenses, rollups } from "@reportlens/db";
+import { eq, and, isNull, ne, isNotNull, inArray, desc } from "drizzle-orm";
+import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
-import { verifyNumbers } from "./guardrail.js";
 import { getProvider } from "./providers/index.js";
 import { simhash, hamming, tokenCount } from "./simhash.js";
 
@@ -51,12 +50,26 @@ export async function processReport(report: Report): Promise<void> {
 
     const sim = simhash(document);
 
-    // AI 메타 추출(제목·발간일·요약·타입·멀티산업) + 카탈로그 매칭. 확인된 산업은 덮지 않음.
+    // 분류+분석 통합 호출(문서 1회 전송으로 2회 왕복 제거). 직무·렌즈는 호출 전에 준비.
     const catalog = await db
       .select({ id: industries.id, name: industries.name })
       .from(industries)
       .where(isNull(industries.userId));
-    const meta = await provider.analyze(document, catalog.map((c) => c.name));
+    const [jobLens] = await db
+      .select({ config: userLenses.config })
+      .from(userLenses)
+      .where(and(eq(userLenses.userId, report.userId), eq(userLenses.lensKey, "job")))
+      .limit(1);
+    const jobRole = jobLens?.config?.jobRole;
+    const lensKeys = report.requestedLenses ?? [];
+    // 대형 PDF(수십 페이지)는 원문 전체 전송 시 LLM 지연·타임아웃 → 상한(앞부분=핵심). 분류·분석 공통.
+    const extractDoc = document.length > 24000 ? document.slice(0, 24000) : document;
+
+    const { meta, frame } = await provider.analyzeExtract(
+      extractDoc,
+      catalog.map((c) => c.name),
+      { lenses: lensKeys, jobRole },
+    );
     const matchedRows = catalog.filter((c) => meta.industries.includes(c.name));
     const primaryId = report.industryConfirmed ? report.industryId : (matchedRows[0]?.id ?? report.industryId);
 
@@ -114,26 +127,11 @@ export async function processReport(report: Report): Promise<void> {
         .onConflictDoNothing();
     }
 
-    // 취업 렌즈용 직무(user_lenses.config.jobRole)
-    const [jobLens] = await db
-      .select({ config: userLenses.config })
-      .from(userLenses)
-      .where(and(eq(userLenses.userId, report.userId), eq(userLenses.lensKey, "job")))
-      .limit(1);
-    const jobRole = jobLens?.config?.jobRole;
-
-    const lensKeys = report.requestedLenses ?? [];
     const entryDate = meta.pubDate ?? report.pubDate ?? new Date().toISOString().slice(0, 10);
     const industryId = primaryId;
 
-    // 리포트당 1개 분석(공통 틀 + 켠 렌즈 관점). 가드레일용 numbers 동반.
-    // 대형 PDF(수십 페이지)는 원문 전체 전송 시 LLM 지연·타임아웃 → 상한(앞부분=핵심). 페이지 마커 유지.
-    const extractDoc = document.length > 24000 ? document.slice(0, 24000) : document;
-    const extracted = await provider.extract(extractDoc, { docType: meta.docType, lenses: lensKeys, jobRole });
-    const numbers = verifyNumbers(extracted.numbers, pages);
-
-    await db.delete(entries).where(eq(entries.reportId, report.id)); // 재추출 시 교체(엔트리 삭제 시 numbers cascade)
-    const [entry] = await db
+    await db.delete(entries).where(eq(entries.reportId, report.id)); // 재추출 시 교체
+    await db
       .insert(entries)
       .values({
         userId: report.userId,
@@ -141,25 +139,12 @@ export async function processReport(report: Report): Promise<void> {
         industryId,
         lensKey: null,
         entryDate,
-        frame: extracted.frame,
+        frame,
         status: "draft",
         provider: provider.providerKey,
         model: provider.model,
         updatedAt: new Date(),
-      })
-      .returning();
-
-    if (numbers.length > 0) {
-      await db.insert(entryNumbers).values(
-        numbers.map((n) => ({
-          entryId: entry.id,
-          label: n.label,
-          value: n.value,
-          pageNo: n.pageNo,
-          verified: n.verified ?? false,
-        })),
-      );
-    }
+      });
 
     // 흐름 자동 갱신: 이 자료가 속한 산업/기업/뉴스의 월·년 롤업을 pending 으로(워커가 이어서 처리).
     // 비치명적: 롤업 큐잉 실패가 리포트 분석 성공을 무효화하지 않도록 격리.
@@ -167,6 +152,17 @@ export async function processReport(report: Report): Promise<void> {
       await enqueueFlowRollups(report, entryDate, meta.docType, meta.company);
     } catch (e) {
       console.error(`흐름 큐잉 실패(분석은 성공) ${report.id}:`, e instanceof Error ? e.message : e);
+    }
+
+    // 논리 붕괴 트리거 발화 감지: 이 새 자료가 활성 트리거(내 산업 최신 롤업의 trigger)와 매칭되면 알림 생성.
+    try {
+      const repText = [meta.title, frame.summary, frame.facts?.what, ...(frame.drivers ?? []), ...(frame.risks ?? [])]
+        .filter(Boolean)
+        .join(" ");
+      const indNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      await detectTriggerHits(report, [...newIndIds], indNameById, repText, cleanTitle(meta.title) ?? report.title);
+    } catch (e) {
+      console.error(`트리거 발화 감지 실패(분석은 성공) ${report.id}:`, e instanceof Error ? e.message : e);
     }
 
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));
@@ -177,6 +173,78 @@ export async function processReport(report: Report): Promise<void> {
     console.error(`처리 실패 ${report.id}:`, e);
     await db.update(reports).set({ parseStatus: "failed" }).where(eq(reports.id, report.id));
   }
+}
+
+// 의미 토큰(길이 2+) — 트리거↔새자료 매칭용(P2/P3 와 동일 기준).
+function sigTokenSet(s: string): Set<string> {
+  return new Set(s.toLowerCase().replace(/[^0-9a-z가-힣]+/g, " ").trim().split(" ").filter((t) => t.length >= 2));
+}
+
+// 발화 감지: 새 자료(repText)가 내 산업의 '최신 월별 롤업' 트리거와 의미토큰 2개 이상 겹치면 알림 생성.
+// 콘텐츠 유입이 전부 수동이라, 유저가 자료를 추가하는 이 순간이 곧 발화 감지 이벤트.
+async function detectTriggerHits(
+  report: Report,
+  indIds: string[],
+  indNameById: Map<string, string>,
+  repText: string,
+  detailTitle: string | null,
+): Promise<void> {
+  if (indIds.length === 0) return;
+  const rus = await db
+    .select({ id: rollups.id, industryId: rollups.industryId, periodKey: rollups.periodKey })
+    .from(rollups)
+    .where(
+      and(
+        eq(rollups.userId, report.userId),
+        eq(rollups.scope, "industry"),
+        inArray(rollups.industryId, indIds),
+        eq(rollups.periodType, "month"),
+        eq(rollups.status, "done"),
+      ),
+    )
+    .orderBy(desc(rollups.periodKey));
+  const latestByInd = new Map<string, string>(); // 산업 → 최신 롤업 id
+  for (const r of rus) if (r.industryId && !latestByInd.has(r.industryId)) latestByInd.set(r.industryId, r.id);
+  const rollupToInd = new Map([...latestByInd.entries()].map(([ind, rid]) => [rid, ind]));
+  const ruIds = [...latestByInd.values()];
+  if (ruIds.length === 0) return;
+
+  const triggers = await db
+    .select({ rollupId: rollupFacts.rollupId, content: rollupFacts.content })
+    .from(rollupFacts)
+    .where(and(inArray(rollupFacts.rollupId, ruIds), eq(rollupFacts.factType, "trigger")));
+  if (triggers.length === 0) return;
+
+  const repTok = sigTokenSet(repText);
+  const hits: { indId: string; content: string; matched: string }[] = [];
+  const seen = new Set<string>();
+  for (const t of triggers) {
+    if (!t.content) continue;
+    const tt = sigTokenSet(t.content);
+    const shared = [...tt].filter((x) => repTok.has(x)); // 왜 감지됐는지 = 겹친 키워드
+    if (shared.length < 2) continue;
+    const indId = rollupToInd.get(t.rollupId);
+    if (!indId) continue;
+    const key = `${indId}:${t.content}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push({ indId, content: t.content, matched: shared.slice(0, 6).join(", ") });
+  }
+  if (hits.length === 0) return;
+
+  await db.delete(notifications).where(eq(notifications.reportId, report.id)); // 재추출 시 중복 방지
+  await db.insert(notifications).values(
+    hits.map((h) => ({
+      userId: report.userId,
+      kind: "trigger",
+      industryId: h.indId,
+      reportId: report.id,
+      title: `[${indNameById.get(h.indId) ?? "산업"}] 흐름 위험 신호 감지`,
+      body: h.content,
+      detail: detailTitle,
+      matched: h.matched,
+    })),
+  );
 }
 
 // 업로드 분석 완료 시 그 자료가 속한 산업/기업/뉴스의 월·년 흐름(롤업)을 pending 으로 갱신.

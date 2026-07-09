@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Provider, ExtractedEntry, DocMeta, ExtractCtx, RollupResult } from "./types.js";
-import { buildAnalyzePrompt, buildExtractPrompt, buildRollupPrompt } from "../prompts.js";
+import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult } from "./types.js";
+import { buildAnalyzeExtractPrompt, buildRollupPrompt } from "../prompts.js";
 import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
 
 // 기본 프로바이더(API 키). MVP 는 단일 호출(JSON).
@@ -21,6 +21,8 @@ export class GeminiProvider implements Provider {
       config: {
         responseMimeType: "application/json",
         maxOutputTokens: maxTokens,
+        // 모델·실행 간 일관성 확보용 낮은 온도(구조화 추출은 창의성 불필요).
+        temperature: 0.2,
         // 2.5 계열은 추론(thinking) 모델 → 구조화 JSON 에선 thinking 비활성(출력 토큰 확보·속도·비용).
         thinkingConfig: { thinkingBudget: 0 },
       },
@@ -28,13 +30,10 @@ export class GeminiProvider implements Provider {
     return extractJson(res.text ?? "{}");
   }
 
-  async analyze(document: string, industries: string[]): Promise<DocMeta> {
-    return parseMeta(await this.json(buildAnalyzePrompt(document, industries), 400), industries);
-  }
-
-  async extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry> {
-    const o = await this.json(buildExtractPrompt(document, ctx), 4096);
-    return { frame: parseFrame(o, ctx), numbers: parseNumbers(o.numbers) };
+  async analyzeExtract(document: string, industries: string[], ctx: MergeCtx): Promise<AnalyzeExtractResult> {
+    const o = await this.json(buildAnalyzeExtractPrompt(document, industries, ctx), 4500);
+    const meta = parseMeta(o, industries);
+    return { meta, frame: parseFrame(o, { docType: meta.docType, lenses: ctx.lenses, jobRole: ctx.jobRole }), numbers: parseNumbers(o.numbers) };
   }
 
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {

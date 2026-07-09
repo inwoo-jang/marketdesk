@@ -1,4 +1,4 @@
-import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, ExtractCtx, DocType, RollupResult } from "./types.js";
+import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, MergeCtx, DocType, RollupResult, AnalyzeExtractResult } from "./types.js";
 
 // 제목·요약에서 연락처·작성자·SNS·날짜 등 군더더기 제거
 function cleanNoise(s: string): string {
@@ -27,6 +27,7 @@ const INDUSTRY_HINTS: Record<string, string[]> = {
   "제약·바이오": ["제약", "바이오", "임상", "신약"],
   "에너지·유틸리티": ["에너지", "전력", "원유", "가스", "태양광"],
   금융: ["은행", "증권", "보험", "금리", "대출"],
+  부동산: ["부동산", "주택", "분양", "청약", "재건축", "재개발", "아파트", "전월세", "임대", "리츠", "REITs"],
   게임: ["게임", "신작", "MMORPG"],
   통신: ["통신", "5G", "요금제"],
 };
@@ -38,8 +39,15 @@ export class MockProvider implements Provider {
   providerKey = null;
   model = "mock";
 
-  // 메타 추출: 제목(첫 줄)·발간일(정규식)·요약(앞부분)·타입·멀티 산업(키워드 복수 매칭).
-  async analyze(document: string, industries: string[]): Promise<DocMeta> {
+  // 분류+분석 통합(mock): 메타(제목·발간일·타입·산업) + 프레임 + numbers 를 한 번에 결정적으로 생성.
+  async analyzeExtract(document: string, industries: string[], ctx: MergeCtx): Promise<AnalyzeExtractResult> {
+    const meta = this.buildMeta(document, industries);
+    const frameNumbers = this.buildFrame(document, meta.docType, ctx);
+    return { meta, frame: frameNumbers.frame, numbers: frameNumbers.numbers };
+  }
+
+  // 메타: 제목(첫 줄)·발간일(정규식)·요약(앞부분)·타입·멀티 산업(키워드 복수 매칭).
+  private buildMeta(document: string, industries: string[]): DocMeta {
     const body = document.replace(/=== p\.\d+ ===/g, "").trim();
     const oneLine = body.replace(/\s+/g, " ").trim();
     const firstLine = body.split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
@@ -64,7 +72,7 @@ export class MockProvider implements Provider {
     };
   }
 
-  async extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry> {
+  private buildFrame(document: string, docType: DocType, ctx: MergeCtx): ExtractedEntry {
     const pages = splitPages(document);
     const numbers: ExtractedNumber[] = [];
     for (const { pageNo, text } of pages) {
@@ -81,7 +89,7 @@ export class MockProvider implements Provider {
     numbers.push({ label: "환각 테스트", value: "999999억", pageNo: 1 });
 
     const oneLine = cleanNoise(document.replace(/=== p\.\d+ ===/g, " "));
-    const dt = ctx.docType === "company" ? "기업" : ctx.docType === "news" ? "뉴스" : "산업";
+    const dt = docType === "company" ? "기업" : docType === "news" ? "뉴스" : "산업";
     const frame: ExtractedEntry["frame"] = {
       highlight: `(mock·${dt}) 핵심 한 가지: ${oneLine.slice(0, 40)}`,
       summary: `(mock·${dt}) ${oneLine.slice(0, 60)}`,

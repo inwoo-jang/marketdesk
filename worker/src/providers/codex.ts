@@ -2,8 +2,8 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Provider, ExtractedEntry, DocMeta, ExtractCtx, RollupResult } from "./types.js";
-import { buildAnalyzePrompt, buildExtractPrompt, buildRollupPrompt } from "../prompts.js";
+import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult } from "./types.js";
+import { buildAnalyzeExtractPrompt, buildRollupPrompt } from "../prompts.js";
 import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
 
 const CODEX_PREFIX =
@@ -88,15 +88,11 @@ export class CodexCliProvider implements Provider {
     this.model = model ? `codex-cli:${model}` : "codex-cli";
   }
 
-  async analyze(document: string, industries: string[]): Promise<DocMeta> {
-    const text = await runCodex(buildAnalyzePrompt(document, industries), this.cliModel, this.command);
-    return parseMeta(extractJson(text), industries);
-  }
-
-  async extract(document: string, ctx: ExtractCtx): Promise<ExtractedEntry> {
-    const text = await runCodex(buildExtractPrompt(document, ctx), this.cliModel, this.command);
+  async analyzeExtract(document: string, industries: string[], ctx: MergeCtx): Promise<AnalyzeExtractResult> {
+    const text = await runCodex(buildAnalyzeExtractPrompt(document, industries, ctx), this.cliModel, this.command);
     const o = extractJson(text);
-    return { frame: parseFrame(o, ctx), numbers: parseNumbers(o.numbers) };
+    const meta = parseMeta(o, industries);
+    return { meta, frame: parseFrame(o, { docType: meta.docType, lenses: ctx.lenses, jobRole: ctx.jobRole }), numbers: parseNumbers(o.numbers) };
   }
 
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
