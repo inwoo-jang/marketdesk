@@ -28,6 +28,14 @@ export default function ReportReviewPage() {
   // 목록에서 넘어온 순서 스냅샷 → 이전/다음 리포트
   const [navIds, setNavIds] = useState<string[]>([]);
   useEffect(() => setNavIds(loadReportNav()), []);
+  // 목록 복귀 시 이 카드가 중앙에 오도록 마지막으로 본 자료 id 저장(화살표로 바뀌어도 갱신)
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("reportNavCurrent", id);
+    } catch {
+      // 무시
+    }
+  }, [id]);
   const navIdx = navIds.indexOf(id);
   const prevId = navIdx > 0 ? navIds[navIdx - 1] : null;
   const nextId = navIdx >= 0 && navIdx < navIds.length - 1 ? navIds[navIdx + 1] : null;

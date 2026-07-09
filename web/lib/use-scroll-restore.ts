@@ -33,6 +33,16 @@ export function useScrollRestore(ready: boolean) {
   useEffect(() => {
     if (!ready || !popped) return;
     popped = false;
+    // 리포트에서 목록으로 돌아온 경우: 마지막으로 본 카드를 화면 중앙으로.
+    const centerId = sessionStorage.getItem("reportNavCurrent");
+    if (centerId) {
+      const el = document.querySelector(`[data-report-id="${centerId}"]`);
+      if (el) {
+        requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
+        return;
+      }
+    }
+    // 그 외: 저장된 스크롤 위치로.
     const y = Number(sessionStorage.getItem(`scroll:${pathname}`) || 0);
     if (y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
   }, [ready, pathname]);
