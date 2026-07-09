@@ -9,6 +9,17 @@ import { WordLookup } from "@/components/word-lookup";
 import { knownCountryOf, normco, companyAliases } from "@/lib/companies";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
+// 기간 이동: 월/년 단위로 delta 만큼(이전=-1, 다음=+1)
+const shiftPeriod = (k: string, period: "month" | "year", delta: number): string => {
+  if (period === "year") return String(Number(k) + delta);
+  const [y, m] = k.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+};
+const nowPeriodKey = (period: "month" | "year"): string => {
+  const d = new Date();
+  return period === "year" ? String(d.getFullYear()) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 const stripPeriodLead = (text: string, periodKey: string) => {
   const original = text.trim();
   if (!original) return original;
@@ -135,7 +146,29 @@ export default function BoardFeedPage() {
             <span className="ml-2 text-base font-normal text-ink-muted">({knownCountryOf(feed.label)})</span>
           )}
         </h1>
-        <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted">{fmt(feed.periodKey, feed.period)}</span>
+        {(() => {
+          const prev = shiftPeriod(feed.periodKey, feed.period, -1);
+          const next = shiftPeriod(feed.periodKey, feed.period, 1);
+          const canNext = next <= nowPeriodKey(feed.period); // 미래는 막음
+          const href = (pk: string) =>
+            `/board/feed?dim=${feed.dim}&key=${encodeURIComponent(feed.key)}&period=${feed.period}&periodKey=${pk}`;
+          const btn = "flex h-7 w-7 items-center justify-center rounded-full text-ink-sub hover:bg-bg-deep";
+          return (
+            <div className="flex items-center gap-0.5">
+              <a href={href(prev)} title={`이전 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
+                ‹
+              </a>
+              <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-sm text-ink-muted tabular-nums">{fmt(feed.periodKey, feed.period)}</span>
+              {canNext ? (
+                <a href={href(next)} title={`다음 ${feed.period === "year" ? "해" : "달"}`} className={btn}>
+                  ›
+                </a>
+              ) : (
+                <span className={`${btn} cursor-default opacity-30`}>›</span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* 흐름 요약 — 단어 클릭/검색 시 AI 용어풀이(WordLookup 대상) */}
