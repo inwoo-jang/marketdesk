@@ -1,0 +1,1 @@
+ALTER TYPE "public"."fact_type" ADD VALUE 'trigger';

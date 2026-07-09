@@ -12,3 +12,4 @@ export * from "./groups";
 export * from "./memos";
 export * from "./company-favorites";
 export * from "./notepads";
+export * from "./notifications";

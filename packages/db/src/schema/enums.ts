@@ -8,7 +8,7 @@ export const parseStatus = pgEnum("parse_status", ["pending", "parsing", "parsed
 export const entryStatus = pgEnum("entry_status", ["draft", "saved"]);
 export const llmProvider = pgEnum("llm_provider", ["gemini", "claude", "codex", "mcp"]);
 export const periodType = pgEnum("period_type", ["month", "year"]); // year = Phase2
-export const factType = pgEnum("fact_type", ["common", "conflict"]);
+export const factType = pgEnum("fact_type", ["common", "conflict", "trigger"]); // trigger = 논리 붕괴 트리거
 export const llmTier = pgEnum("llm_tier", ["default", "byo", "mcp"]);
 export const exportScope = pgEnum("export_scope", ["entry", "rollup"]);
 export const jobStatus = pgEnum("job_status", ["pending", "done", "failed"]);
