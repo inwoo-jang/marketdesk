@@ -1,4 +1,4 @@
-import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, MergeCtx, DocType, RollupResult, AnalyzeExtractResult } from "./types.js";
+import type { Provider, ExtractedEntry, ExtractedNumber, DocMeta, MergeCtx, DocType, RollupResult, AnalyzeExtractResult, TriggerJudgment } from "./types.js";
 
 // 제목·요약에서 연락처·작성자·SNS·날짜 등 군더더기 제거
 function cleanNoise(s: string): string {
@@ -137,6 +137,10 @@ export class MockProvider implements Provider {
         { type: "conflict", content: `(mock) 리포트 간 엇갈리는 지점 요약` },
       ],
     };
+  }
+
+  async judgeTriggers(): Promise<TriggerJudgment[]> {
+    return []; // mock 은 오탐 없이 조용히(개발용)
   }
 }
 

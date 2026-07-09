@@ -78,6 +78,19 @@ export function buildAnalyzeExtractPrompt(document: string, industries: string[]
   );
 }
 
+// 흐름 위험 신호 발화 판단: 새 자료가 각 신호에 '실제로' 해당하는지 LLM 판단(단어 겹침 오탐 방지).
+export function buildTriggerJudgePrompt(repText: string, triggers: string[]): string {
+  const list = triggers.map((t, i) => `${i}. ${t}`).join("\n");
+  return (
+    `아래 '새 자료'가 각 '흐름 위험 신호'에 실제로 해당하는지 판단하라.\n` +
+    `자료 본문에 그 신호와 직접 관련된 내용이 있을 때만 해당으로 본다. 같은 단어가 우연히 겹치는 것·주제가 다른데 억지로 잇는 것은 제외.\n` +
+    `해당하는 신호만 그 번호(i)와 근거(basis: 자료의 어느 내용이 그 신호의 근거인지 한 문장)를 배열로. 해당 없으면 빈 배열.\n` +
+    `출력 JSON: {"hits":[{"i":0,"basis":""}]}` +
+    STRICT_JSON +
+    `\n\n--- 흐름 위험 신호 ---\n${list}\n\n--- 새 자료 ---\n${repText}`
+  );
+}
+
 // 월별 롤업 프롬프트: 한 달 엔트리 모음 → 흐름 한 줄 + 공통/엇갈림. 하위 엔트리만 근거.
 export function buildRollupPrompt(industryName: string, period: string, digest: string): string {
   return (

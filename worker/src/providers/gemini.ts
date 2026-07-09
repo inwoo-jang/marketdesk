@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult } from "./types.js";
-import { buildAnalyzeExtractPrompt, buildRollupPrompt } from "../prompts.js";
-import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
+import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult, TriggerJudgment } from "./types.js";
+import { buildAnalyzeExtractPrompt, buildRollupPrompt, buildTriggerJudgePrompt } from "../prompts.js";
+import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup, parseTriggerJudge } from "./parse.js";
 
 // 기본 프로바이더(API 키). MVP 는 단일 호출(JSON).
 export class GeminiProvider implements Provider {
@@ -38,5 +38,11 @@ export class GeminiProvider implements Provider {
 
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
     return parseRollup(await this.json(buildRollupPrompt(industryName, period, digest), 1500));
+  }
+
+  async judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]> {
+    if (triggers.length === 0) return [];
+    const o = await this.json(buildTriggerJudgePrompt(repText, triggers), 800);
+    return parseTriggerJudge(o).filter((h) => h.index < triggers.length);
   }
 }

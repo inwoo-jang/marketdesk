@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult } from "./types.js";
-import { buildAnalyzeExtractPrompt, buildRollupPrompt } from "../prompts.js";
-import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
+import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult, TriggerJudgment } from "./types.js";
+import { buildAnalyzeExtractPrompt, buildRollupPrompt, buildTriggerJudgePrompt } from "../prompts.js";
+import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup, parseTriggerJudge } from "./parse.js";
 
 const CODEX_PREFIX =
   "이 작업은 코드 수정이 아니라 순수 문서 분석이다. 어떤 파일이나 명령도 실행하지 말고, " +
@@ -98,5 +98,11 @@ export class CodexCliProvider implements Provider {
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
     const text = await runCodex(buildRollupPrompt(industryName, period, digest), this.cliModel, this.command);
     return parseRollup(extractJson(text));
+  }
+
+  async judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]> {
+    if (triggers.length === 0) return [];
+    const text = await runCodex(buildTriggerJudgePrompt(repText, triggers), this.cliModel, this.command);
+    return parseTriggerJudge(extractJson(text)).filter((h) => h.index < triggers.length);
   }
 }

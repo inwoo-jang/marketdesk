@@ -45,4 +45,8 @@ export interface Provider {
   analyzeExtract(document: string, industries: string[], ctx: MergeCtx): Promise<AnalyzeExtractResult>;
   // 월별 롤업: digest(한 달 엔트리 요약 모음) → 흐름 한 줄 + 공통/엇갈림/트리거. 하위 엔트리만 근거.
   rollup(industryName: string, period: string, digest: string): Promise<RollupResult>;
+  // 흐름 위험 신호 발화 판단: 새 자료가 각 신호에 실제 해당하는지 + 근거(단어 겹침 오탐 방지).
+  judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]>;
 }
+
+export type TriggerJudgment = { index: number; basis: string };

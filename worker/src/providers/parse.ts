@@ -1,6 +1,6 @@
 import { jsonrepair } from "jsonrepair";
 import type { EntryFrame } from "@reportlens/db";
-import type { DocMeta, DocType, ExtractCtx, ExtractedNumber, RollupResult, RollupFact } from "./types.js";
+import type { DocMeta, DocType, ExtractCtx, ExtractedNumber, RollupResult, RollupFact, TriggerJudgment } from "./types.js";
 
 // LLM JSON 응답 공용 파서(Gemini·Claude 공유).
 
@@ -110,6 +110,14 @@ export function parseRollup(o: Record<string, unknown>): RollupResult {
         .filter((f) => f.content)
     : [];
   return { oneLiner: str(o.one_liner) ?? str(o.oneLiner) ?? "", facts };
+}
+
+export function parseTriggerJudge(o: Record<string, unknown>): TriggerJudgment[] {
+  if (!Array.isArray(o.hits)) return [];
+  return o.hits
+    .map((h) => (h ?? {}) as Record<string, unknown>)
+    .map((h) => ({ index: Number(h.i), basis: str(h.basis) ?? "" }))
+    .filter((h) => Number.isInteger(h.index) && h.index >= 0);
 }
 
 export function parseNumbers(v: unknown): ExtractedNumber[] {

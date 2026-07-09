@@ -4,6 +4,7 @@ import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
 import { getProvider } from "./providers/index.js";
+import type { Provider } from "./providers/types.js";
 import { simhash, hamming, tokenCount } from "./simhash.js";
 
 const SIMHASH_DUP_THRESHOLD = 4; // Hamming 거리 이하면 유사 중복(64bit 중). 오탐 줄이려 6→4.
@@ -160,7 +161,7 @@ export async function processReport(report: Report): Promise<void> {
         .filter(Boolean)
         .join(" ");
       const indNameById = new Map(catalog.map((c) => [c.id, c.name]));
-      await detectTriggerHits(report, [...newIndIds], indNameById, repText, cleanTitle(meta.title) ?? report.title);
+      await detectTriggerHits(provider, report, [...newIndIds], indNameById, repText, cleanTitle(meta.title) ?? report.title);
     } catch (e) {
       console.error(`트리거 발화 감지 실패(분석은 성공) ${report.id}:`, e instanceof Error ? e.message : e);
     }
@@ -183,6 +184,7 @@ function sigTokenSet(s: string): Set<string> {
 // 발화 감지: 새 자료(repText)가 내 산업의 '최신 월별 롤업' 트리거와 의미토큰 2개 이상 겹치면 알림 생성.
 // 콘텐츠 유입이 전부 수동이라, 유저가 자료를 추가하는 이 순간이 곧 발화 감지 이벤트.
 async function detectTriggerHits(
+  provider: Provider,
   report: Report,
   indIds: string[],
   indNameById: Map<string, string>,
@@ -215,36 +217,46 @@ async function detectTriggerHits(
     .where(and(inArray(rollupFacts.rollupId, ruIds), eq(rollupFacts.factType, "trigger")));
   if (triggers.length === 0) return;
 
+  // 1단계(싼 필터): 의미토큰 2개+ 겹치는 신호만 후보. 겹침 없으면 LLM 호출 스킵(토큰 절약).
   const repTok = sigTokenSet(repText);
-  const hits: { indId: string; content: string; matched: string }[] = [];
+  const candidates: { indId: string; content: string }[] = [];
   const seen = new Set<string>();
   for (const t of triggers) {
     if (!t.content) continue;
     const tt = sigTokenSet(t.content);
-    const shared = [...tt].filter((x) => repTok.has(x)); // 왜 감지됐는지 = 겹친 키워드
-    if (shared.length < 2) continue;
+    let inter = 0;
+    for (const x of tt) if (repTok.has(x)) inter++;
+    if (inter < 2) continue;
     const indId = rollupToInd.get(t.rollupId);
     if (!indId) continue;
     const key = `${indId}:${t.content}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    hits.push({ indId, content: t.content, matched: shared.slice(0, 6).join(", ") });
+    candidates.push({ indId, content: t.content });
   }
-  if (hits.length === 0) return;
+  if (candidates.length === 0) return;
 
-  await db.delete(notifications).where(eq(notifications.reportId, report.id)); // 재추출 시 중복 방지
-  await db.insert(notifications).values(
-    hits.map((h) => ({
-      userId: report.userId,
-      kind: "trigger",
-      industryId: h.indId,
-      reportId: report.id,
-      title: `[${indNameById.get(h.indId) ?? "산업"}] 흐름 위험 신호 감지`,
-      body: h.content,
-      detail: detailTitle,
-      matched: h.matched,
-    })),
-  );
+  // 2단계(정밀): 후보만 LLM 이 실제 해당 여부 + 근거 판단(단어 우연 겹침 오탐 제거).
+  const judged = await provider.judgeTriggers(repText, candidates.map((c) => c.content));
+  const values = judged
+    .map((j) => {
+      const c = candidates[j.index];
+      if (!c) return null;
+      return {
+        userId: report.userId,
+        kind: "trigger",
+        industryId: c.indId,
+        reportId: report.id,
+        title: `[${indNameById.get(c.indId) ?? "산업"}] 흐름 위험 신호 감지`,
+        body: c.content,
+        detail: detailTitle,
+        matched: j.basis, // 근거(자료의 어느 부분이 이 신호와 관련되는지)
+      };
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null);
+
+  await db.delete(notifications).where(eq(notifications.reportId, report.id)); // 재추출 시 교체
+  if (values.length > 0) await db.insert(notifications).values(values);
 }
 
 // 업로드 분석 완료 시 그 자료가 속한 산업/기업/뉴스의 월·년 흐름(롤업)을 pending 으로 갱신.

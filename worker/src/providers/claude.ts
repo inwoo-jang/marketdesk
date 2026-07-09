@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult } from "./types.js";
-import { buildAnalyzeExtractPrompt, buildRollupPrompt } from "../prompts.js";
-import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup } from "./parse.js";
+import type { Provider, AnalyzeExtractResult, MergeCtx, RollupResult, TriggerJudgment } from "./types.js";
+import { buildAnalyzeExtractPrompt, buildRollupPrompt, buildTriggerJudgePrompt } from "../prompts.js";
+import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup, parseTriggerJudge } from "./parse.js";
 
 // 터미널의 `claude` CLI 를 직접 호출하는 프로바이더(API 키 불필요, 사용자 Claude 구독 사용).
 // 프롬프트는 stdin 으로 전달(긴 문서 대응), 응답 텍스트(JSON) 를 받아 파싱.
@@ -53,5 +53,11 @@ export class ClaudeCliProvider implements Provider {
   async rollup(industryName: string, period: string, digest: string): Promise<RollupResult> {
     const text = await runClaude(buildRollupPrompt(industryName, period, digest), this.cliModel);
     return parseRollup(extractJson(text));
+  }
+
+  async judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]> {
+    if (triggers.length === 0) return [];
+    const text = await runClaude(buildTriggerJudgePrompt(repText, triggers), this.cliModel);
+    return parseTriggerJudge(extractJson(text)).filter((h) => h.index < triggers.length);
   }
 }
