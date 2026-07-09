@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry, type Lens, type JobRole } from "@/lib/api";
+import { loadReportNav } from "@/lib/report-nav";
 import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
 import { MemoLayer } from "@/components/memo";
@@ -23,6 +25,12 @@ export default function ReportReviewPage() {
   const [editingPub, setEditingPub] = useState(false);
   const [pubInput, setPubInput] = useState("");
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  // 목록에서 넘어온 순서 스냅샷 → 이전/다음 리포트
+  const [navIds, setNavIds] = useState<string[]>([]);
+  useEffect(() => setNavIds(loadReportNav()), []);
+  const navIdx = navIds.indexOf(id);
+  const prevId = navIdx > 0 ? navIds[navIdx - 1] : null;
+  const nextId = navIdx >= 0 && navIdx < navIds.length - 1 ? navIds[navIdx + 1] : null;
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -101,6 +109,26 @@ export default function ReportReviewPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
+      {/* 목록 순서 이전/다음: 콘텐츠 양옆 세로 중앙 고정(크게) */}
+      {prevId && (
+        <Link
+          href={`/reports/${prevId}`}
+          title="이전 자료"
+          className="fixed left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:left-4 lg:left-8"
+        >
+          ‹
+        </Link>
+      )}
+      {nextId && (
+        <Link
+          href={`/reports/${nextId}`}
+          title="다음 자료"
+          className="fixed right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/80 text-2xl text-ink-sub shadow-card backdrop-blur transition hover:bg-card hover:text-ink print:hidden md:right-4 lg:right-8"
+        >
+          ›
+        </Link>
+      )}
+
       <div className="flex items-center justify-between">
         <button
           onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/"))}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api, type Report } from "@/lib/api";
+import { snapshotReportNav } from "@/lib/report-nav";
 import { BookmarkIcon } from "@/components/bookmark-icon";
 import { HideIcon } from "@/components/hide-icon";
 
@@ -75,9 +76,10 @@ export function ReportCard({
   const tone = report.docType ? DOC_TONE[report.docType] : undefined;
   return (
     <div
+      data-report-id={report.id}
       className={`group relative rounded-card shadow-card transition hover:ring-1 hover:ring-primary/30 ${tone?.card ?? "bg-card"}`}
     >
-      <Link href={`/reports/${report.id}`} className="block p-4 pr-12">
+      <Link href={`/reports/${report.id}`} onClick={snapshotReportNav} className="block p-4 pr-12">
         <div className="flex items-center gap-2">
           {report.docType && (
             <span className={`rounded px-1.5 py-0.5 text-[11px] ${tone?.badge ?? "bg-ink/5 text-ink-muted"}`}>
