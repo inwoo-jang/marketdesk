@@ -93,19 +93,6 @@ export default function ReportPrintPage() {
             </div>
           )}
 
-          {entry.numbers.length > 0 && (
-            <div>
-              <h2 className="mb-1.5 font-bold text-ink-muted">🔢 핵심숫자 · 출처</h2>
-              <ul className="space-y-1">
-                {entry.numbers.map((n) => (
-                  <li key={n.id}>
-                    {n.label} {n.value}
-                    {n.pageNo != null ? ` [p.${n.pageNo}]` : ""} {n.verified ? "✓" : "(미확인)"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
 

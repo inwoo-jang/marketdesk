@@ -118,7 +118,11 @@ export const api = {
   },
   setReportIndustry: (reportId: string, industryId: string | null) =>
     put<{ ok: true; industryId: string | null }>(`/api/me/reports/${reportId}/industry`, { industryId }),
+  setReportIndustries: (reportId: string, industryIds: string[]) =>
+    put<{ ok: true; industryIds: string[] }>(`/api/me/reports/${reportId}/industries`, { industryIds }),
   deleteReport: (id: string) => del<{ ok: true }>(`/api/me/reports/${id}`),
+  notifications: () => get<{ notifications: AppNotification[]; unread: number }>("/api/me/notifications"),
+  markNotificationsRead: (ids?: string[]) => post<{ ok: true }>("/api/me/notifications/read", ids ? { ids } : {}),
   usage: () => get<Usage>("/api/me/usage"),
   llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm"),
   setLlmProvider: (provider: "claude" | "codex" | "gemini") =>
@@ -211,7 +215,28 @@ export type BoardFeed = {
   reports: Report[];
 };
 
-export type RollupFact = { id: string; factType: "common" | "conflict"; content: string | null; sort: number | null };
+export type AppNotification = {
+  id: string;
+  kind: string;
+  industryId: string | null;
+  reportId: string | null;
+  title: string | null;
+  body: string | null;
+  detail: string | null;
+  matched: string | null; // 왜 감지됐는지 = 겹친 키워드
+  read: boolean;
+  createdAt: string;
+};
+export type FactDelta = { kind: "new" | "recurring" | "promoted"; months: number };
+export type TriggerHit = { reportId: string; title: string | null; matched: string | null };
+export type RollupFact = {
+  id: string;
+  factType: "common" | "conflict" | "trigger";
+  content: string | null;
+  sort: number | null;
+  delta?: FactDelta | null; // 전월 대비(board feed 월별에서만 채워짐)
+  hits?: TriggerHit[]; // 트리거 발화 콘텐츠(board feed 산업 흐름에서만)
+};
 export type Rollup = {
   id: string;
   periodKey: string;
@@ -289,13 +314,6 @@ export type EntryFrame = {
   };
   sources?: AnalysisSource[];
 };
-export type EntryNumber = {
-  id: string;
-  label: string | null;
-  value: string | null;
-  pageNo: number | null;
-  verified: boolean | null;
-};
 export type EntryFull = {
   id: string;
   lensKey: string | null;
@@ -303,5 +321,4 @@ export type EntryFull = {
   frame: EntryFrame | null;
   provider: "gemini" | "claude" | "codex" | "mcp" | null;
   model: string | null;
-  numbers: EntryNumber[];
 };

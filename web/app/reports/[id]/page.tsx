@@ -102,7 +102,12 @@ export default function ReportReviewPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
+        <button
+          onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/"))}
+          className="text-sm text-ink-sub hover:text-ink"
+        >
+          ← 뒤로
+        </button>
         <div className="flex items-center gap-3">
           <button
             onClick={toggleBookmark}
@@ -322,40 +327,80 @@ function StatusBadge({ status }: { status: Report["parseStatus"] }) {
 }
 
 function IndustryRow({ report, catalog, onSaved }: { report: Report; catalog: Industry[]; onSaved: () => void }) {
-  const [value, setValue] = useState(report.industryId ?? "");
+  const initial = report.industries?.length ? report.industries.map((i) => i.id) : report.industryId ? [report.industryId] : [];
+  const [sel, setSel] = useState<string[]>(initial);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const nameOf = (id: string) => catalog.find((c) => c.id === id)?.name ?? id;
+  const available = catalog.filter((c) => !sel.includes(c.id));
   async function save() {
     setSaving(true);
     try {
-      await api.setReportIndustry(report.id, value || null);
+      await api.setReportIndustries(report.id, sel);
+      setEditing(false);
       onSaved();
     } finally {
       setSaving(false);
     }
   }
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-card bg-card p-4 shadow-card">
-      <span className="text-sm font-semibold text-ink-muted">산업</span>
-      {!report.industryConfirmed && report.industryId && (
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">AI 추정</span>
-      )}
-      <select
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm outline-none focus:border-primary"
-      >
-        <option value="">미지정</option>
-        {catalog.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
+    <div className="mt-4 rounded-card bg-card p-4 shadow-card">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-ink-muted">산업</span>
+        {!report.industryConfirmed && initial.length > 0 && (
+          <span className="text-xs text-ink-muted">AI 추정</span>
+        )}
+        {sel.length === 0 && !editing && <span className="text-sm text-ink-muted">미지정</span>}
+        {sel.map((id, i) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+          >
+            {i === 0 && sel.length > 1 && <span className="text-[10px] font-semibold text-primary/70">대표</span>}
+            {nameOf(id)}
+            {editing && (
+              <button onClick={() => setSel(sel.filter((x) => x !== id))} title="제거" className="ml-0.5 text-primary/60 hover:text-primary">
+                ×
+              </button>
+            )}
+          </span>
         ))}
-      </select>
-      {value !== (report.industryId ?? "") || !report.industryConfirmed ? (
-        <button onClick={save} disabled={saving} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-          {saving ? "..." : report.industryConfirmed ? "변경" : "확인"}
-        </button>
-      ) : (
-        <span className="text-xs text-success-text">확인됨 ✓</span>
-      )}
+        {editing && sel.length < 3 && available.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) setSel([...sel, e.target.value]);
+            }}
+            className="rounded-lg border border-line bg-white px-2 py-1 text-sm outline-none focus:border-primary"
+          >
+            <option value="">+ 산업 추가</option>
+            {available.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        {editing ? (
+          <>
+            <button onClick={save} disabled={saving} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+              {saving ? "..." : "저장"}
+            </button>
+            <button
+              onClick={() => {
+                setSel(initial);
+                setEditing(false);
+              }}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+            >
+              취소
+            </button>
+          </>
+        ) : (
+          <button onClick={() => setEditing(true)} className="text-xs font-medium text-ink-sub hover:text-primary">
+            수정
+          </button>
+        )}
+      </div>
+      {editing && <p className="mt-2 text-[11px] text-ink-muted">첫 번째가 대표 산업(대시보드·흐름보드 기준). 최대 3개까지 추가.</p>}
     </div>
   );
 }
@@ -525,38 +570,58 @@ function AnalysisCard({ entry, onSaved }: { entry: EntryFull; onSaved: () => voi
         </div>
       )}
 
-      {/* ⑥ 출처 + 핵심숫자(가드레일) */}
-      <Section title="⑥ 핵심숫자 · 출처">
-        {entry.numbers.length === 0 ? (
-          <p className="text-sm text-ink-sub">추출된 숫자가 없어요.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {entry.numbers.map((n) => (
-              <span
-                key={n.id}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${
-                  n.verified ? "border-success-text/30 bg-success-bg" : "border-line bg-bg-deep"
-                }`}
-                title={n.verified ? "출처 페이지에서 확인됨" : "출처 미확인"}
-              >
-                <span className="font-semibold">{n.label}</span>
-                <span>{n.value}</span>
-                {n.pageNo != null && <span className="text-xs text-ink-muted">[p.{n.pageNo}]</span>}
-                {n.verified ? (
-                  <span className="text-xs font-medium text-success-text">✓</span>
-                ) : (
-                  <span className="text-xs text-amber-600">미확인</span>
-                )}
-              </span>
-            ))}
+      {/* ⑥ 출처 (편집 시 언론사·기자 등 직접 추가·수정) */}
+      <Section title="⑥ 출처">
+        {editing ? (
+          <div className="space-y-2">
+            {(f.sources ?? []).map((s, i) => {
+              const upd = (patch: Partial<{ item: string; source: string; date: string }>) =>
+                set({ sources: (f.sources ?? []).map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+              return (
+                <div key={i} className="flex flex-wrap items-center gap-1.5">
+                  <input
+                    value={s.item ?? ""}
+                    onChange={(e) => upd({ item: e.target.value })}
+                    placeholder="내용/항목"
+                    className="min-w-[8rem] flex-1 rounded-lg border border-line px-2 py-1 text-sm outline-none focus:border-primary"
+                  />
+                  <input
+                    value={s.source ?? ""}
+                    onChange={(e) => upd({ source: e.target.value })}
+                    placeholder="언론사·기자"
+                    className="w-36 rounded-lg border border-line px-2 py-1 text-sm outline-none focus:border-primary"
+                  />
+                  <input
+                    value={s.date ?? ""}
+                    onChange={(e) => upd({ date: e.target.value })}
+                    placeholder="날짜"
+                    className="w-24 rounded-lg border border-line px-2 py-1 text-sm outline-none focus:border-primary"
+                  />
+                  <button
+                    onClick={() => set({ sources: (f.sources ?? []).filter((_, j) => j !== i) })}
+                    title="삭제"
+                    className="rounded px-1.5 text-ink-muted hover:text-red-500"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              onClick={() => set({ sources: [...(f.sources ?? []), { item: "", source: "", date: "" }] })}
+              className="rounded-lg border border-dashed border-line px-3 py-1 text-xs font-medium text-ink-sub hover:bg-bg-deep"
+            >
+              + 출처 추가
+            </button>
           </div>
-        )}
-        {(f.sources ?? []).length > 0 && (
-          <ul className="mt-2 text-xs text-ink-muted">
+        ) : (f.sources ?? []).length > 0 ? (
+          <ul className="text-xs text-ink-muted">
             {(f.sources ?? []).map((s, i) => (
               <li key={i}>· {s.item} {s.source && `(${s.source}${s.date ? `, ${s.date}` : ""})`}</li>
             ))}
           </ul>
+        ) : (
+          <p className="text-sm text-ink-sub">출처 정보가 없어요.</p>
         )}
       </Section>
       </div>

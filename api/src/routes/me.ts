@@ -8,7 +8,6 @@ import {
   industries,
   userIndustries,
   entries,
-  entryNumbers,
   reports,
   reportIndustries,
   rollups,
@@ -16,6 +15,7 @@ import {
   usageDaily,
   highlights,
   userLlmSettings,
+  notifications,
   publicContents,
   userPublicHidden,
   userPublicBookmark,
@@ -536,6 +536,26 @@ meRoute.get("/board/rows", async (c) => {
   return c.json({ dim, period, rows });
 });
 
+// 흐름 항목 델타(전월 대비)용: 의미 토큰 집합 + 유사도(overlap coefficient, 짧은 문장에 관대).
+function sigTokens(s: string): Set<string> {
+  return new Set(
+    s.toLowerCase().replace(/[^0-9a-z가-힣]+/g, " ").trim().split(" ").filter((t) => t.length >= 2),
+  );
+}
+// 같은 항목 판정: 공유 의미토큰 2개 이상 + 겹침계수 0.3 이상(롤업이 매달 표현이 달라져 관대하게,
+// 단 공유 2개 이상으로 단일 공통어 오탐 차단. 타 산업 교차는 실측 0.11 로 안전).
+function factMatch(a: Set<string>, b: Set<string>): boolean {
+  if (a.size === 0 || b.size === 0) return false;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  return inter >= 2 && inter / Math.min(a.size, b.size) >= 0.3;
+}
+function monthMinus(periodKey: string, n: number): string {
+  const [y, m] = periodKey.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 - n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 // GET /api/me/board/feed?dim=&key=&period=&periodKey= - 한 칸의 흐름 요약 + 근거 원문 리포트
 meRoute.get("/board/feed", async (c) => {
   const user = c.get("user");
@@ -584,13 +604,83 @@ meRoute.get("/board/feed", async (c) => {
     .limit(1);
   const facts = ru ? await db.select().from(rollupFacts).where(eq(rollupFacts.rollupId, ru.id)) : [];
 
+  // 전월 대비 델타(월별만): 직전 달들과 비교해 각 항목을 NEW / 연속N개월 / 승격(엇갈림→핵심)으로 태깅.
+  // 트리거는 이제 막 생긴 개념이라 델타 제외(전부 NEW 로 뜨는 노이즈 방지).
+  const deltaByFactId = new Map<string, { kind: "new" | "recurring" | "promoted"; months: number }>();
+  if (period === "month" && ru && facts.length > 0) {
+    const priorRus = await db
+      .select({ id: rollups.id, periodKey: rollups.periodKey })
+      .from(rollups)
+      .where(and(boardMatch(user.id, dim, key, "month"), lt(rollups.periodKey, periodKey)))
+      .orderBy(desc(rollups.periodKey))
+      .limit(6);
+    const priorFacts = priorRus.length
+      ? await db
+          .select({ rollupId: rollupFacts.rollupId, factType: rollupFacts.factType, content: rollupFacts.content })
+          .from(rollupFacts)
+          .where(inArray(rollupFacts.rollupId, priorRus.map((r) => r.id)))
+      : [];
+    const pkOf = new Map(priorRus.map((r) => [r.id, r.periodKey]));
+    const byMonth = new Map<string, { type: string; tokens: Set<string> }[]>();
+    for (const f of priorFacts) {
+      const pk = pkOf.get(f.rollupId);
+      if (!pk) continue;
+      const arr = byMonth.get(pk) ?? [];
+      arr.push({ type: f.factType, tokens: sigTokens(f.content ?? "") });
+      byMonth.set(pk, arr);
+    }
+    for (const f of facts) {
+      if (f.factType === "trigger") continue;
+      const tok = sigTokens(f.content ?? "");
+      let streak = 0;
+      let prevType: string | null = null;
+      for (let k = 1; k <= 6; k++) {
+        const monthFacts = byMonth.get(monthMinus(periodKey, k));
+        if (!monthFacts) break; // 달 자체가 없으면 연속 끊김
+        const match = monthFacts.find((pf) => factMatch(tok, pf.tokens));
+        if (!match) break;
+        if (k === 1) prevType = match.type;
+        streak++;
+      }
+      const kind = streak === 0 ? "new" : prevType === "conflict" && f.factType === "common" ? "promoted" : "recurring";
+      deltaByFactId.set(f.id, { kind, months: streak + 1 });
+    }
+  }
+
+  // 트리거 발화: 이 산업 트리거(내용 일치)를 발화시킨 콘텐츠(notifications) 를 항목에 붙인다.
+  // 흐름보드에서 흐름을 보며 어떤 트리거가 실제로 발화했는지 그 자리에서 확인.
+  const hitsByContent = new Map<string, { reportId: string; title: string | null; matched: string | null }[]>();
+  if (dim === "industry" && facts.some((f) => f.factType === "trigger")) {
+    const notifs = await db
+      .select({ body: notifications.body, reportId: notifications.reportId, detail: notifications.detail, matched: notifications.matched })
+      .from(notifications)
+      .where(and(eq(notifications.userId, user.id), eq(notifications.industryId, key), eq(notifications.kind, "trigger")))
+      .orderBy(desc(notifications.createdAt));
+    for (const n of notifs) {
+      if (!n.body || !n.reportId) continue;
+      const arr = hitsByContent.get(n.body) ?? [];
+      if (!arr.some((x) => x.reportId === n.reportId)) arr.push({ reportId: n.reportId, title: n.detail, matched: n.matched });
+      hitsByContent.set(n.body, arr);
+    }
+  }
+
   return c.json({
     dim,
     key,
     period,
     periodKey,
     label,
-    rollup: ru ? { oneLiner: ru.oneLiner, status: ru.status, facts } : null,
+    rollup: ru
+      ? {
+          oneLiner: ru.oneLiner,
+          status: ru.status,
+          facts: facts.map((f) => ({
+            ...f,
+            delta: deltaByFactId.get(f.id) ?? null,
+            hits: f.factType === "trigger" ? hitsByContent.get(f.content ?? "") ?? [] : undefined,
+          })),
+        }
+      : null,
     reports: reps,
   });
 });
@@ -1252,7 +1342,7 @@ meRoute.get("/flow-export.md", async (c) => {
 
   const factRows = rows.length
     ? await db
-        .select({ rollupId: rollupFacts.rollupId, content: rollupFacts.content, sort: rollupFacts.sort })
+        .select({ rollupId: rollupFacts.rollupId, content: rollupFacts.content, factType: rollupFacts.factType, sort: rollupFacts.sort })
         .from(rollupFacts)
         .where(inArray(rollupFacts.rollupId, rows.map((r) => r.id)))
     : [];
@@ -1260,7 +1350,8 @@ meRoute.get("/flow-export.md", async (c) => {
   for (const f of [...factRows].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))) {
     if (isBlank(f.content)) continue;
     const arr = factsBy.get(f.rollupId) ?? [];
-    arr.push(f.content as string);
+    const prefix = f.factType === "trigger" ? "⚠️ 흐름 위험 신호: " : f.factType === "conflict" ? "⚡ 엇갈림: " : "";
+    arr.push(prefix + (f.content as string));
     factsBy.set(f.rollupId, arr);
   }
 
@@ -1451,6 +1542,65 @@ meRoute.put("/reports/:id/industry", async (c) => {
   return c.json({ ok: true, industryId });
 });
 
+// PUT /api/me/reports/:id/industries - 산업 멀티태그 설정(1~3개). 첫 번째가 대표 산업.
+const setIndustriesSchema = z.object({ industryIds: z.array(z.string().uuid()).max(3) });
+meRoute.put("/reports/:id/industries", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const parsed = setIndustriesSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.id, id), eq(reports.userId, user.id)))
+    .limit(1);
+  if (!report) return c.json({ error: "리포트 없음" }, 404);
+
+  const ids = [...new Set(parsed.data.industryIds)]; // 순서 유지 + 중복 제거(첫 번째=대표)
+  if (ids.length > 0) {
+    const rows = await db.select({ id: industries.id, userId: industries.userId }).from(industries).where(inArray(industries.id, ids));
+    const valid = new Set(rows.filter((r) => r.userId === null || r.userId === user.id).map((r) => r.id));
+    if (valid.size !== ids.length) return c.json({ error: "없거나 접근 불가한 산업이 있습니다." }, 400);
+  }
+  const primary = ids[0] ?? null;
+
+  await db.update(reports).set({ industryId: primary, industryConfirmed: true }).where(eq(reports.id, id));
+  await db.delete(reportIndustries).where(eq(reportIndustries.reportId, id));
+  if (ids.length > 0) {
+    await db.insert(reportIndustries).values(ids.map((iid) => ({ reportId: id, industryId: iid }))).onConflictDoNothing();
+  }
+  if (primary) await db.insert(userIndustries).values({ userId: user.id, industryId: primary }).onConflictDoNothing(); // 대표만 핀
+  await db.update(entries).set({ industryId: primary }).where(eq(entries.reportId, id));
+  return c.json({ ok: true, industryIds: ids });
+});
+
+// GET /api/me/notifications - 최근 알림 + 안읽음 수(벨 표시용)
+meRoute.get("/notifications", async (c) => {
+  const user = c.get("user");
+  const rows = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, user.id))
+    .orderBy(desc(notifications.createdAt))
+    .limit(50);
+  const [cnt] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(notifications)
+    .where(and(eq(notifications.userId, user.id), eq(notifications.read, false)));
+  return c.json({ notifications: rows, unread: cnt?.n ?? 0 });
+});
+
+// POST /api/me/notifications/read - 읽음 처리({ids} 없으면 전체)
+meRoute.post("/notifications/read", async (c) => {
+  const user = c.get("user");
+  const body = (await c.req.json().catch(() => ({}))) as { ids?: unknown };
+  const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === "string") : null;
+  const cond = ids && ids.length ? inArray(notifications.id, ids) : eq(notifications.read, false);
+  await db.update(notifications).set({ read: true }).where(and(eq(notifications.userId, user.id), cond));
+  return c.json({ ok: true });
+});
+
 // GET /api/me/reports/:id - 리포트 1건 + 추출 작업 상태(AI 요약 작업 상태 조회)
 meRoute.get("/reports/:id", async (c) => {
   const user = c.get("user");
@@ -1540,16 +1690,6 @@ meRoute.get("/reports/:id/entries", async (c) => {
   if (!report) return c.json({ error: "리포트 없음" }, 404);
 
   const entryRows = await db.select().from(entries).where(eq(entries.reportId, id)).orderBy(entries.lensKey);
-  const ids = entryRows.map((e) => e.id);
-  const numbers = ids.length
-    ? await db.select().from(entryNumbers).where(inArray(entryNumbers.entryId, ids))
-    : [];
-  const byEntry = new Map<string, typeof numbers>();
-  for (const n of numbers) {
-    const arr = byEntry.get(n.entryId) ?? [];
-    arr.push(n);
-    byEntry.set(n.entryId, arr);
-  }
   // 유사 중복 원본 정보(있으면 제목)
   let dupInfo: { id: string; title: string | null } | null = null;
   if (report.dupOf) {
@@ -1562,7 +1702,7 @@ meRoute.get("/reports/:id/entries", async (c) => {
   }
   return c.json({
     report: (await attachIndustries([report]))[0],
-    entries: entryRows.map((e) => ({ ...e, numbers: byEntry.get(e.id) ?? [] })),
+    entries: entryRows,
     dupInfo,
   });
 });

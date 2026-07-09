@@ -22,7 +22,16 @@ export default function IndustryDashboard() {
   const [period, setPeriod] = useState(thisMonth());
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [newId, setNewId] = useState<string | null>(null); // 알림에서 넘어온 새 원문(트리거 발화)
   const flowRef = useRef<HTMLElement>(null);
+  const newRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setNewId(new URLSearchParams(window.location.search).get("new"));
+  }, []);
+  useEffect(() => {
+    if (loaded && newId && newRef.current) newRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loaded, newId]);
 
   const load = useCallback(async () => {
     const me = await api.me().catch(() => ({ user: null }));
@@ -103,9 +112,30 @@ export default function IndustryDashboard() {
   const rollupMonths = new Set(rollups.map((r) => r.periodKey));
   const months = [...new Set([...byMonth.keys(), ...pubByMonth.keys()])].filter((m) => !rollupMonths.has(m)).sort().reverse();
 
+  // 알림에서 넘어온 새 원문은 링(rose)으로 강조 + 스크롤 대상.
+  const renderCard = (r: Report) => {
+    const isNew = r.id === newId;
+    return (
+      <div key={r.id} ref={isNew ? newRef : undefined} className={isNew ? "rounded-card ring-2 ring-rose-300" : undefined}>
+        <ReportCard
+          report={r}
+          onDelete={async (rid) => {
+            await api.deleteReport(rid);
+            load();
+          }}
+        />
+      </div>
+    );
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <a href="/" className="text-sm text-ink-sub hover:text-ink">← 대시보드</a>
+      <button
+        onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/"))}
+        className="text-sm text-ink-sub hover:text-ink"
+      >
+        ← 뒤로
+      </button>
 
       <div className="mt-3 flex items-center justify-between">
         <h1 className="flex items-center gap-3 text-2xl font-bold">
@@ -133,6 +163,22 @@ export default function IndustryDashboard() {
           </a>
         </div>
       </div>
+
+      {/* 알림에서 넘어온 새 원문(흐름 위험 신호 감지) 안내 */}
+      {(() => {
+        const nr = newId ? reports.find((r) => r.id === newId) : null;
+        if (!nr) return null;
+        return (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-card border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm">
+            <span className="rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">NEW</span>
+            <span className="font-semibold text-rose-700">흐름 위험 신호 감지 자료</span>
+            <span className="min-w-0 flex-1 truncate text-ink-sub">{nr.title ?? "새 자료"}</span>
+            <a href={`/reports/${nr.id}`} className="shrink-0 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white hover:brightness-105">
+              원문 열기
+            </a>
+          </div>
+        );
+      })()}
 
       {/* 월별 흐름(롤업) — 단어 클릭/검색 시 AI 용어풀이(WordLookup 대상) */}
       <section ref={flowRef} className="mt-8">
@@ -185,16 +231,7 @@ export default function IndustryDashboard() {
                       {ru.periodKey} 원문 바로보기 ({cntOf(ru.periodKey)})
                     </summary>
                     <div className="mt-2 space-y-2">
-                      {(byMonth.get(ru.periodKey) ?? []).map((r) => (
-                        <ReportCard
-                          key={r.id}
-                          report={r}
-                          onDelete={async (rid) => {
-                            await api.deleteReport(rid);
-                            load();
-                          }}
-                        />
-                      ))}
+                      {(byMonth.get(ru.periodKey) ?? []).map(renderCard)}
                       {(pubByMonth.get(ru.periodKey) ?? []).map((c) => (
                         <PublicCard key={c.id} content={c} variant="feed" onRemoved={(cid) => setPub((p) => p.filter((x) => x.id !== cid))} />
                       ))}
@@ -224,16 +261,7 @@ export default function IndustryDashboard() {
                   <span className="font-normal">{cntOf(m)}건</span>
                 </summary>
                 <div className="space-y-2 px-3 pb-3">
-                  {(byMonth.get(m) ?? []).map((r) => (
-                    <ReportCard
-                      key={r.id}
-                      report={r}
-                      onDelete={async (rid) => {
-                        await api.deleteReport(rid);
-                        load();
-                      }}
-                    />
-                  ))}
+                  {(byMonth.get(m) ?? []).map(renderCard)}
                   {(pubByMonth.get(m) ?? []).map((c) => (
                     <PublicCard key={c.id} content={c} variant="feed" onRemoved={(cid) => setPub((p) => p.filter((x) => x.id !== cid))} />
                   ))}

@@ -6,6 +6,7 @@ import { api, type User, type Usage } from "@/lib/api";
 import { Logo } from "@/components/logo";
 import { BookmarkIcon } from "@/components/bookmark-icon";
 import { HelpButton } from "@/components/help-button";
+import { NotificationBell } from "@/components/notification-bell";
 
 const NAV = [
   { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
@@ -65,6 +66,7 @@ export function AppNav() {
             </span>
           )}
           <span className="hidden text-sm text-ink-sub md:inline">{user.displayName ?? user.email}</span>
+          <NotificationBell />
           <a
             href="/settings"
             aria-label="환경설정"
