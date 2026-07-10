@@ -196,7 +196,7 @@ meRoute.delete("/memos/:mid", async (c) => {
 
 // ===== 분석 엔진(LLM) 설정 — 개발자 계정만 로컬 CLI 엔진 선택 가능 =====
 const isDeveloper = (user: AppUser) => !!user.email && env.devEmails.includes(user.email.toLowerCase());
-type AnalysisProvider = "claude" | "codex" | "gemini";
+type AnalysisProvider = "claude" | "codex" | "gemini" | "ollama";
 
 // 이 사용자의 리포트에 적용할 분석 엔진 결정. 개발자가 로컬 CLI 엔진 선택 시에만 반영, 그 외 gemini(기본).
 async function resolveProvider(user: AppUser): Promise<AnalysisProvider> {
@@ -207,7 +207,7 @@ async function resolveProvider(user: AppUser): Promise<AnalysisProvider> {
     .from(userLlmSettings)
     .where(eq(userLlmSettings.userId, user.id))
     .limit(1);
-  return s?.p === "claude" || s?.p === "codex" ? s.p : "gemini";
+  return s?.p === "claude" || s?.p === "codex" || s?.p === "ollama" ? s.p : "gemini";
 }
 
 // GET /api/me/llm - 분석 엔진 설정(개발자 여부 + 현재 선택)
@@ -328,26 +328,25 @@ meRoute.put("/alert-settings", async (c) => {
   return c.json({ ok: true, ...parsed.data });
 });
 
-// ── 로컬 에이전트: 본인 PC에서 로컬 CLI(claude/codex)로 분석. analysisProvider 로 라우팅. ──
+// ── 로컬 에이전트: 본인 PC의 Ollama(로컬 오픈모델)로 분석. 무료·무제한, 약관 제약 없음. ──
 // GET /api/me/local-agent
 meRoute.get("/local-agent", async (c) => {
   const user = c.get("user");
   const [s] = await db.select({ p: userLlmSettings.analysisProvider }).from(userLlmSettings).where(eq(userLlmSettings.userId, user.id)).limit(1);
-  const engine = s?.p === "claude" || s?.p === "codex" ? s.p : null;
-  return c.json({ enabled: !!engine, engine, email: user.email });
+  return c.json({ enabled: s?.p === "ollama", email: user.email });
 });
 
-// PUT /api/me/local-agent { enabled, engine?: 'claude'|'codex' }
+// PUT /api/me/local-agent { enabled }
 meRoute.put("/local-agent", async (c) => {
   const user = c.get("user");
-  const parsed = z.object({ enabled: z.boolean(), engine: z.enum(["claude", "codex"]).optional() }).safeParse(await c.req.json().catch(() => ({})));
+  const parsed = z.object({ enabled: z.boolean() }).safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "invalid" }, 400);
-  const provider = parsed.data.enabled ? parsed.data.engine ?? "claude" : null;
+  const provider = parsed.data.enabled ? "ollama" : null;
   await db
     .insert(userLlmSettings)
     .values({ userId: user.id, analysisProvider: provider })
     .onConflictDoUpdate({ target: userLlmSettings.userId, set: { analysisProvider: provider, updatedAt: new Date() } });
-  return c.json({ ok: true, enabled: parsed.data.enabled, engine: provider });
+  return c.json({ ok: true, enabled: parsed.data.enabled });
 });
 
 // POST /api/me/public/ingest - 공공 콘텐츠 온디맨드 수집(개발자만). worker 의 ingest 스크립트를 백그라운드 실행.

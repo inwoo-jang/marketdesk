@@ -33,8 +33,11 @@ export const env = {
   // BYO Anthropic/OpenAI 모델(비우면 기본). 유저 키로 호출.
   anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-3-5-haiku-latest",
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-  // 로컬 에이전트 모드: 이 이메일 유저의 작업만 처리(본인 PC에서 로컬 CLI로). 비우면 일반(클라우드) 모드.
+  // 로컬 에이전트용 Ollama(로컬 오픈모델). 본인 PC에서 무료·무제한.
+  ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
+  ollamaModel: process.env.OLLAMA_MODEL ?? "llama3.1",
+  // 로컬 에이전트 모드: 이 이메일 유저의 작업만 처리(본인 PC의 Ollama로). 비우면 일반(클라우드) 모드.
   localAgentUserEmail: process.env.LOCAL_AGENT_USER_EMAIL ?? "",
-  // 클라우드 워커가 로컬 전용 엔진(claude/codex) 리포트를 건너뛸지(로컬 에이전트에 양보). 운영 배포 시 true.
+  // 클라우드 워커가 로컬 전용 엔진(claude/codex/ollama) 리포트를 건너뛸지(로컬 에이전트에 양보). 운영 배포 시 true.
   skipLocalProviders: process.env.WORKER_SKIP_LOCAL === "true",
 };

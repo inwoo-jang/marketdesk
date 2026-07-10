@@ -14,8 +14,8 @@ async function resolveLocalUser(): Promise<void> {
   localUserId = u.id;
   console.log(`로컬 에이전트 모드: ${env.localAgentUserEmail} 작업만 처리`);
 }
-// 로컬 전용 엔진(로컬 CLI 필요). 클라우드 워커는 skipLocalProviders 시 이들을 건너뜀.
-const LOCAL_PROVIDERS = ["claude", "codex"];
+// 로컬 전용 엔진(로컬에서 처리). 클라우드 워커는 skipLocalProviders 시 이들을 건너뜀(로컬 에이전트에 양보).
+const LOCAL_PROVIDERS = ["claude", "codex", "ollama"];
 
 // 흐름 재생성 배치: dirty 로 표시된(업로드로 바뀐) 롤업을 6시간마다 한 번만 재생성 → 업로드마다 재생성 방지(원가 절감).
 const ROLLUP_STALE_MS = 6 * 60 * 60 * 1000;

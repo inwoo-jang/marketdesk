@@ -7,6 +7,7 @@ import { MockProvider } from "./mock.js";
 import { GeminiProvider } from "./gemini.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { OpenAIProvider } from "./openai.js";
+import { OllamaProvider } from "./ollama.js";
 import { ClaudeCliProvider } from "./claude.js";
 import { CodexCliProvider } from "./codex.js";
 
@@ -48,6 +49,8 @@ export function getProvider(key?: string | null): Provider {
       return new ClaudeCliProvider(env.claudeModel || undefined);
     case "codex":
       return new CodexCliProvider(env.codexModel || undefined, env.codexCliPath);
+    case "ollama":
+      return new OllamaProvider(env.ollamaUrl, env.ollamaModel);
     case "gemini":
       if (!env.geminiApiKey) throw new Error("LLM_PROVIDER=gemini 인데 GEMINI_API_KEY 가 없습니다.");
       return new GeminiProvider(env.geminiApiKey, env.geminiModel);

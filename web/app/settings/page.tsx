@@ -36,15 +36,15 @@ export default function SettingsPage() {
     if (r) { setAlertSaved(true); setTimeout(() => setAlertSaved(false), 2000); }
   }
 
-  // 로컬 에이전트
-  const [agent, setAgent] = useState<{ enabled: boolean; engine: string | null; email: string | null } | null>(null);
+  // 로컬 에이전트(Ollama)
+  const [agent, setAgent] = useState<{ enabled: boolean; email: string | null } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
 
-  async function toggleAgent(enabled: boolean, engine?: "claude" | "codex") {
+  async function toggleAgent(enabled: boolean) {
     setAgentBusy(true);
-    const r = await api.setLocalAgent(enabled, engine).catch(() => null);
+    const r = await api.setLocalAgent(enabled).catch(() => null);
     setAgentBusy(false);
-    if (r) setAgent((a) => ({ enabled: r.enabled, engine: r.engine, email: a?.email ?? null }));
+    if (r) setAgent((a) => ({ enabled: r.enabled, email: a?.email ?? null }));
   }
 
   async function saveByo() {
@@ -360,34 +360,33 @@ export default function SettingsPage() {
         {byoMsg && <p className={`mt-2 text-xs ${byoMsg.ok ? "text-success-text" : "text-red-600"}`}>{byoMsg.text}</p>}
       </section>
 
-      {/* 로컬 에이전트 */}
+      {/* 로컬 에이전트 (Ollama) */}
       <section className="mt-4 rounded-card bg-card p-6 shadow-card">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-ink-muted">로컬 에이전트</h2>
+          <h2 className="text-sm font-semibold text-ink-muted">로컬 에이전트 · Ollama</h2>
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">헤비 유저</span>
         </div>
         <p className="mt-1 text-xs text-ink-muted">
-          본인 PC에서 에이전트를 돌려 자기 LLM(Claude·Codex CLI)으로 분석해요. 키 없이 본인 구독으로, 무제한. 켜면 새 업로드는 로컬 에이전트가 처리합니다.
+          본인 PC의 <b className="text-ink">Ollama</b>(로컬 오픈모델)로 분석해요. 완전 무료·무제한, 데이터도 내 컴퓨터 밖으로 안 나가요. 켜면 새 업로드는 로컬 에이전트가 처리합니다.
         </p>
         <div className="mt-3 flex items-center gap-2">
           {agent?.enabled ? (
             <>
-              <span className="rounded-lg bg-success-bg/40 px-3 py-1.5 text-sm font-medium text-success-text">사용 중 · {agent.engine === "codex" ? "Codex" : "Claude"} CLI</span>
+              <span className="rounded-lg bg-success-bg/40 px-3 py-1.5 text-sm font-medium text-success-text">사용 중 · Ollama</span>
               <button onClick={() => toggleAgent(false)} disabled={agentBusy} className="text-xs text-ink-sub hover:text-red-600 disabled:opacity-50">끄기</button>
             </>
           ) : (
-            <>
-              <button onClick={() => toggleAgent(true, "claude")} disabled={agentBusy} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-bg-deep disabled:opacity-50">Claude CLI로 켜기</button>
-              <button onClick={() => toggleAgent(true, "codex")} disabled={agentBusy} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-bg-deep disabled:opacity-50">Codex CLI로 켜기</button>
-            </>
+            <button onClick={() => toggleAgent(true)} disabled={agentBusy} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-bg-deep disabled:opacity-50">Ollama로 켜기</button>
           )}
         </div>
         {agent?.enabled && (
           <div className="mt-3 rounded-lg border border-line bg-bg-deep/40 p-3">
             <p className="text-xs font-semibold text-ink">에이전트 실행 방법</p>
-            <p className="mt-1 text-[11px] text-ink-muted">저장소를 받은 뒤, 아래로 본인 작업만 로컬에서 처리해요. (Claude/Codex CLI 로그인 필요)</p>
-            <pre className="mt-2 overflow-x-auto rounded bg-ink/5 p-2 text-[11px] text-ink">{`LOCAL_AGENT_USER_EMAIL=${agent.email ?? "you@example.com"} \\
-LLM_PROVIDER=${agent.engine ?? "claude"} \\
+            <p className="mt-1 text-[11px] text-ink-muted">① ollama.com 설치 → ② 모델 받기 → ③ 본인 작업만 로컬에서 처리(아래).</p>
+            <pre className="mt-2 overflow-x-auto rounded bg-ink/5 p-2 text-[11px] text-ink">{`ollama pull llama3.1
+
+LOCAL_AGENT_USER_EMAIL=${agent.email ?? "you@example.com"} \\
+LLM_PROVIDER=ollama \\
 pnpm --filter @reportlens/worker start`}</pre>
           </div>
         )}

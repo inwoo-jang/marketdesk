@@ -136,9 +136,8 @@ export const api = {
   alertSettings: () => get<{ dropPct: number; stopPct: number; enabled: boolean }>("/api/me/alert-settings"),
   setAlertSettings: (input: { dropPct: number; stopPct: number; enabled: boolean }) =>
     put<{ ok: true; dropPct: number; stopPct: number; enabled: boolean }>("/api/me/alert-settings", input),
-  localAgent: () => get<{ enabled: boolean; engine: string | null; email: string | null }>("/api/me/local-agent"),
-  setLocalAgent: (enabled: boolean, engine?: "claude" | "codex") =>
-    put<{ ok: true; enabled: boolean; engine: string | null }>("/api/me/local-agent", { enabled, engine }),
+  localAgent: () => get<{ enabled: boolean; email: string | null }>("/api/me/local-agent"),
+  setLocalAgent: (enabled: boolean) => put<{ ok: true; enabled: boolean }>("/api/me/local-agent", { enabled }),
   publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);

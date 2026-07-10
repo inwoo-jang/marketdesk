@@ -37,8 +37,8 @@ export type MergeCtx = { lenses: string[]; jobRole?: string };
 export type AnalyzeExtractResult = { meta: DocMeta; frame: EntryFrame; numbers: ExtractedNumber[] };
 
 export interface Provider {
-  // entries.provider 에 기록할 값(enum: gemini|claude|codex|mcp). mock 은 null.
-  providerKey: "gemini" | "claude" | "codex" | "mcp" | null;
+  // entries.provider 에 기록할 값(enum: gemini|claude|codex|mcp|ollama). mock 은 null.
+  providerKey: "gemini" | "claude" | "codex" | "mcp" | "ollama" | null;
   model: string; // entries.model (예: gemini-2.0-flash-001, mock)
   // 분류+분석 통합(리포트당 1회): 메타 분류 + 구조화 틀 + 관점 레이어(켠 렌즈만) + 가드레일용 numbers.
   // 문서를 2번 보내던 analyze/extract 2회 호출을 1회로 합침.

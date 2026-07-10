@@ -6,7 +6,7 @@ export const authProvider = pgEnum("auth_provider", ["google", "kakao"]);
 export const sourceType = pgEnum("source_type", ["broker", "public"]); // public = Phase2 자동수집
 export const parseStatus = pgEnum("parse_status", ["pending", "parsing", "parsed", "failed"]);
 export const entryStatus = pgEnum("entry_status", ["draft", "saved"]);
-export const llmProvider = pgEnum("llm_provider", ["gemini", "claude", "codex", "mcp"]);
+export const llmProvider = pgEnum("llm_provider", ["gemini", "claude", "codex", "mcp", "ollama"]);
 export const periodType = pgEnum("period_type", ["month", "year"]); // year = Phase2
 export const factType = pgEnum("fact_type", ["common", "conflict", "trigger"]); // trigger = 논리 붕괴 트리거
 export const llmTier = pgEnum("llm_tier", ["default", "byo", "mcp"]);
