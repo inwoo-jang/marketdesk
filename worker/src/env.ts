@@ -30,4 +30,7 @@ export const env = {
   kisAppSecret: process.env.KIS_APP_SECRET ?? "",
   // BYO(본인 API 키) 복호화용 앱 시크릿. api 와 동일해야 함.
   appEncKey: process.env.APP_ENC_KEY ?? "",
+  // BYO Anthropic/OpenAI 모델(비우면 기본). 유저 키로 호출.
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-3-5-haiku-latest",
+  openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
 };

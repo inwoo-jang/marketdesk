@@ -21,15 +21,16 @@ export default function SettingsPage() {
   // BYO(본인 API 키)
   const [byo, setByo] = useState<{ provider: string | null; hasKey: boolean } | null>(null);
   const [byoKeyInput, setByoKeyInput] = useState("");
+  const [byoProviderSel, setByoProviderSel] = useState<"gemini" | "anthropic" | "openai">("gemini");
   const [byoBusy, setByoBusy] = useState(false);
   const [byoMsg, setByoMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function saveByo() {
     if (!byoKeyInput.trim()) return;
     setByoBusy(true); setByoMsg(null);
-    const r = await api.setByoKey("gemini", byoKeyInput.trim()).catch(() => null);
+    const r = await api.setByoKey(byoProviderSel, byoKeyInput.trim()).catch(() => null);
     setByoBusy(false);
-    if (r) { setByo({ provider: "gemini", hasKey: true }); setByoKeyInput(""); setByoMsg({ ok: true, text: "연결됐어요. 이제 분석에 본인 키를 사용해요." }); }
+    if (r) { setByo({ provider: byoProviderSel, hasKey: true }); setByoKeyInput(""); setByoMsg({ ok: true, text: "연결됐어요. 이제 분석에 본인 키를 사용해요." }); }
     else setByoMsg({ ok: false, text: "키가 유효하지 않거나 저장에 실패했어요." });
   }
   async function removeByo() {
@@ -248,24 +249,44 @@ export default function SettingsPage() {
 
         {byo?.hasKey ? (
           <div className="mt-3 flex items-center justify-between rounded-lg border border-success-text/30 bg-success-bg/40 px-3 py-2">
-            <span className="text-sm font-medium text-success-text">Gemini 키 연결됨</span>
+            <span className="text-sm font-medium text-success-text">{byo.provider === "anthropic" ? "Claude" : byo.provider === "openai" ? "GPT" : "Gemini"} 키 연결됨</span>
             <button onClick={removeByo} disabled={byoBusy} className="text-xs font-medium text-ink-sub hover:text-red-600 disabled:opacity-50">제거</button>
           </div>
         ) : (
           <div className="mt-3">
+            {/* 제공사 선택 */}
+            <div className="mb-2 flex gap-1.5">
+              {([
+                { k: "gemini", label: "Gemini" },
+                { k: "anthropic", label: "Claude" },
+                { k: "openai", label: "GPT" },
+              ] as const).map((p) => (
+                <button
+                  key={p.k}
+                  onClick={() => setByoProviderSel(p.k)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${byoProviderSel === p.k ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
               <input
                 type="password"
                 value={byoKeyInput}
                 onChange={(e) => setByoKeyInput(e.target.value)}
-                placeholder="Gemini API 키 붙여넣기 (AIza...)"
+                placeholder={byoProviderSel === "gemini" ? "Gemini API 키 (AIza...)" : byoProviderSel === "anthropic" ? "Anthropic API 키 (sk-ant-...)" : "OpenAI API 키 (sk-...)"}
                 className="min-w-0 flex-1 rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary"
               />
               <button onClick={saveByo} disabled={byoBusy || !byoKeyInput.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
                 {byoBusy ? "확인 중..." : "연결"}
               </button>
             </div>
-            <p className="mt-1.5 text-[11px] text-ink-muted">키는 aistudio.google.com/apikey 에서 무료로 발급받을 수 있어요.</p>
+            <p className="mt-1.5 text-[11px] text-ink-muted">
+              {byoProviderSel === "gemini" && "aistudio.google.com/apikey 에서 무료 발급."}
+              {byoProviderSel === "anthropic" && "console.anthropic.com 에서 발급(유료)."}
+              {byoProviderSel === "openai" && "platform.openai.com/api-keys 에서 발급(유료)."}
+            </p>
           </div>
         )}
         {byoMsg && <p className={`mt-2 text-xs ${byoMsg.ok ? "text-success-text" : "text-red-600"}`}>{byoMsg.text}</p>}

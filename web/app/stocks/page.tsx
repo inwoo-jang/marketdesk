@@ -136,7 +136,7 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
       )}
 
       {showInvest && totals.hasAny && (
-        <section className="mt-4 rounded-card bg-card p-5 shadow-card">
+        <section className="mt-4 rounded-card border border-primary/20 bg-primary/[0.04] p-5 shadow-card">
           <p className="text-xs font-semibold text-ink-muted">{simulated ? "모의 포트폴리오" : "내 포트폴리오"}</p>
           {/* 메인: 보유 평가손익 */}
           {totals.heldCount > 0 ? (

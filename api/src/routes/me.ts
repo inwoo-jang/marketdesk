@@ -257,11 +257,25 @@ meRoute.get("/llm/inflight", async (c) => {
   return c.json({ count: (rep?.n ?? 0) + (ru?.n ?? 0) });
 });
 
-// ── BYO(본인 API 키): 전체 유저. 지금은 Gemini 키만. 서버에 AES 암호화 저장. ──
-async function verifyGeminiKey(key: string): Promise<boolean> {
+// ── BYO(본인 API 키): 전체 유저. Gemini·Anthropic·OpenAI. 서버에 AES 암호화 저장. ──
+async function verifyByoKey(provider: "gemini" | "anthropic" | "openai", key: string): Promise<boolean> {
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(8000) });
-    return r.ok;
+    if (provider === "gemini") {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(8000) });
+      return r.ok;
+    }
+    if (provider === "openai") {
+      const r = await fetch("https://api.openai.com/v1/models", { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+      return r.ok;
+    }
+    // anthropic: 무료 검증 엔드포인트가 없어 최소 메시지 호출. 401/403 = 무효.
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-3-5-haiku-latest", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return r.status !== 401 && r.status !== 403;
   } catch {
     return false;
   }
@@ -274,13 +288,13 @@ meRoute.get("/byo-key", async (c) => {
   return c.json({ provider: row?.p ?? null, hasKey: !!row?.k });
 });
 
-// PUT /api/me/byo-key - 키 등록/교체. { provider:'gemini', key }
+// PUT /api/me/byo-key - 키 등록/교체. { provider:'gemini'|'anthropic'|'openai', key }
 meRoute.put("/byo-key", async (c) => {
   const user = c.get("user");
   if (!env.appEncKey) return c.json({ error: "서버 암호화 키(APP_ENC_KEY) 미설정." }, 500);
-  const parsed = z.object({ provider: z.enum(["gemini"]), key: z.string().min(10).max(400) }).safeParse(await c.req.json().catch(() => ({})));
+  const parsed = z.object({ provider: z.enum(["gemini", "anthropic", "openai"]), key: z.string().min(10).max(400) }).safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "키를 확인해 주세요." }, 400);
-  if (!(await verifyGeminiKey(parsed.data.key))) return c.json({ error: "키가 유효하지 않아요. 다시 확인해 주세요." }, 400);
+  if (!(await verifyByoKey(parsed.data.provider, parsed.data.key))) return c.json({ error: "키가 유효하지 않아요. 다시 확인해 주세요." }, 400);
   const enc = encryptSecret(env.appEncKey, parsed.data.key);
   await db
     .insert(userLlmSettings)

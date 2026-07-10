@@ -5,30 +5,36 @@ import { db } from "../db.js";
 import type { Provider } from "./types.js";
 import { MockProvider } from "./mock.js";
 import { GeminiProvider } from "./gemini.js";
+import { AnthropicProvider } from "./anthropic.js";
+import { OpenAIProvider } from "./openai.js";
 import { ClaudeCliProvider } from "./claude.js";
 import { CodexCliProvider } from "./codex.js";
 
-// 유저별 엔진 해석: gemini 면 BYO(본인 키) 우선, 없으면 공용 키. 그 외는 getProvider.
+// 유저별 엔진 해석: 유저가 BYO(본인 키)를 등록했으면 그 키로 해당 provider 사용(전 provider 오버라이드).
+// 없으면 리포트에 박힌 엔진/공용 기본.
 export async function providerFor(llmProvider: string | null | undefined, userId: string): Promise<Provider> {
-  const selected = llmProvider || env.llmProvider;
-  if (selected === "gemini") {
-    let key = env.geminiApiKey;
-    if (env.appEncKey) {
-      const [row] = await db
-        .select({ p: userLlmSettings.byoProvider, k: userLlmSettings.byoKeyEnc })
-        .from(userLlmSettings)
-        .where(eq(userLlmSettings.userId, userId))
-        .limit(1);
-      if (row?.p === "gemini" && row.k) {
-        try {
-          key = decryptSecret(env.appEncKey, row.k);
-        } catch (e) {
-          console.error("BYO 키 복호화 실패:", e);
-        }
+  if (env.appEncKey) {
+    const [row] = await db
+      .select({ p: userLlmSettings.byoProvider, k: userLlmSettings.byoKeyEnc })
+      .from(userLlmSettings)
+      .where(eq(userLlmSettings.userId, userId))
+      .limit(1);
+    if (row?.p && row.k) {
+      try {
+        const key = decryptSecret(env.appEncKey, row.k);
+        if (row.p === "gemini") return new GeminiProvider(key, env.geminiModel);
+        if (row.p === "anthropic") return new AnthropicProvider(key, env.anthropicModel);
+        if (row.p === "openai") return new OpenAIProvider(key, env.openaiModel);
+      } catch (e) {
+        console.error("BYO 키 복호화/생성 실패, 기본 엔진으로:", e);
       }
     }
-    if (!key) throw new Error("gemini 키가 없습니다(BYO·env 둘 다).");
-    return new GeminiProvider(key, env.geminiModel);
+  }
+  // BYO 없음: gemini 기본은 공용 키
+  const selected = llmProvider || env.llmProvider;
+  if (selected === "gemini") {
+    if (!env.geminiApiKey) throw new Error("gemini 키가 없습니다.");
+    return new GeminiProvider(env.geminiApiKey, env.geminiModel);
   }
   return getProvider(llmProvider);
 }
