@@ -1,0 +1,1 @@
+ALTER TABLE "paper_positions" ADD COLUMN "simulated" boolean DEFAULT false NOT NULL;

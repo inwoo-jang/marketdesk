@@ -79,8 +79,8 @@ const num = (s: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-// 국내 기간별 시세(일 D / 월 M). code=단축코드. 최근 100건 제한 → 필요 구간만 요청.
-export async function domesticBars(code: string, period: "D" | "M", from: string, to: string): Promise<Bar[]> {
+// 국내 기간별 시세(일 D / 월 M / 년 Y). code=단축코드. 최근 100건 제한 → 필요 구간만 요청.
+export async function domesticBars(code: string, period: "D" | "M" | "Y", from: string, to: string): Promise<Bar[]> {
   const j = await kisGet("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice", "FHKST03010100", {
     FID_COND_MRKT_DIV_CODE: "J",
     FID_INPUT_ISCD: code,

@@ -14,7 +14,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const router = useRouter();
   const [detail, setDetail] = useState<StockDetail | null>(null);
-  const [period, setPeriod] = useState<"M" | "D">("M");
+  const [period, setPeriod] = useState<"Y" | "M" | "D">("M");
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [notes, setNotes] = useState<PaperNote[]>([]);
   const [articles, setArticles] = useState<RelatedArticle[]>([]);
@@ -23,7 +23,6 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [addBuy, setAddBuy] = useState(false);
 
   const overseas = detail?.security.isOverseas ?? false;
 
@@ -39,7 +38,9 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   }, [id, period]);
 
   if (!detail) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
-  const { security, quote, positions, summary } = detail;
+  const { security, quote, positions, summary, simSummary } = detail;
+  const realPositions = positions.filter((p) => !p.simulated);
+  const simPositions = positions.filter((p) => p.simulated);
   const markers = positions.map((p) => ({ date: p.buyDate }));
 
   async function addNote() {
@@ -87,40 +88,40 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-semibold text-ink-muted">주가 흐름 <span className="font-normal">(참고용)</span></p>
           <div className="flex gap-1 text-xs">
-            <button onClick={() => setPeriod("M")} className={`rounded px-2 py-0.5 ${period === "M" ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>월봉</button>
-            <button onClick={() => setPeriod("D")} className={`rounded px-2 py-0.5 ${period === "D" ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>일봉</button>
+            {(["Y", "M", "D"] as const).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)} className={`rounded px-2 py-0.5 ${period === p ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>{p === "Y" ? "연봉" : p === "M" ? "월봉" : "일봉"}</button>
+            ))}
           </div>
         </div>
         <PriceChart bars={bars} markers={markers} positive={summary.pnlPct != null ? summary.pnlPct >= 0 : undefined} />
-        {markers.length > 0 && <p className="mt-1 text-[11px] text-ink-muted">◦ 점선은 모의매수 시점</p>}
+        {markers.length > 0 && <p className="mt-1 text-[11px] text-ink-muted">◦ 점선은 매수/매도 시점</p>}
       </section>
 
-      {/* 모의 손익 */}
-      <section className="mt-4 rounded-card bg-card p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink-muted">모의 손익</h2>
-          <button onClick={() => setAddBuy((v) => !v)} className="text-xs font-medium text-primary">+ 매수 기록</button>
-        </div>
-        {addBuy && <QuickBuy securityId={id} currentPrice={quote?.price ?? summary.close} overseas={overseas} onDone={() => { setAddBuy(false); loadDetail(); }} />}
-        {summary.watchOnly ? (
-          <p className="mt-2 text-sm text-ink-sub">관심 등록만 되어 있어요. 매수를 기록하면 평가손익이 보여요.</p>
-        ) : (
-          <>
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
-              <span className={`text-xl font-extrabold ${(summary.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
-              </span>
-              <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(summary.pnlPct)}</span>
-              <span className="text-xs text-ink-muted">평단 {fmtMoney(summary.avgBuy, overseas)} · {summary.totalShares}주</span>
-            </div>
-            <div className="mt-3 space-y-1">
-              {positions.map((p) => (
-                <PositionRow key={p.id} p={p} overseas={overseas} onChanged={loadDetail} />
-              ))}
-            </div>
-          </>
-        )}
-      </section>
+      {/* 실제 보유 손익 */}
+      <PnlSection
+        securityId={id}
+        title="내 손익"
+        simulated={false}
+        summary={summary}
+        positions={realPositions}
+        overseas={overseas}
+        currentPrice={quote?.price ?? summary.close}
+        onChanged={loadDetail}
+      />
+
+      {/* 모의 손익 - 모의 거래가 있을 때만 */}
+      {!simSummary.watchOnly && (
+        <PnlSection
+          securityId={id}
+          title="모의 손익"
+          simulated
+          summary={simSummary}
+          positions={simPositions}
+          overseas={overseas}
+          currentPrice={quote?.price ?? summary.close}
+          onChanged={loadDetail}
+        />
+      )}
 
       {/* 투자일지 */}
       <section className="mt-4 rounded-card bg-card p-5 shadow-card">
@@ -192,8 +193,58 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function QuickBuy({ securityId, currentPrice, overseas, onDone }: { securityId: string; currentPrice?: number | null; overseas: boolean; onDone: () => void }) {
+// 손익 섹션(실제/모의 공용): 요약 + 거래 lot + 거래 추가.
+function PnlSection({
+  securityId, title, simulated, summary, positions, overseas, currentPrice, onChanged,
+}: {
+  securityId: string;
+  title: string;
+  simulated: boolean;
+  summary: StockDetail["summary"];
+  positions: PaperPosition[];
+  overseas: boolean;
+  currentPrice?: number | null;
+  onChanged: () => void;
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+  return (
+    <section className="mt-4 rounded-card bg-card p-5 shadow-card">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink-muted">
+          {title}
+          {simulated && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">모의</span>}
+        </h2>
+        <button onClick={() => setAddOpen((v) => !v)} className="text-xs font-medium text-primary">+ 거래 기록</button>
+      </div>
+      {addOpen && <QuickBuy securityId={securityId} simulated={simulated} currentPrice={currentPrice} overseas={overseas} onDone={() => { setAddOpen(false); onChanged(); }} />}
+      {summary.watchOnly ? (
+        <p className="mt-2 text-sm text-ink-sub">아직 거래 기록이 없어요. {simulated ? "모의 매수" : "매수"}를 기록하면 손익이 보여요.</p>
+      ) : (
+        <>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <span className={`text-xl font-extrabold ${(summary.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
+            </span>
+            <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(summary.pnlPct)}</span>
+            <span className="text-xs text-ink-muted">평단 {fmtMoney(summary.avgBuy, overseas)} · {summary.totalShares}주</span>
+            {summary.realizedPnl != null && summary.realizedPnl !== 0 && (
+              <span className="text-xs text-ink-muted">실현 {Math.round(summary.realizedPnl).toLocaleString()}원</span>
+            )}
+          </div>
+          <div className="mt-3 space-y-1">
+            {positions.map((p) => (
+              <PositionRow key={p.id} p={p} overseas={overseas} onChanged={onChanged} />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function QuickBuy({ securityId, simulated, currentPrice, overseas, onDone }: { securityId: string; simulated: boolean; currentPrice?: number | null; overseas: boolean; onDone: () => void }) {
   const today = new Date().toISOString().slice(0, 10);
+  const [side, setSide] = useState<"buy" | "sell">("buy");
   const [buyDate, setBuyDate] = useState(today);
   const [shares, setShares] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
@@ -203,20 +254,24 @@ function QuickBuy({ securityId, currentPrice, overseas, onDone }: { securityId: 
     const sh = Number(shares);
     if (!sh || sh <= 0) return;
     setBusy(true);
-    await api.addPosition({ securityId, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined }).catch(() => {});
+    await api.addPosition({ securityId, side, simulated, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined }).catch(() => {});
     setBusy(false);
     onDone();
   }
   return (
     <div className="mt-3 rounded-lg border border-line bg-bg-deep/30 p-3">
-      {currentPrice != null && buyDate === today && (
-        <p className="mb-2 text-xs text-ink-muted">현재가 <b className="text-ink">{priceHint}{overseas ? "" : "원"}</b> · 단가 비우면 현재가로 체결</p>
-      )}
+      <div className="mb-2 flex items-center gap-1">
+        <button onClick={() => setSide("buy")} className={`rounded px-2.5 py-1 text-xs font-bold ${side === "buy" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}>매수</button>
+        <button onClick={() => setSide("sell")} className={`rounded px-2.5 py-1 text-xs font-bold ${side === "sell" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700"}`}>매도</button>
+        {currentPrice != null && buyDate === today && (
+          <span className="ml-1 text-[11px] text-ink-muted">현재가 <b className="text-ink">{priceHint}{overseas ? "" : "원"}</b> · 단가 비우면 현재가로 체결</span>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         <input type="date" value={buyDate} onChange={(e) => setBuyDate(e.target.value)} className="rounded-lg border border-line bg-card px-2 py-1 text-xs" />
         <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="주수" className="w-20 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
         <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder={`단가(${priceHint})`} className="w-28 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
-        <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">추가</button>
+        <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">기록</button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq, or, ilike, sql, desc } from "drizzle-orm";
+import { and, eq, or, ilike, sql, desc, inArray } from "drizzle-orm";
 import { securities, userSecurities, paperPositions, paperNotes, reports } from "@reportlens/db";
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
@@ -103,23 +103,33 @@ stocksRoute.get("/browse", async (c) => {
   return c.json({ group, results: rows.slice(0, LIMIT), hasMore });
 });
 
-// GET / : 내 종목 목록(관심 + 모의매수). 각 종목 손익 요약 포함.
+// GET /?sim=1 : 내 종목 목록. sim=0(기본)=실제 보유+관심, sim=1=모의 연습.
 stocksRoute.get("/", async (c) => {
   const user = c.get("user");
-  const regs = await db
-    .select({ security: securities, createdAt: userSecurities.createdAt })
-    .from(userSecurities)
-    .innerJoin(securities, eq(securities.id, userSecurities.securityId))
-    .where(eq(userSecurities.userId, user.id))
-    .orderBy(desc(userSecurities.createdAt));
+  const sim = c.req.query("sim") === "1";
   const positions = await db
     .select()
     .from(paperPositions)
-    .where(eq(paperPositions.userId, user.id));
+    .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, sim)));
   const bySec = new Map<string, Position[]>();
   for (const p of positions) {
     if (!p.securityId) continue;
     (bySec.get(p.securityId) ?? bySec.set(p.securityId, []).get(p.securityId)!).push(p);
+  }
+  // 실제 탭: 관심(user_securities) + 실제 보유. 모의 탭: 모의 거래가 있는 종목만.
+  let regs: { security: Security; createdAt: Date }[];
+  if (sim) {
+    const ids = [...bySec.keys()];
+    regs = ids.length
+      ? (await db.select().from(securities).where(inArray(securities.id, ids))).map((s) => ({ security: s, createdAt: new Date(0) }))
+      : [];
+  } else {
+    regs = await db
+      .select({ security: securities, createdAt: userSecurities.createdAt })
+      .from(userSecurities)
+      .innerJoin(securities, eq(securities.id, userSecurities.securityId))
+      .where(eq(userSecurities.userId, user.id))
+      .orderBy(desc(userSecurities.createdAt));
   }
   const items = [];
   for (const r of regs) {
@@ -146,6 +156,7 @@ stocksRoute.get("/diary", async (c) => {
       market: securities.market,
       isOverseas: securities.isOverseas,
       side: paperPositions.side,
+      simulated: paperPositions.simulated,
       shares: paperPositions.shares,
       buyPrice: paperPositions.buyPrice,
       reason: paperPositions.reason,
@@ -168,8 +179,8 @@ stocksRoute.get("/diary", async (c) => {
     .leftJoin(securities, eq(securities.id, paperNotes.securityId))
     .where(eq(paperNotes.userId, user.id));
   const items = [
-    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
-    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
+    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });
@@ -195,6 +206,7 @@ stocksRoute.post("/positions", async (c) => {
     .object({
       securityId: z.string().uuid(),
       side: z.enum(["buy", "sell"]).optional(),
+      simulated: z.boolean().optional(),
       buyDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       shares: z.number().positive(),
       buyPrice: z.number().positive().optional(),
@@ -205,6 +217,7 @@ stocksRoute.post("/positions", async (c) => {
   const sec = await findSecurity(parsed.data.securityId);
   if (!sec) return c.json({ error: "종목을 찾을 수 없어요." }, 404);
   const side = parsed.data.side ?? "buy";
+  const simulated = parsed.data.simulated ?? false;
   let buyPrice = parsed.data.buyPrice ?? null;
   if (buyPrice == null) {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -219,7 +232,7 @@ stocksRoute.post("/positions", async (c) => {
   await db.insert(userSecurities).values({ userId: user.id, securityId: sec.id }).onConflictDoNothing();
   const [pos] = await db
     .insert(paperPositions)
-    .values({ userId: user.id, securityId: sec.id, name: sec.name, side, buyDate: parsed.data.buyDate, shares: parsed.data.shares, buyPrice, reason: parsed.data.reason ?? null })
+    .values({ userId: user.id, securityId: sec.id, name: sec.name, side, simulated, buyDate: parsed.data.buyDate, shares: parsed.data.shares, buyPrice, reason: parsed.data.reason ?? null })
     .returning();
   return c.json({ ok: true, position: pos });
 });
@@ -287,12 +300,15 @@ stocksRoute.get("/:securityId", async (c) => {
     .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.securityId, sec.id)))
     .orderBy(paperPositions.buyDate);
   const quote = await liveQuote(sec);
-  const summary = summarize(positions, quote?.price ?? null);
+  const close = quote?.price ?? null;
+  const summary = summarize(positions.filter((p) => !p.simulated), close); // 실제 보유
+  const simSummary = summarize(positions.filter((p) => p.simulated), close); // 모의
   return c.json({
     security: { id: sec.id, code: sec.code, name: sec.name, market: sec.market, isOverseas: sec.isOverseas },
     quote,
     positions,
     summary,
+    simSummary,
   });
 });
 
@@ -300,7 +316,8 @@ stocksRoute.get("/:securityId", async (c) => {
 stocksRoute.get("/:securityId/series", async (c) => {
   const sec = await findSecurity(c.req.param("securityId"));
   if (!sec) return c.json({ error: "종목을 찾을 수 없어요." }, 404);
-  const period = c.req.query("period") === "D" ? "D" : "M";
+  const pq = c.req.query("period");
+  const period = pq === "D" ? "D" : pq === "Y" ? "Y" : "M";
   const bars = await getSeries(sec, period);
   return c.json({ period, bars });
 });

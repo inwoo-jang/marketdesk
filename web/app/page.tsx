@@ -473,7 +473,7 @@ export default function Home() {
             {stockTotals && stockTotals.count > 0 ? (
               stockTotals.pct != null ? (
                 <div className="mt-0.5 text-xs">
-                  <span className="text-ink-muted">모의 평가손익 </span>
+                  <span className="text-ink-muted">평가손익 </span>
                   <span className={`font-semibold ${stockTotals.pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                     {stockTotals.pnl >= 0 ? "+" : ""}{Math.round(stockTotals.pnl).toLocaleString()}원 ({stockTotals.pct >= 0 ? "+" : ""}{stockTotals.pct.toFixed(1)}%)
                   </span>

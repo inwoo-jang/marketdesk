@@ -5,8 +5,8 @@ import { domesticBars, overseasBars, domesticQuote, overseasQuote, kisEnabled, t
 
 type Security = typeof securities.$inferSelect;
 
-// 신선도(ms): 일봉은 장중 갱신 잦음 → 4h, 월봉 → 20h. 지나면 KIS 재조회.
-const TTL: Record<string, number> = { D: 4 * 60 * 60 * 1000, M: 20 * 60 * 60 * 1000 };
+// 신선도(ms): 일봉 4h, 월봉·연봉 20h. 지나면 KIS 재조회.
+const TTL: Record<string, number> = { D: 4 * 60 * 60 * 1000, M: 20 * 60 * 60 * 1000, Y: 20 * 60 * 60 * 1000 };
 
 // 오늘(KST) 문자열. Date 직접 사용은 지양하지만 여기선 조회 구간 계산용.
 function today(): string {
@@ -28,14 +28,15 @@ async function isFresh(securityId: string, period: string): Promise<boolean> {
   return Date.now() - row.fetchedAt.getTime() < (TTL[period] ?? TTL.D);
 }
 
-async function fetchBars(sec: Security, period: "D" | "M"): Promise<Bar[]> {
+async function fetchBars(sec: Security, period: "D" | "M" | "Y"): Promise<Bar[]> {
   const to = today();
   if (sec.isOverseas) {
     if (!sec.excd) return [];
-    return overseasBars(sec.excd, sec.code, period, to);
+    // 해외는 연봉 미지원 → 월봉으로 대체(프론트에서 연 단위 표시)
+    return overseasBars(sec.excd, sec.code, period === "Y" ? "M" : period, to);
   }
-  // 국내: 월봉은 넉넉히(수 년), 일봉은 최근 ~160일(KIS 1회 100건 제한)
-  const from = period === "M" ? daysAgo(6 * 365) : daysAgo(160);
+  // 국내: 연봉 최대(약 20년), 월봉 수 년, 일봉 최근 ~160일(KIS 1회 100건 제한)
+  const from = period === "Y" ? daysAgo(20 * 365) : period === "M" ? daysAgo(6 * 365) : daysAgo(160);
   return domesticBars(sec.code, period, from, to);
 }
 
@@ -63,7 +64,7 @@ const sqlLow = sql`excluded.low`;
 const sqlVol = sql`excluded.volume`;
 
 // 시세 시계열: 캐시 신선하면 그대로, 아니면 KIS 재조회 후 반환.
-export async function getSeries(sec: Security, period: "D" | "M"): Promise<{ date: string; close: number }[]> {
+export async function getSeries(sec: Security, period: "D" | "M" | "Y"): Promise<{ date: string; close: number }[]> {
   if (kisEnabled() && !(await isFresh(sec.id, period))) {
     try {
       const bars = await fetchBars(sec, period);

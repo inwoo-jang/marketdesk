@@ -205,16 +205,16 @@ export const api = {
   stockBrowse: (group: string, offset = 0) =>
     get<{ group: string; results: SecurityLite[]; hasMore: boolean }>(`/api/stocks/browse?group=${encodeURIComponent(group)}&offset=${offset}`),
   stockDiary: () => get<{ items: DiaryItem[] }>("/api/stocks/diary"),
-  myStocks: () => get<{ items: StockSummary[] }>("/api/stocks"),
+  myStocks: (sim = false) => get<{ items: StockSummary[] }>(`/api/stocks${sim ? "?sim=1" : ""}`),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
-  addPosition: (input: { securityId: string; side?: "buy" | "sell"; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
+  addPosition: (input: { securityId: string; side?: "buy" | "sell"; simulated?: boolean; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
     post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
   updatePosition: (id: string, input: { side?: "buy" | "sell"; buyDate?: string; shares?: number; buyPrice?: number | null; reason?: string | null }) =>
     put<{ ok: true; position: PaperPosition }>(`/api/stocks/positions/${id}`, input),
   deletePosition: (id: string) => del<{ ok: true }>(`/api/stocks/positions/${id}`),
   removeStock: (securityId: string) => del<{ ok: true }>(`/api/stocks/${securityId}`),
   stockDetail: (securityId: string) => get<StockDetail>(`/api/stocks/${securityId}`),
-  stockSeries: (securityId: string, period: "M" | "D") =>
+  stockSeries: (securityId: string, period: "Y" | "M" | "D") =>
     get<{ period: string; bars: PriceBar[] }>(`/api/stocks/${securityId}/series?period=${period}`),
   stockNotes: (securityId: string) => get<{ notes: PaperNote[] }>(`/api/stocks/${securityId}/notes`),
   addStockNote: (securityId: string, input: { noteDate: string; body: string; category?: NoteCategory }) =>
@@ -244,6 +244,7 @@ export type PaperPosition = {
   securityId: string | null;
   name: string;
   side: "buy" | "sell";
+  simulated: boolean;
   buyDate: string;
   shares: number;
   buyPrice: number | null;
@@ -257,7 +258,8 @@ export type StockDetail = {
   security: SecurityLite;
   quote: StockQuote | null;
   positions: PaperPosition[];
-  summary: Omit<StockSummary, "security">;
+  summary: Omit<StockSummary, "security" | "changeRate">; // 실제 보유
+  simSummary: Omit<StockSummary, "security" | "changeRate">; // 모의
 };
 export type PriceBar = { date: string; close: number };
 export type DiaryItem = {
@@ -270,6 +272,7 @@ export type DiaryItem = {
   isOverseas: boolean | null;
   shares?: number;
   buyPrice?: number | null;
+  simulated?: boolean;
   reason?: string | null;
   category?: NoteCategory | null;
   body?: string;

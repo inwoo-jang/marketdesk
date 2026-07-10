@@ -225,6 +225,13 @@
       "when": 1783663927162,
       "tag": "0031_exotic_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783665545853,
+      "tag": "0032_solid_whistler",
+      "breakpoints": true
     }
   ]
 }

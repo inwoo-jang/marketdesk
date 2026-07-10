@@ -13,7 +13,7 @@ const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undef
 const fmtPct = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
 
 export default function StocksPage() {
-  const [tab, setTab] = useState<"info" | "diary">("info");
+  const [tab, setTab] = useState<"info" | "sim" | "diary">("info");
   const [label, setLabel] = useState("내 종목");
   const [showInvest, setShowInvest] = useState(true);
 
@@ -30,10 +30,13 @@ export default function StocksPage() {
 
       <div className="mt-4 flex gap-1 border-b border-line">
         <TabBtn active={tab === "info"} onClick={() => setTab("info")}>종목 정보</TabBtn>
+        <TabBtn active={tab === "sim"} onClick={() => setTab("sim")}>모의 종목</TabBtn>
         <TabBtn active={tab === "diary"} onClick={() => setTab("diary")}>다이어리</TabBtn>
       </div>
 
-      {tab === "info" ? <InfoTab showInvest={showInvest} /> : <DiaryTab />}
+      {tab === "info" && <InfoTab key="info" showInvest={showInvest} simulated={false} />}
+      {tab === "sim" && <InfoTab key="sim" showInvest simulated />}
+      {tab === "diary" && <DiaryTab />}
     </main>
   );
 }
@@ -49,13 +52,13 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-// ─── 종목 정보 탭: 관심/보유 종목 목록 + 주가 정보 ───
-function InfoTab({ showInvest }: { showInvest: boolean }) {
+// ─── 종목 정보(실제) / 모의 종목 탭: 목록 + 손익 요약 ───
+function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: boolean }) {
   const [items, setItems] = useState<StockSummary[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [sort, setSort] = useState<"recent" | "pnl">("recent");
-  const load = () => api.myStocks().then((r) => setItems(r.items)).catch(() => setItems([]));
-  useEffect(() => { load(); }, []);
+  const load = () => api.myStocks(simulated).then((r) => setItems(r.items)).catch(() => setItems([]));
+  useEffect(() => { load(); }, [simulated]);
 
   const sorted = useMemo(() => {
     if (!items) return [];
@@ -85,7 +88,7 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
 
       {showInvest && totals.count > 0 && (
         <section className="mt-4 rounded-card bg-card p-5 shadow-card">
-          <p className="text-xs font-semibold text-ink-muted">모의 포트폴리오</p>
+          <p className="text-xs font-semibold text-ink-muted">{simulated ? "모의 포트폴리오" : "내 포트폴리오"}</p>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
             <span className={`text-xl font-extrabold ${totals.pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}>
               {totals.pnl >= 0 ? "+" : ""}{Math.round(totals.pnl).toLocaleString()}원
@@ -93,7 +96,7 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
             <span className={`text-sm font-semibold ${(totals.pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(totals.pct)}</span>
             <span className="text-xs text-ink-muted">평가액 {Math.round(totals.value).toLocaleString()}원 · 원금 {Math.round(totals.cost).toLocaleString()}원</span>
           </div>
-          <p className="mt-2 text-[11px] text-ink-muted">참고용 모의 기록이에요. 실제 투자 권유가 아닙니다.</p>
+          <p className="mt-2 text-[11px] text-ink-muted">{simulated ? "참고용 모의 기록이에요. 실제 투자 권유가 아닙니다." : "직접 입력한 실제 보유 기록이에요."}</p>
         </section>
       )}
 
@@ -105,10 +108,18 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
           </div>
         )}
         {sorted.map((it) => (
-          <Link key={it.security.id} href={`/stocks/${it.security.id}`} className="flex items-center justify-between rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40">
+          <Link
+            key={it.security.id}
+            href={`/stocks/${it.security.id}`}
+            className="flex items-center justify-between rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40"
+          >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                {it.watchOnly && <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" title="관심 종목" />}
+                {simulated ? (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" title="모의 종목" />
+                ) : !it.watchOnly ? (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" title="보유 종목" />
+                ) : null}
                 <span className="truncate font-semibold text-ink">{it.security.name}</span>
                 <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
               </div>
@@ -122,7 +133,7 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
             </div>
             {!it.watchOnly && showInvest && it.pnlPct != null && (
               <div className="shrink-0 text-right">
-                <div className="text-[10px] text-ink-muted">모의 수익률</div>
+                <div className="text-[10px] text-ink-muted">{simulated ? "모의 수익률" : "수익률"}</div>
                 <div className={`text-sm font-bold ${it.pnlPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(it.pnlPct)}</div>
                 <div className={`text-xs ${(it.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                   {(it.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(it.pnl ?? 0).toLocaleString()}원
@@ -133,7 +144,7 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
         ))}
       </div>
 
-      {adding && <AddStockModal invest={showInvest} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
+      {adding && <AddStockModal invest={showInvest} simulated={simulated} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
     </>
   );
 }
@@ -191,6 +202,7 @@ function DiaryTab() {
                       {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
                       {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
                       {e.kind === "note" && !cat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>}
+                      {e.kind !== "note" && e.simulated && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">모의</span>}
                       <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
                       {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
                     </div>
@@ -219,6 +231,8 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
   const [picked, setPicked] = useState<SecurityLite | null>(null);
   const [holding, setHolding] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
+  const [period, setPeriod] = useState<"Y" | "M" | "D">("M");
+  const [real, setReal] = useState(true); // 실제/모의
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SecurityLite[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -239,11 +253,14 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
     if (q.trim().length < 1) { setResults([]); return; }
     timer.current = setTimeout(() => api.stockSearch(q.trim()).then((r) => setResults(r.results)).catch(() => setResults([])), 200);
   }, [q, picked]);
+  useEffect(() => {
+    if (!picked) return;
+    api.stockSeries(picked.id, period).then((r) => setBars(r.bars)).catch(() => setBars([]));
+  }, [picked, period]);
 
   function pick(s: SecurityLite) {
     setPicked(s); setResults([]); setAi(null); setCat("buy");
     api.stockDetail(s.id).then(setHolding).catch(() => setHolding(null));
-    api.stockSeries(s.id, "D").then((r) => setBars(r.bars)).catch(() => setBars([]));
   }
   function reset() {
     setPicked(null); setHolding(null); setBars([]); setQ(""); setShares(""); setPrice(""); setText(""); setAi(null);
@@ -262,7 +279,7 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
       if (isTrade) {
         const sh = Number(shares);
         if (!sh || sh <= 0) { setBusy(false); return; }
-        await api.addPosition({ securityId: picked.id, side: cat as "buy" | "sell", buyDate: date, shares: sh, buyPrice: price ? Number(price) : undefined, reason: text.trim() || undefined });
+        await api.addPosition({ securityId: picked.id, side: cat as "buy" | "sell", simulated: !real, buyDate: date, shares: sh, buyPrice: price ? Number(price) : undefined, reason: text.trim() || undefined });
       } else {
         if (!text.trim()) { setBusy(false); return; }
         await api.addStockNote(picked.id, { noteDate: date, body: text.trim(), category: cat as NoteCategory });
@@ -325,9 +342,14 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
             <button onClick={reset} className="text-xs text-ink-muted hover:text-ink">변경</button>
           </div>
 
-          {/* 그 종목의 최근 주가 흐름(매수/매도 이후 흐름 참고) */}
+          {/* 그 종목의 주가 흐름 - 연/월/일 */}
           {bars.length > 1 && (
             <div className="mt-2 rounded-lg border border-line bg-bg-deep/20 p-2">
+              <div className="mb-1 flex justify-end gap-1 text-[11px]">
+                {(["Y", "M", "D"] as const).map((p) => (
+                  <button key={p} onClick={() => setPeriod(p)} className={`rounded px-1.5 py-0.5 ${period === p ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>{p === "Y" ? "연" : p === "M" ? "월" : "일"}</button>
+                ))}
+              </div>
               <PriceChart bars={bars} markers={markers} height={110} />
             </div>
           )}
@@ -349,6 +371,12 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
 
           {isTrade ? (
             <div className="mt-3 space-y-2">
+              {/* 실제/모의 구분 */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-ink-muted">기록 대상</span>
+                <button onClick={() => setReal(true)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${real ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>실제 보유</button>
+                <button onClick={() => setReal(false)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${!real ? "bg-violet-100 text-violet-700" : "text-ink-muted hover:bg-bg-deep"}`}>모의</button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
                 <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="주수" className="w-20 rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
@@ -382,14 +410,15 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
 const KO_TABS = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".split("");
 const EN_TABS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: () => void; onDone: () => void }) {
+function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean; simulated: boolean; onClose: () => void; onDone: () => void }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SecurityLite[]>([]);
+  const [mine, setMine] = useState<SecurityLite[]>([]);
   const [hangul, setHangul] = useState(true); // 한/영 토글
   const [group, setGroup] = useState("ㄱ");
   const [browse, setBrowse] = useState<SecurityLite[]>([]);
   const [picked, setPicked] = useState<SecurityLite | null>(null);
-  const [mode, setMode] = useState<"watch" | "buy">(invest ? "buy" : "watch");
+  const [mode, setMode] = useState<"watch" | "buy" | "sell">("buy");
   const [buyDate, setBuyDate] = useState(new Date().toISOString().slice(0, 10));
   const [shares, setShares] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
@@ -410,6 +439,8 @@ function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: 
     api.stockBrowse(group).then((r) => setBrowse(r.results)).catch(() => setBrowse([]));
   }, [group, picked, searching]);
 
+  useEffect(() => { api.myStocks(false).then((r) => setMine(r.items.map((i) => i.security))).catch(() => {}); }, []);
+
   async function submit() {
     if (!picked) return;
     setBusy(true); setErr("");
@@ -418,7 +449,7 @@ function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: 
       else {
         const sh = Number(shares);
         if (!sh || sh <= 0) { setErr("주수를 입력해 주세요."); setBusy(false); return; }
-        await api.addPosition({ securityId: picked.id, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined });
+        await api.addPosition({ securityId: picked.id, side: mode, simulated, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined });
       }
       onDone();
     } catch {
@@ -435,7 +466,17 @@ function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: 
 
         {!picked ? (
           <>
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="종목명 검색 (예: 삼성전자)" className="mt-3 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+            {!searching && mine.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-ink-muted">내 종목에서</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {mine.map((s) => (
+                    <button key={s.id} onClick={() => setPicked(s)} className="rounded-full border border-line bg-bg-deep/30 px-3 py-1 text-sm font-medium text-ink hover:border-primary hover:text-primary">{s.name}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="그 외 종목 검색 (예: 삼성전자)" className="mt-3 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
             {!searching && (
               <>
                 <div className="mt-2 flex gap-1">
@@ -466,20 +507,23 @@ function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: 
               <button onClick={() => setPicked(null)} className="text-xs text-ink-muted hover:text-ink">다시 선택</button>
             </div>
             <div className="mt-3 flex gap-2">
-              <button onClick={() => setMode("watch")} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${mode === "watch" ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"}`}>관심만 등록</button>
-              <button onClick={() => setMode("buy")} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${mode === "buy" ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"}`}>모의매수 기록</button>
+              {!simulated && (
+                <button onClick={() => setMode("watch")} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${mode === "watch" ? "border-primary bg-primary/10 text-primary" : "border-line text-ink-sub"}`}>관심만</button>
+              )}
+              <button onClick={() => setMode("buy")} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${mode === "buy" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-line text-ink-sub"}`}>{simulated ? "모의 매수" : "매수"}</button>
+              <button onClick={() => setMode("sell")} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${mode === "sell" ? "border-rose-500 bg-rose-50 text-rose-700" : "border-line text-ink-sub"}`}>{simulated ? "모의 매도" : "매도"}</button>
             </div>
-            {mode === "buy" && (
+            {mode !== "watch" && (
               <div className="mt-3 space-y-2">
-                <label className="block text-xs text-ink-muted">매수일
+                <label className="block text-xs text-ink-muted">{mode === "buy" ? "매수" : "매도"}일
                   <input type="date" value={buyDate} onChange={(e) => setBuyDate(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
                 </label>
                 <div className="flex gap-2">
                   <label className="block flex-1 text-xs text-ink-muted">주수
                     <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="10" className="mt-1 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
                   </label>
-                  <label className="block flex-1 text-xs text-ink-muted">매수단가 (비우면 자동)
-                    <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="매수일 종가" className="mt-1 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+                  <label className="block flex-1 text-xs text-ink-muted">{mode === "buy" ? "매수" : "매도"}단가 (비우면 현재가)
+                    <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="현재가 자동" className="mt-1 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
                   </label>
                 </div>
               </div>

@@ -86,6 +86,7 @@ export const paperPositions = pgTable("paper_positions", {
   securityId: uuid("security_id").references(() => securities.id, { onDelete: "set null" }), // 미해결 시 null
   name: text("name").notNull(), // 표시명(미해결이어도 유지)
   side: text("side").default("buy").notNull(), // buy | sell
+  simulated: boolean("simulated").default(false).notNull(), // false=실제 보유, true=모의 연습
   buyDate: date("buy_date").notNull(), // 거래일(매수/매도 공통)
   shares: doublePrecision("shares").notNull(),
   buyPrice: doublePrecision("buy_price"), // 체결가. null 이면 거래일 종가로 자동
