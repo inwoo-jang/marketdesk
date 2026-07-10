@@ -213,7 +213,14 @@ export const api = {
   stockBrowse: (group: string, offset = 0) =>
     get<{ group: string; results: SecurityLite[]; hasMore: boolean }>(`/api/stocks/browse?group=${encodeURIComponent(group)}&offset=${offset}`),
   stockDiary: () => get<{ items: DiaryItem[] }>("/api/stocks/diary"),
-  myStocks: (sim = false) => get<{ items: StockSummary[] }>(`/api/stocks${sim ? "?sim=1" : ""}`),
+  myStocks: (sim = false, live = false) => {
+    const q = new URLSearchParams();
+    if (sim) q.set("sim", "1");
+    if (live) q.set("live", "1");
+    const qs = q.toString();
+    return get<{ items: StockSummary[] }>(`/api/stocks${qs ? `?${qs}` : ""}`);
+  },
+  resetSimStocks: () => post<{ ok: true }>("/api/stocks/sim/reset"),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
   bookmarkStock: (securityId: string, on: boolean) => post<{ ok: true; bookmarked: boolean }>(`/api/stocks/${securityId}/bookmark`, { on }),
   setStopLoss: (securityId: string, stopPct: number | null) => put<{ ok: true; stopPct: number | null }>(`/api/stocks/${securityId}/stop-loss`, { stopPct }),

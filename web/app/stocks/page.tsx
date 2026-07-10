@@ -8,6 +8,7 @@ import { PriceChart } from "@/components/price-chart";
 import { BookmarkIcon } from "@/components/bookmark-icon";
 import { MarketStatus } from "@/components/market-status";
 import { StockPicker } from "@/components/stock-picker";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -76,8 +77,30 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
   const [adding, setAdding] = useState(false);
   const [sort, setSort] = useState<"recent" | "pnl">("recent");
   const [q, setQ] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [liveAt, setLiveAt] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const load = () => api.myStocks(simulated).then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, [simulated]);
+
+  // 실시간 새로고침: 보유/관심 종목 현재가를 서버에서 동시 호출(제한 병렬)해 일괄 갱신.
+  async function refreshLive() {
+    setRefreshing(true);
+    const r = await api.myStocks(simulated, true).catch(() => null);
+    if (r) {
+      setItems(r.items);
+      setLiveAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    }
+    setRefreshing(false);
+  }
+
+  // 모의 종목 리셋: 모의 매매·메모 전체 삭제(실제 보유는 유지).
+  async function doReset() {
+    setConfirmReset(false);
+    setItems(null);
+    await api.resetSimStocks().catch(() => {});
+    load();
+  }
 
   function toggleBookmark(id: string, on: boolean) {
     setItems((prev) => (prev ? prev.map((i) => (i.security.id === id ? { ...i, bookmarked: on } : i)) : prev));
@@ -117,13 +140,33 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
 
   return (
     <>
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setSort("recent")} className={sort === "recent" ? "font-semibold text-primary" : "text-ink-muted"}>최근순</button>
           <span className="text-ink-muted">·</span>
           <button onClick={() => setSort("pnl")} className={sort === "pnl" ? "font-semibold text-primary" : "text-ink-muted"}>수익률순</button>
         </div>
-        <button onClick={() => setAdding(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ 종목 추가</button>
+        <div className="flex items-center gap-2">
+          {liveAt && <span className="hidden text-[11px] text-ink-muted sm:inline">실시간 {liveAt}</span>}
+          <button
+            onClick={refreshLive}
+            disabled={refreshing || (items?.length ?? 0) === 0}
+            title="현재가 실시간 새로고침"
+            className="inline-flex items-center gap-1 rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-sub hover:bg-bg-deep disabled:opacity-50"
+          >
+            <span className={refreshing ? "animate-spin" : ""}>↻</span>
+            {refreshing ? "갱신 중" : "실시간"}
+          </button>
+          {simulated && (items?.length ?? 0) > 0 && (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-sub hover:border-red-300 hover:text-red-600"
+            >
+              리셋
+            </button>
+          )}
+          <button onClick={() => setAdding(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ 종목 추가</button>
+        </div>
       </div>
 
       {(items?.length ?? 0) > 8 && (
@@ -235,6 +278,14 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
       </div>
 
       {adding && <AddStockModal invest={showInvest} simulated={simulated} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
+      <ConfirmModal
+        open={confirmReset}
+        title="모의 종목을 리셋할까요?"
+        message="모의 매매 기록과 모의 메모가 모두 삭제됩니다. 실제 보유 기록은 그대로 유지돼요."
+        confirmLabel="리셋"
+        onConfirm={doReset}
+        onCancel={() => setConfirmReset(false)}
+      />
     </>
   );
 }

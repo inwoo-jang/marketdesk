@@ -34,24 +34,30 @@ export default function DocsFeed() {
   useScrollRestore(loaded);
 
   const load = useCallback(async () => {
-    const me = await api.me().catch(() => ({ user: null }));
+    // 이 화면에 필요한 타입(해당 타입 + 뉴스)만 서버에서 걸러 받는다. 전체 리포트를 받아
+    // 클라이언트에서 거르던 걸 없애 페이로드·처리량을 줄임. me 는 직렬 대기 대신 병렬로.
+    const needCompany = type === "company";
+    const emptyGroups = { map: {} as Record<string, string> };
+    const emptyFav = { groups: [] as string[], companies: [] as string[] };
+    const [me, mine, newsRep, mi, cg, fav] = await Promise.all([
+      api.me().catch(() => ({ user: null })),
+      api.myReports({ docType: type }).catch(() => ({ reports: [] as Report[] })),
+      type === "news" ? Promise.resolve({ reports: [] as Report[] }) : api.myReports({ docType: "news" }).catch(() => ({ reports: [] as Report[] })),
+      api.myIndustries().catch(() => ({ industries: [] as MyIndustry[] })),
+      needCompany ? api.companyGroups().catch(() => emptyGroups) : Promise.resolve(emptyGroups),
+      needCompany ? api.companyFavorites().catch(() => emptyFav) : Promise.resolve(emptyFav),
+    ]);
     if (!me.user) {
       window.location.href = "/login";
       return;
     }
-    const [{ reports }, mi, cg, fav] = await Promise.all([
-      api.myReports(),
-      api.myIndustries().catch(() => ({ industries: [] as MyIndustry[] })),
-      api.companyGroups().catch(() => ({ map: {} as Record<string, string> })),
-      api.companyFavorites().catch(() => ({ groups: [] as string[], companies: [] as string[] })),
-    ]);
-    setAll(reports);
+    setAll([...mine.reports, ...newsRep.reports]);
     setFollowed(mi.industries);
     setGroupMap(cg.map);
     setFavGroups(new Set(fav.groups));
     setFavCompanies(new Set(fav.companies));
     setLoaded(true);
-  }, []);
+  }, [type]);
 
   useEffect(() => {
     load().catch(() => setLoaded(true));

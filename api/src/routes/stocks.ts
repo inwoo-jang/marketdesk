@@ -4,7 +4,7 @@ import { and, eq, or, ilike, sql, desc, inArray } from "drizzle-orm";
 import { securities, userSecurities, paperPositions, paperNotes, reports, userLlmSettings } from "@reportlens/db";
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
-import { getSeries, latestClose, closeOn, liveQuote } from "../lib/price-service.js";
+import { getSeries, latestClose, latestCachedClose, closeOn, liveQuote } from "../lib/price-service.js";
 import { currentFx, fxOn } from "../lib/fx.js";
 import { mapPool } from "../lib/concurrency.js";
 import { askLLM, askLLMSearch } from "../define.js";
@@ -126,6 +126,7 @@ stocksRoute.get("/browse", async (c) => {
 stocksRoute.get("/", async (c) => {
   const user = c.get("user");
   const sim = c.req.query("sim") === "1";
+  const live = c.req.query("live") === "1"; // 실시간 현재가 일괄 조회(느리지만 즉시 최신). 기본은 캐시 종가.
   const positions = await db
     .select()
     .from(paperPositions)
@@ -158,13 +159,26 @@ stocksRoute.get("/", async (c) => {
   const bmSet = new Set(bmRows.map((b) => b.securityId));
   const hasOverseas = regs.some((r) => r.security.isOverseas);
   const fxRate = hasOverseas ? (await currentFx()) ?? 1 : 1;
-  // 종목별 최근 종가는 제한 병렬로 조회(순차 대기 제거 → 종목 많아도 빠름).
+  // 종목별 시세를 제한 병렬로 조회(순차 대기 제거 → 종목 많아도 빠름).
+  // live=1 이면 실시간 현재가(liveQuote), 기본은 캐시 종가(latestClose).
   const items = await mapPool(regs, 5, async (r) => {
-    const last = await latestClose(r.security);
-    const summary = summarize(bySec.get(r.security.id) ?? [], last?.close ?? null, r.security.isOverseas ? fxRate : 1);
+    let close: number | null;
+    let changeRate: number | null;
+    if (live) {
+      const q = await liveQuote(r.security);
+      close = q?.price ?? null;
+      changeRate = q?.changeRate ?? null;
+    } else {
+      // 기본: DB 캐시 최신 2봉만(즉시). 캐시가 아직 없는 새 종목만 1회 KIS 조회.
+      const cached = await latestCachedClose(r.security);
+      const last = cached ?? (await latestClose(r.security));
+      close = last?.close ?? null;
+      changeRate = last?.changeRate ?? null;
+    }
+    const summary = summarize(bySec.get(r.security.id) ?? [], close, r.security.isOverseas ? fxRate : 1);
     return {
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
-      changeRate: last?.changeRate ?? null,
+      changeRate,
       bookmarked: bmSet.has(r.security.id),
       ...summary,
     };
@@ -172,6 +186,14 @@ stocksRoute.get("/", async (c) => {
   // 책갈피 먼저
   items.sort((a, b) => Number(b.bookmarked) - Number(a.bookmarked));
   return c.json({ items });
+});
+
+// POST /sim/reset : 모의 매매 기록 전체 초기화(모의 거래 + 모의 메모). 실제 보유는 건드리지 않음.
+stocksRoute.post("/sim/reset", async (c) => {
+  const user = c.get("user");
+  await db.delete(paperPositions).where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, true)));
+  await db.delete(paperNotes).where(and(eq(paperNotes.userId, user.id), eq(paperNotes.simulated, true)));
+  return c.json({ ok: true });
 });
 
 // GET /diary : 모의매수 다이어리(전 종목 매수+일지 시간순). 주식공부 일기 느낌.

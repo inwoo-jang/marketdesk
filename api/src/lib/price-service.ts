@@ -81,6 +81,22 @@ export async function getSeries(sec: Security, period: "D" | "M" | "Y"): Promise
   return rows;
 }
 
+// 목록용 가벼운 종가 조회: DB 캐시의 최신 2봉만 읽어 즉시 반환(KIS 미조회·신선도 검사 없음).
+// 목록 화면은 이걸로 즉시 뜨고, 최신화는 실시간 새로고침 버튼/상세/15분 스윕이 담당.
+export async function latestCachedClose(sec: Security): Promise<{ close: number; changeRate: number | null } | null> {
+  const rows = await db
+    .select({ date: priceBars.date, close: priceBars.close })
+    .from(priceBars)
+    .where(and(eq(priceBars.securityId, sec.id), eq(priceBars.period, "D")))
+    .orderBy(sql`${priceBars.date} desc`)
+    .limit(2);
+  const last = rows[0];
+  if (!last) return null;
+  const prev = rows[1];
+  const changeRate = prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : null;
+  return { close: last.close, changeRate };
+}
+
 // 최근 종가 + 전일대비(등락률). 일봉 캐시 최신 2개로 계산. 없으면 null.
 export async function latestClose(sec: Security): Promise<{ close: number; date: string; changeRate: number | null } | null> {
   const series = await getSeries(sec, "D");
