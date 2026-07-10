@@ -24,6 +24,7 @@ export const kisEnabled = (): boolean => !!(env.kisAppKey && env.kisAppSecret);
 
 const TOKEN_FILE = path.join(env.uploadDir, ".kis-token.json");
 let mem: { token: string; expiresAt: number } | null = null;
+let issuing: Promise<string> | null = null; // 발급 진행 중 프로미스(병렬 호출 중복 발급 방지)
 
 async function loadTokenFromFile(): Promise<void> {
   if (mem) return;
@@ -39,19 +40,27 @@ async function loadTokenFromFile(): Promise<void> {
 async function getToken(): Promise<string> {
   await loadTokenFromFile();
   if (mem && mem.expiresAt > Date.now() + 60_000) return mem.token;
-
-  const res = await fetch(`${env.kisBaseUrl}/oauth2/tokenP`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ grant_type: "client_credentials", appkey: env.kisAppKey, appsecret: env.kisAppSecret }),
-  });
-  const j = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
-  if (!j.access_token) throw new Error(`KIS 토큰 발급 실패: ${j.error_description ?? res.status}`);
-  // expires_in(초) 보수적으로 사용. 실패 시 12h.
-  const ttl = (j.expires_in ?? 43200) * 1000;
-  mem = { token: j.access_token, expiresAt: Date.now() + ttl };
-  writeFile(TOKEN_FILE, JSON.stringify(mem)).catch(() => {});
-  return mem.token;
+  // 병렬 호출이 동시에 만료를 만나도 발급은 1회만(KIS 토큰 발급도 분당 제한).
+  if (issuing) return issuing;
+  issuing = (async () => {
+    const res = await fetch(`${env.kisBaseUrl}/oauth2/tokenP`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ grant_type: "client_credentials", appkey: env.kisAppKey, appsecret: env.kisAppSecret }),
+    });
+    const j = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
+    if (!j.access_token) throw new Error(`KIS 토큰 발급 실패: ${j.error_description ?? res.status}`);
+    // expires_in(초) 보수적으로 사용. 실패 시 12h.
+    const ttl = (j.expires_in ?? 43200) * 1000;
+    mem = { token: j.access_token, expiresAt: Date.now() + ttl };
+    writeFile(TOKEN_FILE, JSON.stringify(mem)).catch(() => {});
+    return mem.token;
+  })();
+  try {
+    return await issuing;
+  } finally {
+    issuing = null;
+  }
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

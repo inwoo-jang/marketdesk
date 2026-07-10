@@ -14,6 +14,18 @@ stocksRoute.use("*", requireUser);
 type Security = typeof securities.$inferSelect;
 type Position = typeof paperPositions.$inferSelect;
 
+// 제한 병렬 map: 동시 실행을 limit 개로 묶어 처리. 캐시 만료 시 종목마다 KIS 호출을
+// 순차로 기다리면 종목 수만큼 느려지므로, KIS 초당 유량 제한을 안 넘길 만큼만 병렬화.
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i], i);
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 // 매수/매도 거래 + 현재가 → 손익 요약(평균원가법). 금액은 원화 기준.
 // fxNow=현재 USD/KRW(국내는 1). 각 거래의 buyFx=거래 시점 환율(없으면 현재).
 function summarize(trades: Position[], close: number | null, fxNow = 1) {
@@ -157,17 +169,17 @@ stocksRoute.get("/", async (c) => {
   const bmSet = new Set(bmRows.map((b) => b.securityId));
   const hasOverseas = regs.some((r) => r.security.isOverseas);
   const fxRate = hasOverseas ? (await currentFx()) ?? 1 : 1;
-  const items = [];
-  for (const r of regs) {
+  // 종목별 최근 종가는 제한 병렬로 조회(순차 대기 제거 → 종목 많아도 빠름).
+  const items = await mapPool(regs, 5, async (r) => {
     const last = await latestClose(r.security);
     const summary = summarize(bySec.get(r.security.id) ?? [], last?.close ?? null, r.security.isOverseas ? fxRate : 1);
-    items.push({
+    return {
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
       changeRate: last?.changeRate ?? null,
       bookmarked: bmSet.has(r.security.id),
       ...summary,
-    });
-  }
+    };
+  });
   // 책갈피 먼저
   items.sort((a, b) => Number(b.bookmarked) - Number(a.bookmarked));
   return c.json({ items });
@@ -214,7 +226,7 @@ stocksRoute.get("/diary", async (c) => {
   const closeMap = new Map<string, number | null>();
   if (secIds.length) {
     const secs = await db.select().from(securities).where(inArray(securities.id, secIds));
-    for (const s of secs) closeMap.set(s.id, (await latestClose(s))?.close ?? null);
+    await mapPool(secs, 5, async (s) => closeMap.set(s.id, (await latestClose(s))?.close ?? null));
   }
   const anyOverseas = buys.some((b) => b.isOverseas);
   const fxNow = anyOverseas ? (await currentFx()) ?? 1 : 1;
