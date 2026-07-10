@@ -200,7 +200,8 @@ type AnalysisProvider = "claude" | "codex" | "gemini";
 
 // 이 사용자의 리포트에 적용할 분석 엔진 결정. 개발자가 로컬 CLI 엔진 선택 시에만 반영, 그 외 gemini(기본).
 async function resolveProvider(user: AppUser): Promise<AnalysisProvider> {
-  if (!isDeveloper(user)) return "gemini";
+  // analysisProvider(claude/codex) 는 개발자의 로컬 CLI 선택 또는 유저의 로컬 에이전트 모드에서 설정됨.
+  // 둘 다 리포트를 로컬에서 처리하는 경우라 존중. 없으면 gemini(기본).
   const [s] = await db
     .select({ p: userLlmSettings.analysisProvider })
     .from(userLlmSettings)
@@ -308,6 +309,28 @@ meRoute.delete("/byo-key", async (c) => {
   const user = c.get("user");
   await db.update(userLlmSettings).set({ byoProvider: null, byoKeyEnc: null, updatedAt: new Date() }).where(eq(userLlmSettings.userId, user.id));
   return c.json({ ok: true });
+});
+
+// ── 로컬 에이전트: 본인 PC에서 로컬 CLI(claude/codex)로 분석. analysisProvider 로 라우팅. ──
+// GET /api/me/local-agent
+meRoute.get("/local-agent", async (c) => {
+  const user = c.get("user");
+  const [s] = await db.select({ p: userLlmSettings.analysisProvider }).from(userLlmSettings).where(eq(userLlmSettings.userId, user.id)).limit(1);
+  const engine = s?.p === "claude" || s?.p === "codex" ? s.p : null;
+  return c.json({ enabled: !!engine, engine, email: user.email });
+});
+
+// PUT /api/me/local-agent { enabled, engine?: 'claude'|'codex' }
+meRoute.put("/local-agent", async (c) => {
+  const user = c.get("user");
+  const parsed = z.object({ enabled: z.boolean(), engine: z.enum(["claude", "codex"]).optional() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "invalid" }, 400);
+  const provider = parsed.data.enabled ? parsed.data.engine ?? "claude" : null;
+  await db
+    .insert(userLlmSettings)
+    .values({ userId: user.id, analysisProvider: provider })
+    .onConflictDoUpdate({ target: userLlmSettings.userId, set: { analysisProvider: provider, updatedAt: new Date() } });
+  return c.json({ ok: true, enabled: parsed.data.enabled, engine: provider });
 });
 
 // POST /api/me/public/ingest - 공공 콘텐츠 온디맨드 수집(개발자만). worker 의 ingest 스크립트를 백그라운드 실행.

@@ -133,6 +133,9 @@ export const api = {
   byoKey: () => get<{ provider: string | null; hasKey: boolean }>("/api/me/byo-key"),
   setByoKey: (provider: "gemini" | "anthropic" | "openai", key: string) => put<{ ok: true; provider: string; hasKey: boolean }>("/api/me/byo-key", { provider, key }),
   deleteByoKey: () => del<{ ok: true }>("/api/me/byo-key"),
+  localAgent: () => get<{ enabled: boolean; engine: string | null; email: string | null }>("/api/me/local-agent"),
+  setLocalAgent: (enabled: boolean, engine?: "claude" | "codex") =>
+    put<{ ok: true; enabled: boolean; engine: string | null }>("/api/me/local-agent", { enabled, engine }),
   publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
