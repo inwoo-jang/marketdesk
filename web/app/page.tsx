@@ -9,6 +9,7 @@ import { Logo } from "@/components/logo";
 import { LoginPanel } from "@/components/login-panel";
 import { UsageBadge } from "@/components/usage-badge";
 import { hasReportSearch, matchesReportSearch } from "@/components/report-search-controls";
+import { stockMenuLabel } from "@/components/app-nav";
 
 // 기간 선택(연도→월→일). 미선택이면 최근 3개월.
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -182,6 +183,8 @@ export default function Home() {
   const [drag, setDrag] = useState<{ kind: "ind" | "group" | "company"; idx: number } | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [stockLabel, setStockLabel] = useState("내 종목");
+  const [stockTotals, setStockTotals] = useState<{ pnl: number; pct: number | null; count: number } | null>(null);
   const feedReqSeq = useRef(0);
   const PAGE_SIZE = 20;
 
@@ -240,8 +243,16 @@ export default function Home() {
     setMyIndustries(mi.industries);
     setCatalog(industries);
     setUsage(u);
+    setStockLabel(stockMenuLabel(enabled));
     api.llmSetting().then((s) => setIsDev(s.isDeveloper)).catch(() => {});
     api.companyFavorites().then((f) => { setFavGroups(f.groups); setFavCompanies(f.companies); }).catch(() => {});
+    api.myStocks().then(({ items }) => {
+      const withPos = items.filter((i) => !i.watchOnly && i.marketValue != null);
+      const cost = withPos.reduce((s, i) => s + i.totalCost, 0);
+      const value = withPos.reduce((s, i) => s + (i.marketValue ?? 0), 0);
+      const pnl = value - cost;
+      setStockTotals({ pnl, pct: cost > 0 ? (pnl / cost) * 100 : null, count: items.length });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -426,23 +437,57 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
+      <header className="mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-semibold text-ink-muted">렌즈</span>
+            {myLensKeys.map((k) => (
+              <span key={k} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                {lensLabel(k)}
+                {k === "job" && jobRoleLabel ? ` · ${jobRoleLabel}` : ""}
+              </span>
+            ))}
+            <a href="/onboarding" title="렌즈 수정" aria-label="렌즈 수정" className="ml-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-bg-deep hover:text-ink">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </a>
+          </div>
           <UsageBadge usage={usage} />
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {myLensKeys.map((k) => (
-            <span key={k} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              {lensLabel(k)}
-              {k === "job" && jobRoleLabel ? ` · ${jobRoleLabel}` : ""}
-            </span>
-          ))}
-          <a href="/settings" className="rounded-full border border-line px-3 py-1 text-xs text-ink-sub hover:bg-bg-deep">
-            렌즈 변경
-          </a>
-        </div>
       </header>
+
+      {/* 바로가기: 흐름 보드 / 내 종목 */}
+      <section className="mb-8 grid gap-3 sm:grid-cols-2">
+        <a href="/board" className="group flex items-center justify-between rounded-card bg-card p-5 shadow-card hover:ring-1 hover:ring-primary/30">
+          <div>
+            <div className="text-base font-bold text-ink">흐름 보드</div>
+            <div className="mt-0.5 text-xs text-ink-muted">산업·기업·뉴스 시간순 흐름 요약</div>
+          </div>
+          <span className="text-ink-muted transition group-hover:translate-x-0.5 group-hover:text-primary">→</span>
+        </a>
+        <a href="/stocks" className="group flex items-center justify-between rounded-card bg-card p-5 shadow-card hover:ring-1 hover:ring-primary/30">
+          <div>
+            <div className="text-base font-bold text-ink">{stockLabel}</div>
+            {stockTotals && stockTotals.count > 0 ? (
+              stockTotals.pct != null ? (
+                <div className="mt-0.5 text-xs">
+                  <span className="text-ink-muted">모의 평가손익 </span>
+                  <span className={`font-semibold ${stockTotals.pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {stockTotals.pnl >= 0 ? "+" : ""}{Math.round(stockTotals.pnl).toLocaleString()}원 ({stockTotals.pct >= 0 ? "+" : ""}{stockTotals.pct.toFixed(1)}%)
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-0.5 text-xs text-ink-muted">관심 종목 {stockTotals.count}개</div>
+              )
+            ) : (
+              <div className="mt-0.5 text-xs text-ink-muted">관심 종목·모의투자 연습</div>
+            )}
+          </div>
+          <span className="text-ink-muted transition group-hover:translate-x-0.5 group-hover:text-primary">→</span>
+        </a>
+      </section>
 
       <section className="mb-8 rounded-card border border-line bg-card p-4 shadow-card">
         <label className="block">
@@ -491,7 +536,7 @@ export default function Home() {
             관심 산업을 아직 안 골랐어요. 아래 &quot;전체 산업&quot;에서 ★ 로 고르면 여기에 모여요. (안 골라도 전체에서 다 볼 수 있어요)
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
             {myIndustries.map((ind, i) => (
               <div
                 key={ind.id}
@@ -501,27 +546,27 @@ export default function Home() {
                 onDragOver={(e) => reorderMode && e.preventDefault()}
                 onDragEnd={() => reorderMode && persistOrder("ind")}
                 onDrop={() => reorderMode && persistOrder("ind")}
-                className={`group relative rounded-card bg-card p-5 shadow-card transition hover:ring-1 hover:ring-primary/30 ${
+                className={`group relative rounded-card bg-card p-3 shadow-card transition hover:ring-1 hover:ring-primary/30 ${
                   reorderMode ? "cursor-grab active:cursor-grabbing ring-1 ring-primary/30" : ""
                 } ${drag?.kind === "ind" && drag.idx === i ? "opacity-50 ring-2 ring-primary" : ""}`}
               >
                 {reorderMode && (
-                  <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
+                  <span className="absolute left-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
                     {i + 1}
                   </span>
                 )}
                 <a href={`/industry/${ind.id}`} className={reorderMode ? "pointer-events-none block" : "block"}>
                   <div
-                    className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                    className="mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white"
                     style={{ backgroundColor: ind.iconColor ?? "#8A93A8" }}
                   >
                     {ind.name.slice(0, 1)}
                   </div>
-                  <div className="font-semibold">{ind.name}</div>
-                  {ind.isCustom && <span className="text-xs text-ink-muted">커스텀</span>}
+                  <div className="truncate text-sm font-semibold">{ind.name}</div>
+                  {ind.isCustom && <span className="text-[10px] text-ink-muted">커스텀</span>}
                 </a>
                 {!reorderMode && (
-                  <button onClick={() => togglePin(ind.id, true)} className="absolute right-3 top-3 text-primary" title="관심 해제">
+                  <button onClick={() => togglePin(ind.id, true)} className="absolute right-2 top-2 text-xs text-primary" title="관심 해제">
                     ★
                   </button>
                 )}
