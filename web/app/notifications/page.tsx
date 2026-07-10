@@ -77,7 +77,7 @@ export default function NotificationsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-semibold text-ink">{n.title ?? "알림"}</span>
-                      <span className="shrink-0 text-xs text-ink-muted">{fmt(n.createdAt)}</span>
+                      <span className="shrink-0 text-xs text-ink-muted">{fmt(n.pubDate ?? n.createdAt)}</span>
                     </div>
                     {n.body && <p className="mt-0.5 text-sm text-ink-sub">{n.body}</p>}
                     {n.detail && <p className="mt-0.5 truncate text-xs text-ink-muted">자료: {n.detail}</p>}

@@ -1575,14 +1575,27 @@ meRoute.put("/reports/:id/industries", async (c) => {
   return c.json({ ok: true, industryIds: ids });
 });
 
-// GET /api/me/notifications - 최근 알림 + 안읽음 수(벨 표시용)
+// GET /api/me/notifications - 최근 알림 + 안읽음 수(벨 표시용). 날짜·정렬은 기사 발간일 기준.
 meRoute.get("/notifications", async (c) => {
   const user = c.get("user");
   const rows = await db
-    .select()
+    .select({
+      id: notifications.id,
+      kind: notifications.kind,
+      industryId: notifications.industryId,
+      reportId: notifications.reportId,
+      title: notifications.title,
+      body: notifications.body,
+      detail: notifications.detail,
+      matched: notifications.matched,
+      read: notifications.read,
+      createdAt: notifications.createdAt,
+      pubDate: reports.pubDate, // 기사 발간일(없으면 null)
+    })
     .from(notifications)
+    .leftJoin(reports, eq(reports.id, notifications.reportId))
     .where(eq(notifications.userId, user.id))
-    .orderBy(desc(notifications.createdAt))
+    .orderBy(desc(sql`coalesce(${reports.pubDate}, ${notifications.createdAt}::date)`))
     .limit(50);
   const [cnt] = await db
     .select({ n: sql<number>`count(*)::int` })

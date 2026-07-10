@@ -225,9 +225,10 @@ export type AppNotification = {
   title: string | null;
   body: string | null;
   detail: string | null;
-  matched: string | null; // 왜 감지됐는지 = 겹친 키워드
+  matched: string | null; // 왜 감지됐는지 = 근거 문장
   read: boolean;
   createdAt: string;
+  pubDate: string | null; // 기사 발간일(알림 날짜 기준)
 };
 export type FactDelta = { kind: "new" | "recurring" | "promoted"; months: number };
 export type TriggerHit = { reportId: string; title: string | null; matched: string | null };

@@ -104,7 +104,7 @@ export function NotificationBell() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-xs font-semibold text-ink">{n.title ?? "알림"}</span>
-                          <span className="shrink-0 text-[10px] text-ink-muted">{fmt(n.createdAt)}</span>
+                          <span className="shrink-0 text-[10px] text-ink-muted">{fmt(n.pubDate ?? n.createdAt)}</span>
                         </div>
                         {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-ink-sub">{n.body}</p>}
                         {n.detail && <p className="mt-0.5 truncate text-[11px] text-ink-muted">자료: {n.detail}</p>}
