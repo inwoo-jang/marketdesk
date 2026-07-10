@@ -206,15 +206,16 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
         </section>
       )}
 
-      {/* 모의 포트폴리오 바로 밑, 작게. 보유만 종료되고 기록은 다이어리에 남음. */}
+      {/* 모의 포트폴리오 카드에 바짝 붙여서. 보유만 종료되고 기록은 다이어리에 남음. */}
       {simulated && (items?.length ?? 0) > 0 && (
-        <div className="mt-1.5 text-right">
+        <div className="mt-1 text-right">
           <button
             onClick={() => setConfirmReset(true)}
             title="모의 보유 종료(기록은 다이어리에 남음)"
-            className="text-[11px] text-ink-muted underline decoration-dotted underline-offset-2 transition-colors hover:text-red-600 active:text-red-700"
+            className="inline-flex items-center gap-1 rounded-full border border-sky-300 px-2.5 py-1 text-[11px] font-medium text-sky-600 transition-colors hover:bg-sky-50 active:bg-sky-100"
           >
-            모의 리셋
+            <span aria-hidden className="text-[12px] leading-none">↺</span>
+            모의 리셋하기
           </button>
         </div>
       )}
