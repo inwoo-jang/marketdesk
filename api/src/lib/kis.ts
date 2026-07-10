@@ -54,7 +54,9 @@ async function getToken(): Promise<string> {
   return mem.token;
 }
 
-async function kisGet(pathname: string, trId: string, params: Record<string, string>): Promise<any> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function kisGet(pathname: string, trId: string, params: Record<string, string>, attempt = 0): Promise<any> {
   const token = await getToken();
   const qs = new URLSearchParams(params);
   const res = await fetch(`${env.kisBaseUrl}${pathname}?${qs}`, {
@@ -67,7 +69,15 @@ async function kisGet(pathname: string, trId: string, params: Record<string, str
     },
   });
   const j = (await res.json()) as any;
-  if (j.rt_cd && j.rt_cd !== "0") throw new Error(`KIS ${trId} 오류: ${j.msg1 ?? j.rt_cd}`);
+  if (j.rt_cd && j.rt_cd !== "0") {
+    const msg = String(j.msg1 ?? "");
+    // 초당 유량 초과 → 잠시 후 재시도(최대 3회)
+    if (msg.includes("초당") && attempt < 3) {
+      await sleep(300 * (attempt + 1));
+      return kisGet(pathname, trId, params, attempt + 1);
+    }
+    throw new Error(`KIS ${trId} 오류: ${msg || j.rt_cd}`);
+  }
   return j;
 }
 

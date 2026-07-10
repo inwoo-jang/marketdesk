@@ -100,14 +100,27 @@ export async function closeOn(sec: Security, date: string): Promise<number | nul
 }
 
 // 실시간 현재가(상세 화면용). 실패 시 최근 종가로 폴백.
+// 전일대비는 KIS 등락률 대신 일봉(어제 종가) 기준으로 계산 → 국내·해외 일관.
 export async function liveQuote(sec: Security): Promise<Quote | null> {
+  let price: number | null = null;
+  let currency = sec.isOverseas ? "USD" : "KRW";
   if (kisEnabled()) {
     try {
-      return sec.isOverseas && sec.excd ? await overseasQuote(sec.excd, sec.code) : await domesticQuote(sec.code);
+      const q = sec.isOverseas && sec.excd ? await overseasQuote(sec.excd, sec.code) : await domesticQuote(sec.code);
+      price = q.price;
+      currency = q.currency;
     } catch (e) {
       console.error(`현재가 조회 실패(${sec.name}):`, (e as Error).message);
     }
   }
-  const last = await latestClose(sec);
-  return last ? { price: last.close, changeRate: null, currency: sec.isOverseas ? "USD" : "KRW" } : null;
+  const series = await getSeries(sec, "D");
+  if (price == null) {
+    const last = series[series.length - 1];
+    if (!last) return null;
+    price = last.close;
+  }
+  // 전일대비: 직전 거래일 종가 대비(오늘 봉이 있으면 어제, 없으면 그제)
+  const prev = series[series.length - 2]?.close;
+  const changeRate = prev && prev > 0 ? ((price - prev) / prev) * 100 : null;
+  return { price, changeRate, currency };
 }
