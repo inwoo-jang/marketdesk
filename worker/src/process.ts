@@ -2,7 +2,7 @@ import { eq, and, isNull, ne, isNotNull, inArray, desc } from "drizzle-orm";
 import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
-import { parsePdf, buildDocument, type ParsedPage } from "./parsing.js";
+import { parsePdf, buildDocument, stripControlChars, type ParsedPage } from "./parsing.js";
 import { getProvider } from "./providers/index.js";
 import type { Provider } from "./providers/types.js";
 import { simhash, hamming, tokenCount } from "./simhash.js";
@@ -33,7 +33,7 @@ export async function processReport(report: Report): Promise<void> {
     let pageCount: number;
     let pages: ParsedPage[];
     if (report.inputFormat === "text") {
-      const text = new TextDecoder().decode(bytes);
+      const text = stripControlChars(new TextDecoder().decode(bytes));
       pages = [{ pageNo: 1, text }];
       pageCount = 1;
     } else {
