@@ -165,23 +165,36 @@ const catOf = (k?: NoteCategory | null) => DIARY_CATS.find((c) => c.key === k);
 // ─── 다이어리 탭: 매수/매도/상승/하락/유지/메모 + AI, 전 종목 시간순 ───
 function DiaryTab() {
   const [items, setItems] = useState<DiaryItem[] | null>(null);
+  const [filter, setFilter] = useState<"all" | "real" | "sim">("all");
   const load = () => api.stockDiary().then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, []);
 
+  // 필터: 거래는 실제/모의로 가르고, 메모는 모든 필터에 표시(종목 기록).
+  const filtered = useMemo(() => {
+    const arr = items ?? [];
+    if (filter === "all") return arr;
+    return arr.filter((it) => it.kind === "note" || (filter === "sim" ? it.simulated : !it.simulated));
+  }, [items, filter]);
+
   const groups = useMemo(() => {
     const m = new Map<string, DiaryItem[]>();
-    for (const it of items ?? []) {
+    for (const it of filtered) {
       if (!m.has(it.date)) m.set(it.date, []);
       m.get(it.date)!.push(it);
     }
     return [...m.entries()];
-  }, [items]);
+  }, [filtered]);
 
   return (
     <>
       <DiaryComposer onDone={load} />
+      <div className="mt-4 flex gap-1">
+        {([{ k: "all", label: "전체" }, { k: "real", label: "실제" }, { k: "sim", label: "모의" }] as const).map((f) => (
+          <button key={f.k} onClick={() => setFilter(f.k)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filter === f.k ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>{f.label}</button>
+        ))}
+      </div>
       {items == null && <p className="mt-4 text-ink-muted">불러오는 중...</p>}
-      {items != null && items.length === 0 && (
+      {items != null && filtered.length === 0 && (
         <div className="mt-4 rounded-card border border-dashed border-line p-10 text-center text-ink-muted">
           아직 기록이 없어요. 위에서 매수·매도나 오늘의 메모를 남겨보세요.
         </div>
