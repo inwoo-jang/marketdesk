@@ -237,7 +237,7 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
               <StockSection title="처분" rows={sorted.filter((it) => it.totalShares <= 0 && !it.watchOnly)} simulated showInvest={showInvest} onToggleBookmark={toggleBookmark} />
             </>
           ) : (
-            sorted.map((it) => <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} showDot onToggleBookmark={toggleBookmark} />)
+            sorted.map((it) => <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} onToggleBookmark={toggleBookmark} />)
           )
         )}
       </div>
@@ -286,14 +286,15 @@ function StockSection({ title, rows, simulated, showInvest, onToggleBookmark }: 
         <span className="rounded-full bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{rows.length}</span>
       </p>
       {rows.map((it) => (
-        <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} showDot={false} onToggleBookmark={onToggleBookmark} />
+        <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} sectioned onToggleBookmark={onToggleBookmark} />
       ))}
     </div>
   );
 }
 
-// 종목 카드 한 줄. showDot=false 면 앞의 상태 점을 숨김(모의 탭은 섹션으로 구분하므로).
-function StockRow({ it, simulated, showInvest, showDot, onToggleBookmark }: { it: StockSummary; simulated: boolean; showInvest: boolean; showDot: boolean; onToggleBookmark: (id: string, on: boolean) => void }) {
+// 종목 카드 한 줄. sectioned(모의 탭)면 보유/처분은 섹션이 구분하므로 회색 '청산' 점은 생략하되,
+// 실제 보유(파랑)·모의 보유(하늘) 점은 유지하고 왼쪽 여백은 종목 정보 탭과 동일하게 맞춘다.
+function StockRow({ it, simulated, showInvest, sectioned, onToggleBookmark }: { it: StockSummary; simulated: boolean; showInvest: boolean; sectioned?: boolean; onToggleBookmark: (id: string, on: boolean) => void }) {
   return (
     <Link
       href={`/stocks/${it.security.id}`}
@@ -306,19 +307,18 @@ function StockRow({ it, simulated, showInvest, showDot, onToggleBookmark }: { it
       >
         <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
       </button>
-      {/* 맨 앞 점: 실제 보유=파랑 · 모의 보유=연한 하늘 · 둘 다면 점 2개 · 청산=회색 · 관심=투명 */}
-      {showDot && (
-        <span className="flex shrink-0 items-center gap-0.5">
-          {it.heldReal && <span title="실제 보유" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
-          {it.heldSim && <span title="모의 보유" className="h-2.5 w-2.5 rounded-full bg-sky-300" />}
-          {!it.heldReal && !it.heldSim && (
-            <span
-              title={it.watchOnly ? undefined : "청산"}
-              className={`h-2.5 w-2.5 rounded-full ${it.watchOnly ? "bg-transparent" : "bg-ink/25"}`}
-            />
-          )}
-        </span>
-      )}
+      {/* 맨 앞 점(왼쪽 여백은 항상 동일): 실제 보유=파랑 · 모의 보유=연한 하늘 · 둘 다면 점 2개.
+          모의 탭(sectioned)은 처분을 섹션으로 구분하므로 회색 '청산' 점만 생략. */}
+      <span className="flex shrink-0 items-center gap-0.5">
+        {it.heldReal && <span title="실제 보유" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
+        {it.heldSim && <span title="모의 보유" className="h-2.5 w-2.5 rounded-full bg-sky-300" />}
+        {!it.heldReal && !it.heldSim && (
+          <span
+            title={it.watchOnly ? undefined : "청산"}
+            className={`h-2.5 w-2.5 rounded-full ${it.watchOnly || sectioned ? "bg-transparent" : "bg-ink/25"}`}
+          />
+        )}
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-semibold text-ink">{it.security.name}</span>
