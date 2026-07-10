@@ -104,7 +104,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
             ))}
           </div>
         </div>
-        <PriceChart bars={bars} markers={markers} positive={summary.pnlPct != null ? summary.pnlPct >= 0 : undefined} />
+        <PriceChart bars={bars} markers={markers} overseas={overseas} positive={summary.pnlPct != null ? summary.pnlPct >= 0 : undefined} />
         {markers.length > 0 && <p className="mt-1 text-[11px] text-ink-muted">◦ 점선은 매수/매도 시점</p>}
       </section>
 

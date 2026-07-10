@@ -126,13 +126,13 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
             >
               <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
             </button>
-            {/* 맨 앞 점: 실제=파랑 · 모의=하늘 · 관심=빈 자리 (매수/매도 색과 구분) */}
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                it.watchOnly ? "bg-transparent" : simulated ? "bg-sky-400" : "bg-blue-500"
-              }`}
-              title={it.watchOnly ? "관심" : simulated ? "모의" : "실제 보유"}
-            />
+            {/* 종목 정보(실제) 탭에서만 점: 실제 보유=파랑 · 관심=빈 자리. 모의 탭은 전부 모의라 점 없음 */}
+            {!simulated && (
+              <span
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${it.watchOnly ? "bg-transparent" : "bg-blue-600"}`}
+                title={it.watchOnly ? "관심" : "실제 보유"}
+              />
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate font-semibold text-ink">{it.security.name}</span>
@@ -301,7 +301,7 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
   return (
     <div className="group flex overflow-hidden rounded-card bg-card shadow-card hover:bg-bg-deep/40">
       <div className={`flex w-6 shrink-0 items-center justify-center ${
-        e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-sky-100 text-sky-700" : "bg-blue-100 text-blue-700"
+        e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-sky-100 text-sky-600" : "bg-blue-600 text-white"
       }`}>
         <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>{e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}</span>
       </div>
@@ -456,7 +456,7 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
                   <button key={p} onClick={() => setPeriod(p)} className={`rounded px-1.5 py-0.5 ${period === p ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>{p === "Y" ? "연" : p === "M" ? "월" : "일"}</button>
                 ))}
               </div>
-              <PriceChart bars={bars} markers={markers} height={110} />
+              <PriceChart bars={bars} markers={markers} height={110} overseas={overseas} />
             </div>
           )}
 
