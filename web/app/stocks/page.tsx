@@ -8,7 +8,6 @@ import { PriceChart } from "@/components/price-chart";
 import { BookmarkIcon } from "@/components/bookmark-icon";
 import { MarketStatus } from "@/components/market-status";
 import { StockPicker } from "@/components/stock-picker";
-import { ConfirmModal } from "@/components/confirm-modal";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -95,11 +94,14 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
     setRefreshing(false);
   }
 
-  // 모의 종목 리셋: 모의 매매·메모 전체 삭제(실제 보유는 유지).
-  async function doReset() {
+  // 모의 종목 리셋: 전량 매도(실현 손익 반영) 또는 완전 리셋(기록만 남김) 중 선택.
+  const [resetBusy, setResetBusy] = useState<"sell" | "archive" | null>(null);
+  async function doReset(mode: "sell" | "archive") {
+    setResetBusy(mode);
+    await api.resetSimStocks(mode).catch(() => {});
+    setResetBusy(null);
     setConfirmReset(false);
     setItems(null);
-    await api.resetSimStocks().catch(() => {});
     load();
   }
 
@@ -227,82 +229,135 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
             아직 등록한 종목이 없어요. <b className="text-ink">+ 종목 추가</b>로 시작해 보세요.
           </div>
         )}
-        {sorted.map((it) => (
-          <Link
-            key={it.security.id}
-            href={`/stocks/${it.security.id}`}
-            className="relative flex items-center gap-3 rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40"
-          >
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleBookmark(it.security.id, !it.bookmarked); }}
-              title={it.bookmarked ? "책갈피 해제" : "책갈피"}
-              className="absolute left-2 top-0"
-            >
-              <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
-            </button>
-            {/* 맨 앞 점: 실제 보유=파랑 · 모의 보유=연한 하늘 · 둘 다면 점 2개 · 청산=회색 · 관심=투명 */}
-            <span className="flex shrink-0 items-center gap-0.5">
-              {it.heldReal && <span title="실제 보유" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
-              {it.heldSim && <span title="모의 보유" className="h-2.5 w-2.5 rounded-full bg-sky-300" />}
-              {!it.heldReal && !it.heldSim && (
-                <span
-                  title={it.watchOnly ? undefined : "청산"}
-                  className={`h-2.5 w-2.5 rounded-full ${it.watchOnly ? "bg-transparent" : "bg-ink/25"}`}
-                />
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-semibold text-ink">{it.security.name}</span>
-                <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
-                <span>
-                  {fmtMoney(it.close, it.security.isOverseas)}
-                  {it.security.isOverseas && it.close != null && it.fxNow ? ` (₩${Math.round(it.close * it.fxNow).toLocaleString()})` : ""}
-                </span>
-                {it.changeRate != null && (
-                  <span className={`font-medium ${it.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>전일 {fmtPct(it.changeRate)}</span>
-                )}
-                {!it.watchOnly && it.avgBuy != null && it.totalShares > 0 && (
-                  <span>
-                    · 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)}
-                    {it.security.isOverseas && it.avgBuyKRW != null ? ` (₩${Math.round(it.avgBuyKRW).toLocaleString()})` : ""}
-                    {" "}· {it.totalShares}주 · 매수 {Math.round(it.totalCost).toLocaleString()}원
-                  </span>
-                )}
-              </div>
-            </div>
-            {!it.watchOnly && showInvest && it.totalShares > 0 ? (() => {
-              const unreal = it.unrealizedPnl ?? ((it.marketValue ?? 0) - it.totalCost);
-              const unrealPct = it.totalCost > 0 ? (unreal / it.totalCost) * 100 : null;
-              return (
-                <div className="shrink-0 text-right">
-                  <div className="text-[10px] text-ink-muted">{simulated ? "모의 평가손익" : "평가손익"}</div>
-                  <div className={`text-sm font-bold ${unreal >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(unrealPct)}</div>
-                  <div className={`text-xs ${unreal >= 0 ? "text-red-600" : "text-blue-600"}`}>{unreal >= 0 ? "+" : ""}{Math.round(unreal).toLocaleString()}원</div>
-                </div>
-              );
-            })() : (!it.watchOnly && it.totalShares <= 0 ? (
-              <div className="shrink-0 text-right">
-                <div className="text-[10px] text-ink-muted">실현 실적</div>
-                <div className={`text-sm font-bold ${(it.realizedPnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{(it.realizedPnl ?? 0) >= 0 ? "+" : ""}{Math.round(it.realizedPnl ?? 0).toLocaleString()}원</div>
-              </div>
-            ) : null)}
-          </Link>
-        ))}
+        {items != null && items.length > 0 && (
+          simulated ? (
+            // 모의 탭: 회색 점(실제 매도와 혼동) 대신 보유중/처분 섹션으로 구분.
+            <>
+              <StockSection title="보유중" rows={sorted.filter((it) => it.totalShares > 0)} simulated showInvest={showInvest} onToggleBookmark={toggleBookmark} />
+              <StockSection title="처분" rows={sorted.filter((it) => it.totalShares <= 0 && !it.watchOnly)} simulated showInvest={showInvest} onToggleBookmark={toggleBookmark} />
+            </>
+          ) : (
+            sorted.map((it) => <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} showDot onToggleBookmark={toggleBookmark} />)
+          )
+        )}
       </div>
 
       {adding && <AddStockModal invest={showInvest} simulated={simulated} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
-      <ConfirmModal
-        open={confirmReset}
-        title="모의 종목을 리셋할까요?"
-        message="현재 모의 보유가 모두 종료 처리돼요. 기록은 삭제되지 않고 다이어리에 '종료된 모의'로 회색으로 남아 복습할 수 있어요. 실제 보유는 그대로예요."
-        confirmLabel="리셋"
-        onConfirm={doReset}
-        onCancel={() => setConfirmReset(false)}
-      />
+      {confirmReset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => !resetBusy && setConfirmReset(false)}>
+          <div className="w-full max-w-sm rounded-card bg-card p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-ink">모의 종목 리셋</h3>
+            <p className="mt-1 text-xs text-ink-muted">현재 모의 보유를 어떻게 정리할까요? 실제 보유는 영향을 받지 않아요.</p>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => doReset("sell")}
+                disabled={!!resetBusy}
+                className="w-full rounded-card border border-line bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.04] disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-ink">{resetBusy === "sell" ? "매도 처리 중..." : "전량 매도로 종료"}</div>
+                <div className="mt-0.5 text-[11px] text-ink-muted">현재가로 전량 매도해 실현 손익에 반영해요. 다이어리에 매도 기록이 남아요.</div>
+              </button>
+              <button
+                onClick={() => doReset("archive")}
+                disabled={!!resetBusy}
+                className="w-full rounded-card border border-line bg-card p-3 text-left transition-colors hover:border-ink/20 hover:bg-bg-deep disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-ink">{resetBusy === "archive" ? "정리 중..." : "완전 리셋"}</div>
+                <div className="mt-0.5 text-[11px] text-ink-muted">손익 반영 없이 보유만 비워요. 기록은 다이어리에 회색 '종료된 모의'로 남아요.</div>
+              </button>
+            </div>
+            <div className="mt-3 text-right">
+              <button onClick={() => setConfirmReset(false)} disabled={!!resetBusy} className="text-xs text-ink-muted hover:text-ink disabled:opacity-50">취소</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+// 모의 탭 섹션(보유중 / 처분). 비어 있으면 렌더 안 함.
+function StockSection({ title, rows, simulated, showInvest, onToggleBookmark }: { title: string; rows: StockSummary[]; simulated: boolean; showInvest: boolean; onToggleBookmark: (id: string, on: boolean) => void }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-ink-muted">
+        {title}
+        <span className="rounded-full bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{rows.length}</span>
+      </p>
+      {rows.map((it) => (
+        <StockRow key={it.security.id} it={it} simulated={simulated} showInvest={showInvest} showDot={false} onToggleBookmark={onToggleBookmark} />
+      ))}
+    </div>
+  );
+}
+
+// 종목 카드 한 줄. showDot=false 면 앞의 상태 점을 숨김(모의 탭은 섹션으로 구분하므로).
+function StockRow({ it, simulated, showInvest, showDot, onToggleBookmark }: { it: StockSummary; simulated: boolean; showInvest: boolean; showDot: boolean; onToggleBookmark: (id: string, on: boolean) => void }) {
+  return (
+    <Link
+      href={`/stocks/${it.security.id}`}
+      className="relative flex items-center gap-3 rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40"
+    >
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleBookmark(it.security.id, !it.bookmarked); }}
+        title={it.bookmarked ? "책갈피 해제" : "책갈피"}
+        className="absolute left-2 top-0"
+      >
+        <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
+      </button>
+      {/* 맨 앞 점: 실제 보유=파랑 · 모의 보유=연한 하늘 · 둘 다면 점 2개 · 청산=회색 · 관심=투명 */}
+      {showDot && (
+        <span className="flex shrink-0 items-center gap-0.5">
+          {it.heldReal && <span title="실제 보유" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
+          {it.heldSim && <span title="모의 보유" className="h-2.5 w-2.5 rounded-full bg-sky-300" />}
+          {!it.heldReal && !it.heldSim && (
+            <span
+              title={it.watchOnly ? undefined : "청산"}
+              className={`h-2.5 w-2.5 rounded-full ${it.watchOnly ? "bg-transparent" : "bg-ink/25"}`}
+            />
+          )}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-semibold text-ink">{it.security.name}</span>
+          <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+          <span>
+            {fmtMoney(it.close, it.security.isOverseas)}
+            {it.security.isOverseas && it.close != null && it.fxNow ? ` (₩${Math.round(it.close * it.fxNow).toLocaleString()})` : ""}
+          </span>
+          {it.changeRate != null && (
+            <span className={`font-medium ${it.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>전일 {fmtPct(it.changeRate)}</span>
+          )}
+          {!it.watchOnly && it.avgBuy != null && it.totalShares > 0 && (
+            <span>
+              · 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)}
+              {it.security.isOverseas && it.avgBuyKRW != null ? ` (₩${Math.round(it.avgBuyKRW).toLocaleString()})` : ""}
+              {" "}· {it.totalShares}주 · 매수 {Math.round(it.totalCost).toLocaleString()}원
+            </span>
+          )}
+        </div>
+      </div>
+      {!it.watchOnly && showInvest && it.totalShares > 0 ? (() => {
+        const unreal = it.unrealizedPnl ?? ((it.marketValue ?? 0) - it.totalCost);
+        const unrealPct = it.totalCost > 0 ? (unreal / it.totalCost) * 100 : null;
+        return (
+          <div className="shrink-0 text-right">
+            <div className="text-[10px] text-ink-muted">{simulated ? "모의 평가손익" : "평가손익"}</div>
+            <div className={`text-sm font-bold ${unreal >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(unrealPct)}</div>
+            <div className={`text-xs ${unreal >= 0 ? "text-red-600" : "text-blue-600"}`}>{unreal >= 0 ? "+" : ""}{Math.round(unreal).toLocaleString()}원</div>
+          </div>
+        );
+      })() : (!it.watchOnly && it.totalShares <= 0 ? (
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] text-ink-muted">실현 실적</div>
+          <div className={`text-sm font-bold ${(it.realizedPnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{(it.realizedPnl ?? 0) >= 0 ? "+" : ""}{Math.round(it.realizedPnl ?? 0).toLocaleString()}원</div>
+        </div>
+      ) : null)}
+    </Link>
   );
 }
 
@@ -468,9 +523,9 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
       <div className="flex flex-1 items-start justify-between gap-2 p-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {e.kind === "buy" && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${dim ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>매수</span>}
-            {e.kind === "sell" && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${dim ? "bg-slate-100 text-slate-500" : "bg-rose-100 text-rose-700"}`}>매도</span>}
-            {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${dim ? "bg-slate-100 text-slate-500" : cat.chip}`}>{cat.label}</span>}
+            {e.kind === "buy" && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${dim ? "bg-emerald-50 text-emerald-500" : "bg-emerald-100 text-emerald-700"}`}>매수</span>}
+            {e.kind === "sell" && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${dim ? "bg-rose-50 text-rose-400" : "bg-rose-100 text-rose-700"}`}>매도</span>}
+            {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip} ${dim ? "opacity-70" : ""}`}>{cat.label}</span>}
             {e.securityId ? (
               <Link href={`/stocks/${e.securityId}`} className={`font-semibold hover:text-primary ${dim ? "text-ink-muted" : "text-ink"}`}>{e.name ?? "종목"}</Link>
             ) : (
@@ -513,7 +568,7 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
                 {ov && curPer != null ? <span className="text-ink-muted"> (₩{Math.round(curPer).toLocaleString()})</span> : null}
               </div>
               {pct != null && (
-                <div className={`font-bold ${dim ? "text-ink-muted" : gain ? "text-red-600" : "text-blue-600"}`}>
+                <div className={`font-bold ${dim ? (gain ? "text-red-400" : "text-blue-400") : gain ? "text-red-600" : "text-blue-600"}`}>
                   {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}원
                 </div>
               )}

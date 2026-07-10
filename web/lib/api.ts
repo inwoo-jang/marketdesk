@@ -220,7 +220,7 @@ export const api = {
     const qs = q.toString();
     return get<{ items: StockSummary[] }>(`/api/stocks${qs ? `?${qs}` : ""}`);
   },
-  resetSimStocks: () => post<{ ok: true }>("/api/stocks/sim/reset"),
+  resetSimStocks: (mode: "sell" | "archive") => post<{ ok: true; mode: string }>("/api/stocks/sim/reset", { mode }),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
   bookmarkStock: (securityId: string, on: boolean) => post<{ ok: true; bookmarked: boolean }>(`/api/stocks/${securityId}/bookmark`, { on }),
   setStopLoss: (securityId: string, stopPct: number | null) => put<{ ok: true; stopPct: number | null }>(`/api/stocks/${securityId}/stop-loss`, { stopPct }),

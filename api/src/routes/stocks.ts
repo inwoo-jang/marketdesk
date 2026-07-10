@@ -206,10 +206,54 @@ stocksRoute.get("/", async (c) => {
   return c.json({ items });
 });
 
-// POST /sim/reset : 모의 보유만 종료 처리(아카이브). 기록은 삭제하지 않고 다이어리에 "종료된 모의"로 남긴다.
-// 실제 보유는 건드리지 않음. 이미 종료된 건은 그대로.
+// POST /sim/reset : 모의 리셋. mode 로 처리 방식 선택. 실제 보유는 건드리지 않음.
+//  - sell   : 현재가로 전량 매도 기록 → 실현 손익에 반영(청산). 다이어리에 매도로 남음.
+//  - archive: 보유만 종료(아카이브). 손익 반영 없이 다이어리에 "종료된 모의"로 남김.
 stocksRoute.post("/sim/reset", async (c) => {
   const user = c.get("user");
+  const mode = ((await c.req.json().catch(() => ({}))) as { mode?: string })?.mode === "sell" ? "sell" : "archive";
+
+  if (mode === "sell") {
+    // 활성 모의 보유의 종목별 순주수 계산 → 순주수>0 만 현재가로 전량 매도.
+    const active = await db
+      .select()
+      .from(paperPositions)
+      .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, true), isNull(paperPositions.archivedAt)));
+    const bySec = new Map<string, number>();
+    for (const p of active) {
+      if (!p.securityId) continue;
+      bySec.set(p.securityId, (bySec.get(p.securityId) ?? 0) + (p.side === "sell" ? -p.shares : p.shares));
+    }
+    const targetIds = [...bySec.entries()].filter(([, net]) => net > 0).map(([id]) => id);
+    if (targetIds.length) {
+      const secs = await db.select().from(securities).where(inArray(securities.id, targetIds));
+      const anyOverseas = secs.some((s) => s.isOverseas);
+      const fxNow = anyOverseas ? (await currentFx()) ?? 1 : 1;
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      const rows = await mapPool(secs, 5, async (sec) => {
+        const q = await liveQuote(sec);
+        const price = q?.price ?? (await latestCachedClose(sec))?.close ?? null;
+        if (price == null) return null;
+        return {
+          userId: user.id,
+          securityId: sec.id,
+          name: sec.name,
+          side: "sell" as const,
+          simulated: true,
+          buyDate: today,
+          shares: bySec.get(sec.id)!,
+          buyPrice: price,
+          buyFx: sec.isOverseas ? fxNow : null,
+          reason: "모의 리셋(전량 매도)",
+        };
+      });
+      const valid = rows.filter((r): r is NonNullable<typeof r> => !!r);
+      if (valid.length) await db.insert(paperPositions).values(valid);
+    }
+    return c.json({ ok: true, mode });
+  }
+
+  // archive: 보유만 종료, 기록은 다이어리에 "종료된 모의"로 남긴다. 이미 종료된 건은 그대로.
   const now = new Date();
   await db
     .update(paperPositions)
@@ -219,7 +263,7 @@ stocksRoute.post("/sim/reset", async (c) => {
     .update(paperNotes)
     .set({ archivedAt: now })
     .where(and(eq(paperNotes.userId, user.id), eq(paperNotes.simulated, true), isNull(paperNotes.archivedAt)));
-  return c.json({ ok: true });
+  return c.json({ ok: true, mode });
 });
 
 // GET /diary : 모의매수 다이어리(전 종목 매수+일지 시간순). 주식공부 일기 느낌.
