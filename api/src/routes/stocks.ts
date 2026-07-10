@@ -26,8 +26,17 @@ function summarize(trades: Position[], close: number | null, fxNow = 1) {
   const avgBuy = buyShares > 0 ? buyCostNative / buyShares : null; // 네이티브 평단($/원)
   const avgBuyKRW = buyShares > 0 ? buyCostKRW / buyShares : 0; // 원화 평단
   const sellShares = sells.reduce((s, p) => s + p.shares, 0);
-  // 실현손익(원화): 매도대금 - 평단(원화)
-  const realizedPnl = avgBuyKRW ? sells.reduce((s, p) => s + p.shares * ((p.buyPrice ?? 0) * fxOf(p) - avgBuyKRW), 0) : 0;
+  // 실현손익(원화): 매도대금 - 평단(원화). 수익/손실 분리.
+  let realizedGain = 0;
+  let realizedLoss = 0;
+  if (avgBuyKRW) {
+    for (const p of sells) {
+      const r = p.shares * ((p.buyPrice ?? 0) * fxOf(p) - avgBuyKRW);
+      if (r >= 0) realizedGain += r;
+      else realizedLoss += r;
+    }
+  }
+  const realizedPnl = realizedGain + realizedLoss;
   const netShares = buyShares - sellShares;
   const costBasis = avgBuyKRW * netShares; // 남은 보유분 원가(원화)
   const marketValue = close != null ? netShares * close * fxNow : null; // 평가액(원화)
@@ -44,6 +53,8 @@ function summarize(trades: Position[], close: number | null, fxNow = 1) {
     fxNow,
     marketValue,
     realizedPnl,
+    realizedGain,
+    realizedLoss,
     unrealizedPnl,
     pnl,
     pnlPct,

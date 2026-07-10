@@ -289,28 +289,42 @@ function PnlSection({
         <p className="mt-2 text-sm text-ink-sub">아직 거래 기록이 없어요. {simulated ? "모의 매수" : "매수"}를 기록하면 손익이 보여요.</p>
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            {summary.totalShares > 0 ? (
-              <>
-                <span className={`text-xl font-extrabold ${(summary.pnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>
-                  {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
-                </span>
-                <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(summary.pnlPct)}</span>
-                <span className="text-xs text-ink-muted">
-                  평단 {fmtMoney(summary.avgBuy, overseas)}
-                  {overseas && summary.avgBuyKRW != null ? ` (₩${Math.round(summary.avgBuyKRW).toLocaleString()})` : ""}
-                  {" "}· {summary.totalShares}주 · 매수 {Math.round(summary.totalCost).toLocaleString()}원
-                </span>
-              </>
-            ) : (
-              // 전량 매도(청산) → 손익 표시 없이 상태만
-              <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">전량 매도 (청산)</span>
-            )}
-          </div>
-          {overseas && summary.totalShares > 0 && summary.avgBuyKRW != null && (
-            <p className="mt-1 text-[11px] text-ink-muted">
-              원화 평단 {Math.round(summary.avgBuyKRW).toLocaleString()}원 · 평가액 {Math.round(summary.marketValue ?? 0).toLocaleString()}원
-              {summary.fxNow ? ` · 현재환율 ${Math.round(summary.fxNow)}` : ""} · 손익은 환율 반영 원화 기준
+          {summary.totalShares > 0 ? (
+            <>
+              {/* 메인: 보유 평가손익 */}
+              {(() => {
+                const unreal = summary.unrealizedPnl ?? (summary.marketValue != null ? summary.marketValue - summary.totalCost : 0);
+                const unrealPct = summary.totalCost > 0 ? (unreal / summary.totalCost) * 100 : null;
+                return (
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-xs text-ink-muted">보유 평가손익</span>
+                    <span className={`text-xl font-extrabold ${unreal >= 0 ? "text-red-600" : "text-blue-600"}`}>{unreal >= 0 ? "+" : ""}{Math.round(unreal).toLocaleString()}원</span>
+                    <span className={`text-sm font-semibold ${(unrealPct ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(unrealPct)}</span>
+                  </div>
+                );
+              })()}
+              <p className="mt-1 text-xs text-ink-muted">
+                평단 {fmtMoney(summary.avgBuy, overseas)}
+                {overseas && summary.avgBuyKRW != null ? ` (₩${Math.round(summary.avgBuyKRW).toLocaleString()})` : ""}
+                {" "}· {summary.totalShares}주 · 매수 {Math.round(summary.totalCost).toLocaleString()}원 · 평가액 {Math.round(summary.marketValue ?? 0).toLocaleString()}원
+                {overseas && summary.fxNow ? ` · 현재환율 ${Math.round(summary.fxNow)}` : ""}
+              </p>
+            </>
+          ) : (
+            // 전량 매도(청산) → 실현 실적
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">청산</span>
+              <span className="text-xs text-ink-muted">실현 실적</span>
+              <span className={`text-xl font-extrabold ${(summary.realizedPnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                {(summary.realizedPnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.realizedPnl ?? 0).toLocaleString()}원
+              </span>
+            </div>
+          )}
+          {/* 참고: 총손익 + 과거 실현 수익/손실 */}
+          {((summary.realizedGain ?? 0) > 0 || (summary.realizedLoss ?? 0) < 0) && (
+            <p className="mt-1 border-t border-line pt-1 text-[11px] text-ink-muted">
+              총손익(실현 포함) <span className={`font-semibold ${(summary.pnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원</span>
+              {" "}· 과거 실현 수익 <span className="text-red-600">+{Math.round(summary.realizedGain ?? 0).toLocaleString()}원</span> · 실현 손실 <span className="text-blue-600">{Math.round(summary.realizedLoss ?? 0).toLocaleString()}원</span>
             </p>
           )}
           <div className="mt-3 space-y-1">
@@ -330,13 +344,14 @@ function QuickBuy({ securityId, simulated, currentPrice, overseas, onDone }: { s
   const [buyDate, setBuyDate] = useState(today);
   const [shares, setShares] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const priceHint = currentPrice != null ? (overseas ? `$${currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(currentPrice).toLocaleString()}`) : "자동";
   async function save() {
     const sh = Number(shares);
     if (!sh || sh <= 0) return;
     setBusy(true);
-    await api.addPosition({ securityId, side, simulated, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined }).catch(() => {});
+    await api.addPosition({ securityId, side, simulated, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : undefined, reason: reason.trim() || undefined }).catch(() => {});
     setBusy(false);
     onDone();
   }
@@ -355,6 +370,7 @@ function QuickBuy({ securityId, simulated, currentPrice, overseas, onDone }: { s
         <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder={`단가(${priceHint})`} className="w-28 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
         <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">기록</button>
       </div>
+      <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder={`${side === "buy" ? "매수" : "매도"} 이유 (선택)`} className="mt-2 w-full resize-none rounded-lg border border-line bg-card px-2 py-1.5 text-xs outline-none focus:border-primary" />
     </div>
   );
 }

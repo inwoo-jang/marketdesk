@@ -245,6 +245,8 @@ export type StockSummary = {
   fxNow?: number; // 현재 USD/KRW(해외)
   marketValue: number | null; // 원화
   realizedPnl?: number;
+  realizedGain?: number;
+  realizedLoss?: number;
   unrealizedPnl?: number | null;
   pnl: number | null; // 원화
   pnlPct: number | null;
