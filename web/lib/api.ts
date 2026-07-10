@@ -247,7 +247,7 @@ export type PaperPosition = {
   reason: string | null;
   createdAt: string;
 };
-export type NoteCategory = "up" | "down" | "hold" | "etc";
+export type NoteCategory = "up" | "down" | "hold" | "memo";
 export type PaperNote = { id: string; securityId: string; positionId: string | null; noteDate: string; category: NoteCategory | null; body: string; createdAt: string };
 export type StockQuote = { price: number; changeRate: number | null; currency: string };
 export type StockDetail = {

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type StockSummary, type SecurityLite, type DiaryItem } from "@/lib/api";
+import { api, type StockSummary, type SecurityLite, type DiaryItem, type StockDetail, type NoteCategory, type PriceBar } from "@/lib/api";
 import { stockMenuLabel } from "@/components/app-nav";
+import { PriceChart } from "@/components/price-chart";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -29,10 +30,10 @@ export default function StocksPage() {
 
       <div className="mt-4 flex gap-1 border-b border-line">
         <TabBtn active={tab === "info"} onClick={() => setTab("info")}>종목 정보</TabBtn>
-        <TabBtn active={tab === "diary"} onClick={() => setTab("diary")}>모의매수 다이어리</TabBtn>
+        <TabBtn active={tab === "diary"} onClick={() => setTab("diary")}>다이어리</TabBtn>
       </div>
 
-      {tab === "info" ? <InfoTab showInvest={showInvest} /> : <DiaryTab showInvest={showInvest} />}
+      {tab === "info" ? <InfoTab showInvest={showInvest} /> : <DiaryTab />}
     </main>
   );
 }
@@ -133,13 +134,25 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
   );
 }
 
-// ─── 모의매수 다이어리 탭: 전 종목 매수·일지 시간순 ───
-function DiaryTab({ showInvest }: { showInvest: boolean }) {
+// 다이어리 카테고리 6종: 매수·매도(거래) + 상승·하락·유지·메모(기록)
+type DiaryCat = "buy" | "sell" | NoteCategory;
+const DIARY_CATS: { key: DiaryCat; label: string; chip: string }[] = [
+  { key: "buy", label: "매수", chip: "bg-emerald-100 text-emerald-700" },
+  { key: "sell", label: "매도", chip: "bg-rose-100 text-rose-700" },
+  { key: "up", label: "상승", chip: "bg-emerald-100 text-emerald-700" },
+  { key: "down", label: "하락", chip: "bg-red-100 text-red-700" },
+  { key: "hold", label: "유지", chip: "bg-slate-100 text-slate-600" },
+  { key: "memo", label: "메모", chip: "bg-ink/5 text-ink-muted" },
+];
+const NOTE_CATS = DIARY_CATS.filter((c) => c.key !== "buy" && c.key !== "sell");
+const catOf = (k?: NoteCategory | null) => DIARY_CATS.find((c) => c.key === k);
+
+// ─── 다이어리 탭: 매수/매도/상승/하락/유지/메모 + AI, 전 종목 시간순 ───
+function DiaryTab() {
   const [items, setItems] = useState<DiaryItem[] | null>(null);
   const load = () => api.stockDiary().then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, []);
 
-  // 날짜별 그룹
   const groups = useMemo(() => {
     const m = new Map<string, DiaryItem[]>();
     for (const it of items ?? []) {
@@ -155,38 +168,39 @@ function DiaryTab({ showInvest }: { showInvest: boolean }) {
       {items == null && <p className="mt-4 text-ink-muted">불러오는 중...</p>}
       {items != null && items.length === 0 && (
         <div className="mt-4 rounded-card border border-dashed border-line p-10 text-center text-ink-muted">
-          아직 기록이 없어요. 위에서 오늘의 공부를 남겨보세요.
+          아직 기록이 없어요. 위에서 매수·매도나 오늘의 메모를 남겨보세요.
         </div>
       )}
       <div className="mt-5 space-y-5">
         {groups.map(([date, evs]) => (
           <div key={date} className="relative pl-5">
             <div className="absolute left-0 top-1.5 h-2 w-2 rounded-full bg-primary" />
-            <div className="absolute left-[3px] top-4 bottom-0 w-px bg-line" />
+            <div className="absolute bottom-0 left-[3px] top-4 w-px bg-line" />
             <p className="text-xs font-semibold text-ink-muted">{date}</p>
             <div className="mt-2 space-y-2">
-              {evs.map((e) => (
-                <Link
-                  key={e.kind + e.id}
-                  href={e.securityId ? `/stocks/${e.securityId}` : "#"}
-                  className="block rounded-card bg-card p-3 shadow-card hover:bg-bg-deep/40"
-                >
-                  <div className="flex items-center gap-2">
-                    {e.kind === "buy" ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>
+              {evs.map((e) => {
+                const cat = catOf(e.category);
+                return (
+                  <Link key={e.kind + e.id} href={e.securityId ? `/stocks/${e.securityId}` : "#"} className="block rounded-card bg-card p-3 shadow-card hover:bg-bg-deep/40">
+                    <div className="flex items-center gap-2">
+                      {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
+                      {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
+                      {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
+                      {e.kind === "note" && !cat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>}
+                      <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
+                      {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
+                    </div>
+                    {e.kind !== "note" ? (
+                      <>
+                        <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
+                        {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
+                      </>
                     ) : (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
                     )}
-                    <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
-                    {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
-                  </div>
-                  {e.kind === "buy" ? (
-                    <p className="mt-1 text-sm text-ink-sub">{e.shares}주 매수 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
-                  ) : (
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
-                  )}
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -196,14 +210,25 @@ function DiaryTab({ showInvest }: { showInvest: boolean }) {
 }
 
 function DiaryComposer({ onDone }: { onDone: () => void }) {
+  const [mine, setMine] = useState<StockSummary[]>([]);
+  const [cat, setCat] = useState<DiaryCat>("buy");
   const [picked, setPicked] = useState<SecurityLite | null>(null);
+  const [holding, setHolding] = useState<StockDetail | null>(null);
+  const [bars, setBars] = useState<PriceBar[]>([]);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SecurityLite[]>([]);
-  const [body, setBody] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [shares, setShares] = useState("");
+  const [price, setPrice] = useState("");
+  const [text, setText] = useState("");
+  const [ai, setAi] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const isTrade = cat === "buy" || cat === "sell";
+
+  useEffect(() => { api.myStocks().then((r) => setMine(r.items)).catch(() => {}); }, []);
   useEffect(() => {
     if (picked) return;
     if (timer.current) clearTimeout(timer.current);
@@ -211,43 +236,138 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
     timer.current = setTimeout(() => api.stockSearch(q.trim()).then((r) => setResults(r.results)).catch(() => setResults([])), 200);
   }, [q, picked]);
 
-  async function save() {
-    if (!picked || !body.trim()) return;
-    setBusy(true);
-    await api.addStockNote(picked.id, { noteDate: date, body: body.trim() }).catch(() => {});
-    setBusy(false);
-    setBody(""); setPicked(null); setQ("");
-    onDone();
+  function pick(s: SecurityLite) {
+    setPicked(s); setResults([]); setAi(null); setCat("buy");
+    api.stockDetail(s.id).then(setHolding).catch(() => setHolding(null));
+    api.stockSeries(s.id, "D").then((r) => setBars(r.bars)).catch(() => setBars([]));
   }
+  function reset() {
+    setPicked(null); setHolding(null); setBars([]); setQ(""); setShares(""); setPrice(""); setText(""); setAi(null);
+  }
+  async function runAi() {
+    if (!picked) return;
+    setAiBusy(true);
+    const r = await api.analyzeStock(picked.id).catch(() => ({ analysis: "분석을 가져오지 못했어요." }));
+    setAi(r.analysis);
+    setAiBusy(false);
+  }
+  async function save() {
+    if (!picked) return;
+    setBusy(true);
+    try {
+      if (isTrade) {
+        const sh = Number(shares);
+        if (!sh || sh <= 0) { setBusy(false); return; }
+        await api.addPosition({ securityId: picked.id, side: cat as "buy" | "sell", buyDate: date, shares: sh, buyPrice: price ? Number(price) : undefined, reason: text.trim() || undefined });
+      } else {
+        if (!text.trim()) { setBusy(false); return; }
+        await api.addStockNote(picked.id, { noteDate: date, body: text.trim(), category: cat as NoteCategory });
+      }
+      reset();
+      onDone();
+    } catch { /* noop */ }
+    setBusy(false);
+  }
+
+  const overseas = holding?.security.isOverseas ?? false;
+  const held = holding?.summary;
+  const markers = (holding?.positions ?? []).map((p) => ({ date: p.buyDate }));
 
   return (
     <section className="mt-4 rounded-card bg-card p-4 shadow-card">
-      <p className="text-xs font-semibold text-ink-muted">오늘의 공부 기록</p>
       {!picked ? (
-        <div className="relative mt-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="종목 검색 후 선택" className="w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
-          {results.length > 0 && (
-            <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-line bg-card shadow-card">
-              {results.map((r) => (
-                <button key={r.id} onClick={() => { setPicked(r); setResults([]); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
-                  <span className="font-medium text-ink">{r.name}</span>
-                  <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
-                </button>
-              ))}
+        <>
+          {/* 내 종목 우선 선택 */}
+          {mine.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-ink-muted">내 종목에서</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {mine.map((m) => (
+                  <button
+                    key={m.security.id}
+                    onClick={() => pick(m.security)}
+                    className="rounded-full border border-line bg-bg-deep/30 px-3 py-1 text-sm font-medium text-ink hover:border-primary hover:text-primary"
+                  >
+                    {m.security.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-        </div>
+          {/* 그 외 검색 */}
+          <div className="relative mt-3">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="그 외 종목 검색" className="w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+            {results.length > 0 && (
+              <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-line bg-card shadow-card">
+                {results.map((r) => (
+                  <button key={r.id} onClick={() => pick(r)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
+                    <span className="font-medium text-ink">{r.name}</span>
+                    <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         <>
-          <div className="mt-2 flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2">
-            <span className="font-semibold text-ink">{picked.name}</span>
-            <button onClick={() => setPicked(null)} className="text-xs text-ink-muted hover:text-ink">변경</button>
+          <div className="flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2">
+            <div>
+              <span className="font-semibold text-ink">{picked.name}</span>
+              {held && !held.watchOnly && (
+                <span className="ml-2 text-xs text-ink-muted">보유 {held.totalShares}주 · 평단 {fmtMoney(held.avgBuy, overseas)}</span>
+              )}
+            </div>
+            <button onClick={reset} className="text-xs text-ink-muted hover:text-ink">변경</button>
           </div>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="왜 샀는지, 오늘 배운 것, 다음에 볼 것" className="mt-2 w-full resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+
+          {/* 그 종목의 최근 주가 흐름(매수/매도 이후 흐름 참고) */}
+          {bars.length > 1 && (
+            <div className="mt-2 rounded-lg border border-line bg-bg-deep/20 p-2">
+              <PriceChart bars={bars} markers={markers} height={110} />
+            </div>
+          )}
+
+          {/* 거래 / 기록 버튼 분리 */}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-ink-muted">거래</span>
+              <button onClick={() => setCat("buy")} className={`rounded-lg px-3 py-1.5 text-sm font-bold ${cat === "buy" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>매수</button>
+              <button onClick={() => setCat("sell")} className={`rounded-lg px-3 py-1.5 text-sm font-bold ${cat === "sell" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>매도</button>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-ink-muted">기록</span>
+              {NOTE_CATS.map((c) => (
+                <button key={c.key} onClick={() => setCat(c.key)} className={`rounded-full px-2.5 py-1 text-xs font-medium ${cat === c.key ? c.chip : "text-ink-muted hover:bg-bg-deep"}`}>{c.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {isTrade ? (
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
+                <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="주수" className="w-20 rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
+                <input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={`${cat === "buy" ? "매수" : "매도"}가(자동)`} className="w-28 rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
+              </div>
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={`${cat === "buy" ? "매수" : "매도"} 이유 (선택)`} className="w-full resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="왜 오른/내린 것 같은지, 오늘 배운 것" className="flex-1 resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+            </div>
+          )}
+
           <div className="mt-2 flex items-center justify-between">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1 text-xs outline-none focus:border-primary" />
-            <button onClick={save} disabled={busy || !body.trim()} className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40">기록</button>
+            <button onClick={runAi} disabled={aiBusy} className="text-xs font-semibold text-primary hover:text-primary/70 disabled:opacity-50">
+              {aiBusy ? "AI 분석 중..." : "AI 등락 요인 도움받기"}
+            </button>
+            <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40">
+              {cat === "buy" ? "매수 기록" : cat === "sell" ? "매도 기록" : "기록"}
+            </button>
           </div>
+          {ai && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-bg-deep/40 p-2 text-xs text-ink-sub">{ai}</p>}
         </>
       )}
     </section>

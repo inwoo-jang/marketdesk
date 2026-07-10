@@ -286,7 +286,7 @@ stocksRoute.post("/:securityId/notes", async (c) => {
     .object({
       noteDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       body: z.string().min(1).max(2000),
-      category: z.enum(["up", "down", "hold", "etc"]).optional(),
+      category: z.enum(["up", "down", "hold", "memo"]).optional(),
     })
     .safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "메모를 확인해 주세요." }, 400);
