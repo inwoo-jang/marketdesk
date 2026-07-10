@@ -236,12 +236,14 @@ export type StockSummary = {
   watchOnly: boolean;
   totalShares: number;
   totalCost: number;
-  avgBuy: number | null;
+  avgBuy: number | null; // 네이티브 평단($/원)
+  avgBuyKRW?: number | null; // 원화 평단(해외)
   close: number | null;
-  marketValue: number | null;
+  fxNow?: number; // 현재 USD/KRW(해외)
+  marketValue: number | null; // 원화
   realizedPnl?: number;
   unrealizedPnl?: number | null;
-  pnl: number | null;
+  pnl: number | null; // 원화
   pnlPct: number | null;
 };
 export type PaperPosition = {
@@ -253,6 +255,7 @@ export type PaperPosition = {
   buyDate: string;
   shares: number;
   buyPrice: number | null;
+  buyFx: number | null;
   reason: string | null;
   createdAt: string;
 };
@@ -262,9 +265,10 @@ export type StockQuote = { price: number; changeRate: number | null; currency: s
 export type StockDetail = {
   security: SecurityLite;
   quote: StockQuote | null;
+  fxNow: number | null; // 현재 USD/KRW(해외만)
   positions: PaperPosition[];
-  summary: Omit<StockSummary, "security" | "changeRate">; // 실제 보유
-  simSummary: Omit<StockSummary, "security" | "changeRate">; // 모의
+  summary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 실제 보유
+  simSummary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 모의
 };
 export type PriceBar = { date: string; close: number };
 export type DiaryItem = {
@@ -278,6 +282,8 @@ export type DiaryItem = {
   shares?: number;
   buyPrice?: number | null;
   close?: number | null;
+  buyFx?: number | null;
+  fxNow?: number;
   simulated?: boolean;
   reason?: string | null;
   category?: NoteCategory | null;

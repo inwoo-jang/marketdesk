@@ -290,6 +290,12 @@ function PnlSection({
               <span className="text-xs text-ink-muted">실현 {Math.round(summary.realizedPnl).toLocaleString()}원</span>
             )}
           </div>
+          {overseas && summary.avgBuyKRW != null && (
+            <p className="mt-1 text-[11px] text-ink-muted">
+              원화 평단 {Math.round(summary.avgBuyKRW).toLocaleString()}원 · 평가액 {Math.round(summary.marketValue ?? 0).toLocaleString()}원
+              {summary.fxNow ? ` · 현재환율 ${Math.round(summary.fxNow)}` : ""} · 손익은 환율 반영 원화 기준
+            </p>
+          )}
           <div className="mt-3 space-y-1">
             {positions.map((p) => (
               <PositionRow key={p.id} p={p} overseas={overseas} onChanged={onChanged} />
@@ -373,6 +379,7 @@ function PositionRow({ p, overseas, onChanged }: { p: PaperPosition; overseas: b
       <span className="text-ink-sub">
         <span className={`mr-1 font-semibold ${p.side === "sell" ? "text-rose-600" : "text-emerald-600"}`}>{p.side === "sell" ? "매도" : "매수"}</span>
         {p.buyDate} · {p.shares}주 · {fmtMoney(p.buyPrice, overseas)}
+        {overseas && p.buyFx != null && <span className="text-ink-muted"> · 환율 {Math.round(p.buyFx)}</span>}
         {p.reason && <span className="ml-1 text-ink-muted">— {p.reason}</span>}
       </span>
       <span className="flex shrink-0 gap-2">

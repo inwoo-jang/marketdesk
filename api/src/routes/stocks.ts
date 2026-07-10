@@ -5,6 +5,7 @@ import { securities, userSecurities, paperPositions, paperNotes, reports } from 
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
 import { getSeries, latestClose, closeOn, liveQuote } from "../lib/price-service.js";
+import { currentFx, fxOn } from "../lib/fx.js";
 import { askLLM, askLLMSearch } from "../define.js";
 
 export const stocksRoute = new Hono<AppEnv>();
@@ -13,28 +14,34 @@ stocksRoute.use("*", requireUser);
 type Security = typeof securities.$inferSelect;
 type Position = typeof paperPositions.$inferSelect;
 
-// 매수/매도 거래 + 현재가 → 손익 요약(평균원가법). 거래 없으면 관심만.
-function summarize(trades: Position[], close: number | null) {
+// 매수/매도 거래 + 현재가 → 손익 요약(평균원가법). 금액은 원화 기준.
+// fxNow=현재 USD/KRW(국내는 1). 각 거래의 buyFx=거래 시점 환율(없으면 현재).
+function summarize(trades: Position[], close: number | null, fxNow = 1) {
+  const fxOf = (p: Position) => p.buyFx ?? fxNow; // 거래 시점 환율(원화 환산)
   const buys = trades.filter((t) => t.side !== "sell");
   const sells = trades.filter((t) => t.side === "sell");
   const buyShares = buys.reduce((s, p) => s + p.shares, 0);
-  const buyCost = buys.reduce((s, p) => s + p.shares * (p.buyPrice ?? 0), 0);
-  const avgBuy = buyShares > 0 ? buyCost / buyShares : null;
+  const buyCostKRW = buys.reduce((s, p) => s + p.shares * (p.buyPrice ?? 0) * fxOf(p), 0);
+  const buyCostNative = buys.reduce((s, p) => s + p.shares * (p.buyPrice ?? 0), 0);
+  const avgBuy = buyShares > 0 ? buyCostNative / buyShares : null; // 네이티브 평단($/원)
+  const avgBuyKRW = buyShares > 0 ? buyCostKRW / buyShares : 0; // 원화 평단
   const sellShares = sells.reduce((s, p) => s + p.shares, 0);
-  // 실현손익: 매도가 - 평단
-  const realizedPnl = avgBuy != null ? sells.reduce((s, p) => s + p.shares * ((p.buyPrice ?? 0) - avgBuy), 0) : 0;
+  // 실현손익(원화): 매도대금 - 평단(원화)
+  const realizedPnl = avgBuyKRW ? sells.reduce((s, p) => s + p.shares * ((p.buyPrice ?? 0) * fxOf(p) - avgBuyKRW), 0) : 0;
   const netShares = buyShares - sellShares;
-  const costBasis = avgBuy != null ? avgBuy * netShares : 0; // 남은 보유분 원가
-  const marketValue = close != null ? netShares * close : null;
-  const unrealizedPnl = marketValue != null && avgBuy != null ? (close! - avgBuy) * netShares : null;
+  const costBasis = avgBuyKRW * netShares; // 남은 보유분 원가(원화)
+  const marketValue = close != null ? netShares * close * fxNow : null; // 평가액(원화)
+  const unrealizedPnl = marketValue != null ? (close! * fxNow - avgBuyKRW) * netShares : null;
   const pnl = unrealizedPnl != null ? unrealizedPnl + realizedPnl : realizedPnl || null;
-  const pnlPct = pnl != null && buyCost > 0 ? (pnl / buyCost) * 100 : null;
+  const pnlPct = pnl != null && buyCostKRW > 0 ? (pnl / buyCostKRW) * 100 : null;
   return {
     watchOnly: trades.length === 0,
-    totalShares: netShares, // 보유 순주수
+    totalShares: netShares,
     totalCost: costBasis,
     avgBuy,
+    avgBuyKRW: buyShares > 0 ? avgBuyKRW : null,
     close,
+    fxNow,
     marketValue,
     realizedPnl,
     unrealizedPnl,
@@ -137,10 +144,12 @@ stocksRoute.get("/", async (c) => {
     .from(userSecurities)
     .where(and(eq(userSecurities.userId, user.id), eq(userSecurities.bookmarked, true)));
   const bmSet = new Set(bmRows.map((b) => b.securityId));
+  const hasOverseas = regs.some((r) => r.security.isOverseas);
+  const fxRate = hasOverseas ? (await currentFx()) ?? 1 : 1;
   const items = [];
   for (const r of regs) {
     const last = await latestClose(r.security);
-    const summary = summarize(bySec.get(r.security.id) ?? [], last?.close ?? null);
+    const summary = summarize(bySec.get(r.security.id) ?? [], last?.close ?? null, r.security.isOverseas ? fxRate : 1);
     items.push({
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
       changeRate: last?.changeRate ?? null,
@@ -168,6 +177,7 @@ stocksRoute.get("/diary", async (c) => {
       simulated: paperPositions.simulated,
       shares: paperPositions.shares,
       buyPrice: paperPositions.buyPrice,
+      buyFx: paperPositions.buyFx,
       reason: paperPositions.reason,
     })
     .from(paperPositions)
@@ -194,9 +204,11 @@ stocksRoute.get("/diary", async (c) => {
     const secs = await db.select().from(securities).where(inArray(securities.id, secIds));
     for (const s of secs) closeMap.set(s.id, (await latestClose(s))?.close ?? null);
   }
+  const anyOverseas = buys.some((b) => b.isOverseas);
+  const fxNow = anyOverseas ? (await currentFx()) ?? 1 : 1;
   const items = [
-    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
-    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
+    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, buyFx: b.buyFx as number | null | undefined, fxNow: b.isOverseas ? fxNow : (undefined as number | undefined), reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, buyFx: undefined as number | null | undefined, fxNow: undefined as number | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });
@@ -258,9 +270,10 @@ stocksRoute.post("/positions", async (c) => {
     }
   }
   await db.insert(userSecurities).values({ userId: user.id, securityId: sec.id }).onConflictDoNothing();
+  const buyFx = sec.isOverseas ? await fxOn(parsed.data.buyDate) : null; // 거래일 환율(해외만)
   const [pos] = await db
     .insert(paperPositions)
-    .values({ userId: user.id, securityId: sec.id, name: sec.name, side, simulated, buyDate: parsed.data.buyDate, shares: parsed.data.shares, buyPrice, reason: parsed.data.reason ?? null })
+    .values({ userId: user.id, securityId: sec.id, name: sec.name, side, simulated, buyDate: parsed.data.buyDate, shares: parsed.data.shares, buyPrice, buyFx, reason: parsed.data.reason ?? null })
     .returning();
   return c.json({ ok: true, position: pos });
 });
@@ -352,11 +365,13 @@ stocksRoute.get("/:securityId", async (c) => {
     .orderBy(paperPositions.buyDate);
   const quote = await liveQuote(sec);
   const close = quote?.price ?? null;
-  const summary = summarize(positions.filter((p) => !p.simulated), close); // 실제 보유
-  const simSummary = summarize(positions.filter((p) => p.simulated), close); // 모의
+  const fxNow = sec.isOverseas ? (await currentFx()) ?? 1 : 1;
+  const summary = summarize(positions.filter((p) => !p.simulated), close, fxNow); // 실제 보유
+  const simSummary = summarize(positions.filter((p) => p.simulated), close, fxNow); // 모의
   return c.json({
     security: { id: sec.id, code: sec.code, name: sec.name, market: sec.market, isOverseas: sec.isOverseas },
     quote,
+    fxNow: sec.isOverseas ? fxNow : null,
     positions,
     summary,
     simSummary,

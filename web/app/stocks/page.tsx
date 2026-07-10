@@ -354,23 +354,29 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
             <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
           )}
         </div>
-        {/* 오른쪽: 구매가/현재/수익률 */}
+        {/* 오른쪽: 구매가/현재/수익률(해외는 원화 환산) */}
         {isTrade && (() => {
           const bp = e.buyPrice ?? null;
           const cl = e.close ?? null;
           const sh = e.shares ?? 0;
-          const pct = bp != null && cl != null && bp > 0 ? ((cl - bp) / bp) * 100 : null;
-          const amt = bp != null && cl != null ? (cl - bp) * sh : null;
+          const ov = e.isOverseas ?? false;
+          const fxB = ov ? (e.buyFx ?? e.fxNow ?? 1) : 1; // 매수 시점 환율
+          const fxN = ov ? (e.fxNow ?? 1) : 1; // 현재 환율
+          const costPer = bp != null ? bp * fxB : null; // 원화 매수 단가
+          const curPer = cl != null ? cl * fxN : null; // 원화 현재가
+          const pct = costPer != null && curPer != null && costPer > 0 ? ((curPer - costPer) / costPer) * 100 : null;
+          const amt = costPer != null && curPer != null ? (curPer - costPer) * sh : null;
           const gain = (pct ?? 0) >= 0;
           return (
             <div className="shrink-0 text-right text-xs">
-              <div className="text-ink-muted">{e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, e.isOverseas)}</span></div>
-              <div className="text-ink-muted">현재 <span className="text-ink">{fmtMoney(cl, e.isOverseas)}</span></div>
+              <div className="text-ink-muted">{e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, ov)}</span></div>
+              <div className="text-ink-muted">현재 <span className="text-ink">{fmtMoney(cl, ov)}</span></div>
               {pct != null && (
                 <div className={`font-bold ${gain ? "text-emerald-600" : "text-red-600"}`}>
-                  {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}{e.isOverseas ? "" : "원"}
+                  {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}원
                 </div>
               )}
+              {ov && <div className="text-[10px] text-ink-muted">환율 {Math.round(fxB)}→{Math.round(fxN)}</div>}
             </div>
           );
         })()}

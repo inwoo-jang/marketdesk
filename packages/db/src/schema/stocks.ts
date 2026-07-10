@@ -91,6 +91,7 @@ export const paperPositions = pgTable("paper_positions", {
   buyDate: date("buy_date").notNull(), // 거래일(매수/매도 공통)
   shares: doublePrecision("shares").notNull(),
   buyPrice: doublePrecision("buy_price"), // 체결가. null 이면 거래일 종가로 자동
+  buyFx: doublePrecision("buy_fx"), // 거래일 USD/KRW 환율(해외만). 원화 환산용
   reason: text("reason"), // 매수 이유 / 매도 이유
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
