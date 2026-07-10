@@ -69,7 +69,7 @@ export async function sweepPriceAlerts(): Promise<void> {
     .where(and(eq(notifications.kind, "price"), gte(notifications.createdAt, sql`${today}::date`)));
   const sent = new Set(existing.map((e) => `${e.userId}:${e.title}`));
 
-  const rows: { userId: string; kind: string; title: string; body: string; matched: string }[] = [];
+  const rows: { userId: string; kind: string; securityId: string; title: string; body: string; matched: string }[] = [];
   const openSecById = new Map(openSecs.map((s) => [s.id, s]));
   for (const reg of regs) {
     const sec = openSecById.get(reg.securityId);
@@ -81,7 +81,7 @@ export async function sweepPriceAlerts(): Promise<void> {
     if (q.changeRate != null && q.changeRate <= -DROP_PCT) {
       const title = `${sec.name} 급락 경보`;
       if (!sent.has(`${reg.userId}:${title}`)) {
-        rows.push({ userId: reg.userId, kind: "price", title, body: `전일 대비 ${q.changeRate.toFixed(1)}% · 현재 ${fmtP}`, matched: `관심/보유 종목이 오늘 ${DROP_PCT}% 이상 하락` });
+        rows.push({ userId: reg.userId, kind: "price", securityId: sec.id, title, body: `전일 대비 ${q.changeRate.toFixed(1)}% · 현재 ${fmtP}`, matched: `관심/보유 종목이 오늘 ${DROP_PCT}% 이상 하락` });
         sent.add(`${reg.userId}:${title}`);
       }
     }
@@ -94,7 +94,7 @@ export async function sweepPriceAlerts(): Promise<void> {
         const title = `${sec.name} 손절 라인 도달`;
         if (!sent.has(`${reg.userId}:${title}`)) {
           const fmtAvg = sec.isOverseas ? `$${avg.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(avg).toLocaleString()}원`;
-          rows.push({ userId: reg.userId, kind: "price", title, body: `매수가 대비 ${downPct.toFixed(1)}% · 평단 ${fmtAvg} → ${fmtP}`, matched: `보유 종목이 평단 대비 ${STOP_PCT}% 이상 하락(손절선)` });
+          rows.push({ userId: reg.userId, kind: "price", securityId: sec.id, title, body: `매수가 대비 ${downPct.toFixed(1)}% · 평단 ${fmtAvg} → ${fmtP}`, matched: `보유 종목이 평단 대비 ${STOP_PCT}% 이상 하락(손절선)` });
           sent.add(`${reg.userId}:${title}`);
         }
       }

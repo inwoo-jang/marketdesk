@@ -1701,6 +1701,7 @@ meRoute.get("/notifications", async (c) => {
       id: notifications.id,
       kind: notifications.kind,
       industryId: notifications.industryId,
+      securityId: notifications.securityId,
       reportId: notifications.reportId,
       title: notifications.title,
       body: notifications.body,

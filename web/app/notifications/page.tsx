@@ -31,7 +31,13 @@ export default function NotificationsPage() {
     return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
   };
   const linkOf = (n: AppNotification) =>
-    n.industryId ? `/industry/${n.industryId}${n.reportId ? `?new=${n.reportId}` : ""}` : n.reportId ? `/reports/${n.reportId}` : "/board";
+    n.securityId
+      ? `/stocks/${n.securityId}`
+      : n.industryId
+        ? `/industry/${n.industryId}${n.reportId ? `?new=${n.reportId}` : ""}`
+        : n.reportId
+          ? `/reports/${n.reportId}`
+          : "/board";
 
   async function runConfirm() {
     if (!confirm) return;

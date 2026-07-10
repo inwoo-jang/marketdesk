@@ -327,6 +327,7 @@ export type AppNotification = {
   id: string;
   kind: string;
   industryId: string | null;
+  securityId: string | null;
   reportId: string | null;
   title: string | null;
   body: string | null;

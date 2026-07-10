@@ -2,8 +2,9 @@ import { pgTable, uuid, text, boolean, timestamp, index } from "drizzle-orm/pg-c
 import { users } from "./users";
 import { industries } from "./industries";
 import { reports } from "./reports";
+import { securities } from "./stocks";
 
-// notifications: 유저 알림. 현재는 논리 붕괴 트리거 발화(새로 추가한 콘텐츠가 활성 트리거와 매칭) 용도.
+// notifications: 유저 알림. 흐름 위험 신호(trigger)·가격 경보(price)·종목 흐름 위험(flow_risk_stock).
 // 콘텐츠 분석을 기다리지 않아도 나중에 벨/대시보드에서 확인.
 export const notifications = pgTable(
   "notifications",
@@ -12,8 +13,9 @@ export const notifications = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    kind: text("kind").default("trigger").notNull(), // 'trigger'
+    kind: text("kind").default("trigger").notNull(), // trigger | price | flow_risk_stock
     industryId: uuid("industry_id").references(() => industries.id, { onDelete: "cascade" }),
+    securityId: uuid("security_id").references(() => securities.id, { onDelete: "cascade" }), // 종목 알림이면 클릭 이동용
     reportId: uuid("report_id").references(() => reports.id, { onDelete: "cascade" }), // 발화시킨 새 콘텐츠
     title: text("title"), // 예: "[반도체] 흐름 위험 신호 감지"
     body: text("body"), // 신호(트리거) 문구

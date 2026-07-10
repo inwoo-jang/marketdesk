@@ -90,11 +90,13 @@ export function NotificationBell() {
                 <li key={n.id} className="border-b border-line last:border-0">
                   <a
                     href={
-                      n.industryId
-                        ? `/industry/${n.industryId}${n.reportId ? `?new=${n.reportId}` : ""}`
-                        : n.reportId
-                          ? `/reports/${n.reportId}`
-                          : "/board"
+                      n.securityId
+                        ? `/stocks/${n.securityId}`
+                        : n.industryId
+                          ? `/industry/${n.industryId}${n.reportId ? `?new=${n.reportId}` : ""}`
+                          : n.reportId
+                            ? `/reports/${n.reportId}`
+                            : "/board"
                     }
                     onClick={() => setOpen(false)}
                     className="block px-4 py-2.5 hover:bg-bg-deep"

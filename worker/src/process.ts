@@ -1,5 +1,5 @@
 import { eq, and, isNull, ne, isNotNull, inArray, desc, sql } from "drizzle-orm";
-import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications } from "@reportlens/db";
+import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications, userSecurities, securities } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, stripControlChars, type ParsedPage } from "./parsing.js";
@@ -250,7 +250,8 @@ async function detectTriggerHits(
       return {
         userId: report.userId,
         kind: "trigger",
-        industryId: c.indId,
+        industryId: c.indId as string | null,
+        securityId: null as string | null,
         reportId: report.id,
         title: `[${indNameById.get(c.indId) ?? "산업"}] 흐름 위험 신호 감지`,
         body: c.content,
@@ -259,6 +260,30 @@ async function detectTriggerHits(
       };
     })
     .filter((v): v is NonNullable<typeof v> => v !== null);
+
+  // 흐름 위험 신호가 발화한 자료가 내 관심/보유 종목을 언급하면 종목별로 승격 알림.
+  if (values.length > 0) {
+    const mySecs = await db
+      .select({ id: securities.id, name: securities.name })
+      .from(userSecurities)
+      .innerJoin(securities, eq(securities.id, userSecurities.securityId))
+      .where(eq(userSecurities.userId, report.userId));
+    const mentioned = mySecs.filter((s) => s.name.length >= 2 && repText.includes(s.name));
+    const topSignal = values[0].body;
+    for (const s of mentioned) {
+      values.push({
+        userId: report.userId,
+        kind: "flow_risk_stock",
+        industryId: null,
+        securityId: s.id,
+        reportId: report.id,
+        title: `${s.name} 흐름 위험 신호`,
+        body: topSignal,
+        detail: detailTitle,
+        matched: "관심/보유 종목이 흐름 위험 신호 자료에 언급됨",
+      });
+    }
+  }
 
   await db.delete(notifications).where(eq(notifications.reportId, report.id)); // 재추출 시 교체
   if (values.length > 0) await db.insert(notifications).values(values);
