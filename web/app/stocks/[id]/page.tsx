@@ -32,10 +32,17 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   const [sources, setSources] = useState<{ title: string; uri: string }[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [quoteAt, setQuoteAt] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const overseas = detail?.security.isOverseas ?? false;
 
-  const loadDetail = () => api.stockDetail(id).then(setDetail).catch(() => {});
+  const loadDetail = () => api.stockDetail(id).then((d) => { setDetail(d); setQuoteAt(new Date()); }).catch(() => {});
+  async function refreshPrice() {
+    setRefreshing(true);
+    await Promise.all([loadDetail(), api.stockSeries(id, period).then((r) => setBars(r.bars)).catch(() => {})]);
+    setRefreshing(false);
+  }
   const loadNotes = () => api.stockNotes(id).then((r) => setNotes(r.notes)).catch(() => {});
   useEffect(() => {
     loadDetail();
@@ -89,7 +96,23 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
                 전일 {fmtPct(quote.changeRate)}
               </span>
             )}
+            <button
+              onClick={refreshPrice}
+              disabled={refreshing}
+              title="현재가 새로고침"
+              className="text-ink-muted hover:text-primary disabled:opacity-50"
+            >
+              <svg viewBox="0 0 24 24" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
           </div>
+          {quoteAt && (
+            <p className="mt-0.5 text-[11px] text-ink-muted">
+              {quoteAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 · 새로고침하면 갱신
+            </p>
+          )}
         </div>
         <button onClick={() => setConfirmRemove(true)} className="text-xs text-ink-muted hover:text-red-600">삭제</button>
       </div>
