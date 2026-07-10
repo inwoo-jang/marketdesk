@@ -209,6 +209,8 @@ export const api = {
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
   addPosition: (input: { securityId: string; side?: "buy" | "sell"; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
     post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
+  updatePosition: (id: string, input: { side?: "buy" | "sell"; buyDate?: string; shares?: number; buyPrice?: number | null; reason?: string | null }) =>
+    put<{ ok: true; position: PaperPosition }>(`/api/stocks/positions/${id}`, input),
   deletePosition: (id: string) => del<{ ok: true }>(`/api/stocks/positions/${id}`),
   removeStock: (securityId: string) => del<{ ok: true }>(`/api/stocks/${securityId}`),
   stockDetail: (securityId: string) => get<StockDetail>(`/api/stocks/${securityId}`),

@@ -206,11 +206,49 @@ stocksRoute.post("/positions", async (c) => {
   if (!sec) return c.json({ error: "종목을 찾을 수 없어요." }, 404);
   const side = parsed.data.side ?? "buy";
   let buyPrice = parsed.data.buyPrice ?? null;
-  if (buyPrice == null) buyPrice = await closeOn(sec, parsed.data.buyDate);
+  if (buyPrice == null) {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    // 오늘 거래면 실시간 현재가, 과거면 그 날 종가로 체결
+    if (parsed.data.buyDate === today) {
+      const q = await liveQuote(sec);
+      buyPrice = q?.price ?? (await closeOn(sec, parsed.data.buyDate));
+    } else {
+      buyPrice = await closeOn(sec, parsed.data.buyDate);
+    }
+  }
   await db.insert(userSecurities).values({ userId: user.id, securityId: sec.id }).onConflictDoNothing();
   const [pos] = await db
     .insert(paperPositions)
     .values({ userId: user.id, securityId: sec.id, name: sec.name, side, buyDate: parsed.data.buyDate, shares: parsed.data.shares, buyPrice, reason: parsed.data.reason ?? null })
+    .returning();
+  return c.json({ ok: true, position: pos });
+});
+
+// PUT /positions/:id : 거래 수정(side·날짜·주수·단가·사유).
+stocksRoute.put("/positions/:id", async (c) => {
+  const user = c.get("user");
+  const parsed = z
+    .object({
+      side: z.enum(["buy", "sell"]).optional(),
+      buyDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      shares: z.number().positive().optional(),
+      buyPrice: z.number().positive().nullable().optional(),
+      reason: z.string().max(1000).nullable().optional(),
+    })
+    .safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "입력을 확인해 주세요." }, 400);
+  const set: Record<string, unknown> = {};
+  const d = parsed.data;
+  if (d.side !== undefined) set.side = d.side;
+  if (d.buyDate !== undefined) set.buyDate = d.buyDate;
+  if (d.shares !== undefined) set.shares = d.shares;
+  if (d.buyPrice !== undefined) set.buyPrice = d.buyPrice;
+  if (d.reason !== undefined) set.reason = d.reason;
+  if (Object.keys(set).length === 0) return c.json({ ok: true });
+  const [pos] = await db
+    .update(paperPositions)
+    .set(set)
+    .where(and(eq(paperPositions.id, c.req.param("id")), eq(paperPositions.userId, user.id)))
     .returning();
   return c.json({ ok: true, position: pos });
 });

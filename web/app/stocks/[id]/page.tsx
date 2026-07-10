@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { api, type StockDetail, type PriceBar, type PaperNote, type RelatedArticle } from "@/lib/api";
+import { api, type StockDetail, type PriceBar, type PaperNote, type PaperPosition, type RelatedArticle } from "@/lib/api";
 import { PriceChart } from "@/components/price-chart";
 import { ConfirmModal } from "@/components/confirm-modal";
 
@@ -101,7 +101,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           <h2 className="text-sm font-semibold text-ink-muted">모의 손익</h2>
           <button onClick={() => setAddBuy((v) => !v)} className="text-xs font-medium text-primary">+ 매수 기록</button>
         </div>
-        {addBuy && <QuickBuy securityId={id} onDone={() => { setAddBuy(false); loadDetail(); }} />}
+        {addBuy && <QuickBuy securityId={id} currentPrice={quote?.price ?? summary.close} overseas={overseas} onDone={() => { setAddBuy(false); loadDetail(); }} />}
         {summary.watchOnly ? (
           <p className="mt-2 text-sm text-ink-sub">관심 등록만 되어 있어요. 매수를 기록하면 평가손익이 보여요.</p>
         ) : (
@@ -115,10 +115,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="mt-3 space-y-1">
               {positions.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2 text-xs">
-                  <span className="text-ink-sub">{p.buyDate} · {p.shares}주 · {fmtMoney(p.buyPrice, overseas)}</span>
-                  <button onClick={async () => { await api.deletePosition(p.id); loadDetail(); }} className="text-ink-muted hover:text-red-600">삭제</button>
-                </div>
+                <PositionRow key={p.id} p={p} overseas={overseas} onChanged={loadDetail} />
               ))}
             </div>
           </>
@@ -195,11 +192,13 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function QuickBuy({ securityId, onDone }: { securityId: string; onDone: () => void }) {
-  const [buyDate, setBuyDate] = useState(new Date().toISOString().slice(0, 10));
+function QuickBuy({ securityId, currentPrice, overseas, onDone }: { securityId: string; currentPrice?: number | null; overseas: boolean; onDone: () => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [buyDate, setBuyDate] = useState(today);
   const [shares, setShares] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const priceHint = currentPrice != null ? (overseas ? `$${currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(currentPrice).toLocaleString()}`) : "자동";
   async function save() {
     const sh = Number(shares);
     if (!sh || sh <= 0) return;
@@ -210,12 +209,62 @@ function QuickBuy({ securityId, onDone }: { securityId: string; onDone: () => vo
   }
   return (
     <div className="mt-3 rounded-lg border border-line bg-bg-deep/30 p-3">
+      {currentPrice != null && buyDate === today && (
+        <p className="mb-2 text-xs text-ink-muted">현재가 <b className="text-ink">{priceHint}{overseas ? "" : "원"}</b> · 단가 비우면 현재가로 체결</p>
+      )}
       <div className="flex flex-wrap gap-2">
         <input type="date" value={buyDate} onChange={(e) => setBuyDate(e.target.value)} className="rounded-lg border border-line bg-card px-2 py-1 text-xs" />
         <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="주수" className="w-20 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
-        <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="단가(자동)" className="w-28 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
+        <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder={`단가(${priceHint})`} className="w-28 rounded-lg border border-line bg-card px-2 py-1 text-xs" />
         <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">추가</button>
       </div>
+    </div>
+  );
+}
+
+// 거래 한 줄: 보기(매수/매도·날짜·주수·단가·사유) + 수정/삭제.
+function PositionRow({ p, overseas, onChanged }: { p: PaperPosition; overseas: boolean; onChanged: () => void }) {
+  const [edit, setEdit] = useState(false);
+  const [side, setSide] = useState<"buy" | "sell">(p.side);
+  const [buyDate, setBuyDate] = useState(p.buyDate);
+  const [shares, setShares] = useState(String(p.shares));
+  const [buyPrice, setBuyPrice] = useState(p.buyPrice != null ? String(p.buyPrice) : "");
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    const sh = Number(shares);
+    if (!sh || sh <= 0) return;
+    setBusy(true);
+    await api.updatePosition(p.id, { side, buyDate, shares: sh, buyPrice: buyPrice ? Number(buyPrice) : null }).catch(() => {});
+    setBusy(false); setEdit(false); onChanged();
+  }
+  if (edit) {
+    return (
+      <div className="rounded-lg border border-primary/40 bg-bg-deep/30 p-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={() => setSide("buy")} className={`rounded px-2 py-1 font-semibold ${side === "buy" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}>매수</button>
+          <button onClick={() => setSide("sell")} className={`rounded px-2 py-1 font-semibold ${side === "sell" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700"}`}>매도</button>
+          <input type="date" value={buyDate} onChange={(e) => setBuyDate(e.target.value)} className="rounded border border-line bg-card px-2 py-1" />
+          <input type="number" min="0" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="주수" className="w-16 rounded border border-line bg-card px-2 py-1" />
+          <input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="단가" className="w-24 rounded border border-line bg-card px-2 py-1" />
+        </div>
+        <div className="mt-2 flex gap-2">
+          <button onClick={save} disabled={busy} className="rounded bg-primary px-3 py-1 font-semibold text-white disabled:opacity-50">저장</button>
+          <button onClick={() => setEdit(false)} className="rounded border border-line px-3 py-1 text-ink-sub">취소</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2 text-xs">
+      <span className="text-ink-sub">
+        <span className={`mr-1 font-semibold ${p.side === "sell" ? "text-rose-600" : "text-emerald-600"}`}>{p.side === "sell" ? "매도" : "매수"}</span>
+        {p.buyDate} · {p.shares}주 · {fmtMoney(p.buyPrice, overseas)}
+        {p.reason && <span className="ml-1 text-ink-muted">— {p.reason}</span>}
+      </span>
+      <span className="flex shrink-0 gap-2">
+        <button onClick={() => setEdit(true)} className="text-ink-muted hover:text-primary">수정</button>
+        <button onClick={async () => { await api.deletePosition(p.id); onChanged(); }} className="text-ink-muted hover:text-red-600">삭제</button>
+      </span>
     </div>
   );
 }
