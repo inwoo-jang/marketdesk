@@ -137,24 +137,81 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* 요금제 안내 */}
-        <div className="mt-5 rounded-lg border border-line bg-bg-deep/40 p-4">
-          <p className="text-xs font-semibold text-ink">요금제</p>
-          <ul className="mt-2 space-y-1.5 text-xs text-ink-sub">
-            <li>• <b>무료</b> — 월 30만 토큰(Gemini). 이걸로 리포트 15개 안팎.</li>
-            <li>• <b>Pro ₩3,000/월</b>(1개월 무료) — 상향 한도 + BYO 키·로컬 에이전트 잠금 해제.</li>
-            <li>• <b>무제한/헤비 유저</b> — 본인 API 키(BYO) 또는 로컬 에이전트로 자기 LLM 사용.</li>
-          </ul>
-        </div>
+      </section>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button disabled className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50" title="출시 단계에 제공">
-            Pro 업그레이드 (준비중)
-          </button>
-          <button disabled className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink-sub opacity-50" title="출시 단계에 제공">
-            본인 API 키 등록 (준비중)
-          </button>
+      {/* 요금제 — 끌리는 가격 카드 */}
+      <section className="mt-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {/* 무료 */}
+          <div className="flex flex-col rounded-card border border-line bg-card p-5 shadow-card">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-ink">무료</h3>
+              {usage?.plan !== "pro" && (
+                <span className="rounded-full bg-success-bg px-2.5 py-0.5 text-xs font-semibold text-success-text">이용 중</span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-ink-muted">가볍게 시작하기</p>
+            <div className="mt-3 flex items-baseline gap-1">
+              <span className="text-2xl font-extrabold text-ink">₩0</span>
+              <span className="text-sm text-ink-muted">/월</span>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm text-ink-sub">
+              {["월 30만 토큰 (리포트 약 15개)", "흐름 보드·종목 흐름 전체", "흐름 위험 신호 알림", "PDF·MD 내보내기"].map((f) => (
+                <li key={f} className="flex gap-2">
+                  <span className="mt-0.5 text-success-text">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto pt-5">
+              <p className="text-center text-xs text-ink-muted">
+                {usage?.limit != null ? `이번 달 ${100 - pctUsed}% 남음` : "현재 플랜"}
+              </p>
+            </div>
+          </div>
+
+          {/* Pro — 강조 */}
+          <div className="relative flex flex-col rounded-card border-2 border-primary bg-card p-5 shadow-card">
+            <span className="absolute -top-3 left-5 rounded-full bg-primary px-3 py-1 text-xs font-bold text-white shadow-card">
+              첫 달 무료
+            </span>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-primary">Pro</h3>
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">추천</span>
+            </div>
+            <p className="mt-1 text-xs text-ink-muted">한도 걱정 없이, 내 방식대로</p>
+            <div className="mt-3 flex items-baseline gap-1">
+              <span className="text-2xl font-extrabold text-ink">₩3,000</span>
+              <span className="text-sm text-ink-muted">/월</span>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm text-ink-sub">
+              {[
+                "넉넉한 분석 한도",
+                "본인 API 키(BYO) 연결",
+                "로컬 에이전트로 사실상 무제한",
+                "새 기능 우선 제공",
+              ].map((f) => (
+                <li key={f} className="flex gap-2">
+                  <span className="mt-0.5 text-primary">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto pt-5">
+              <button
+                disabled
+                title="출시 단계에 제공"
+                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white opacity-90 shadow-card"
+              >
+                첫 달 무료로 시작
+              </button>
+              <p className="mt-2 text-center text-xs text-ink-muted">출시 준비 중 · 첫 달 이후 언제든 해지</p>
+            </div>
+          </div>
         </div>
+        <p className="mt-3 text-center text-xs text-ink-muted">
+          토큰을 많이 쓰는 헤비 유저는 Pro에서 본인 키·로컬 에이전트를 연결해 자기 LLM 비용으로 무제한 사용할 수 있어요.
+        </p>
       </section>
 
       {/* 분석 엔진 — 개발자 계정만 노출 */}
