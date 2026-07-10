@@ -7,6 +7,7 @@ import { stockMenuLabel } from "@/components/app-nav";
 import { PriceChart } from "@/components/price-chart";
 import { BookmarkIcon } from "@/components/bookmark-icon";
 import { MarketStatus } from "@/components/market-status";
+import { StockPicker } from "@/components/stock-picker";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -390,15 +391,12 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
 }
 
 function DiaryComposer({ onDone }: { onDone: () => void }) {
-  const [mine, setMine] = useState<StockSummary[]>([]);
   const [cat, setCat] = useState<DiaryCat>("buy");
   const [picked, setPicked] = useState<SecurityLite | null>(null);
   const [holding, setHolding] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [period, setPeriod] = useState<"Y" | "M" | "D">("M");
   const [real, setReal] = useState(true); // 실제/모의
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<SecurityLite[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState("");
@@ -406,28 +404,20 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
   const [ai, setAi] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [busy, setBusy] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isTrade = cat === "buy" || cat === "sell";
 
-  useEffect(() => { api.myStocks().then((r) => setMine(r.items)).catch(() => {}); }, []);
-  useEffect(() => {
-    if (picked) return;
-    if (timer.current) clearTimeout(timer.current);
-    if (q.trim().length < 1) { setResults([]); return; }
-    timer.current = setTimeout(() => api.stockSearch(q.trim()).then((r) => setResults(r.results)).catch(() => setResults([])), 200);
-  }, [q, picked]);
   useEffect(() => {
     if (!picked) return;
     api.stockSeries(picked.id, period).then((r) => setBars(r.bars)).catch(() => setBars([]));
   }, [picked, period]);
 
   function pick(s: SecurityLite) {
-    setPicked(s); setResults([]); setAi(null); setCat("buy");
+    setPicked(s); setAi(null); setCat("buy");
     api.stockDetail(s.id).then(setHolding).catch(() => setHolding(null));
   }
   function reset() {
-    setPicked(null); setHolding(null); setBars([]); setQ(""); setShares(""); setPrice(""); setText(""); setAi(null);
+    setPicked(null); setHolding(null); setBars([]); setShares(""); setPrice(""); setText(""); setAi(null);
   }
   async function runAi() {
     if (!picked) return;
@@ -461,40 +451,7 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
   return (
     <section className="mt-4 rounded-card bg-card p-4 shadow-card">
       {!picked ? (
-        <>
-          {/* 내 종목 우선 선택 */}
-          {mine.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-ink-muted">내 종목에서 <span className="font-normal">(책갈피 우선)</span></p>
-              <div className="mt-2 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
-                {mine.map((m) => (
-                  <button
-                    key={m.security.id}
-                    onClick={() => pick(m.security)}
-                    className={`flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium hover:border-primary hover:text-primary ${m.bookmarked ? "border-primary/40 bg-primary/5 text-primary" : "border-line bg-bg-deep/30 text-ink"}`}
-                  >
-                    {m.bookmarked && <span className="text-primary">★</span>}
-                    {m.security.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* 그 외 검색 */}
-          <div className="relative mt-3">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="그 외 종목 검색" className="w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
-            {results.length > 0 && (
-              <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-line bg-card shadow-card">
-                {results.map((r) => (
-                  <button key={r.id} onClick={() => pick(r)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
-                    <span className="font-medium text-ink">{r.name}</span>
-                    <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+        <StockPicker onPick={pick} placeholder="종목 검색 (내 종목 우선)" />
       ) : (
         <>
           <div className="flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2">
@@ -576,12 +533,10 @@ const KO_TABS = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".split("");
 const EN_TABS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean; simulated: boolean; onClose: () => void; onDone: () => void }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<SecurityLite[]>([]);
-  const [mine, setMine] = useState<SecurityLite[]>([]);
   const [hangul, setHangul] = useState(true); // 한/영 토글
   const [group, setGroup] = useState("ㄱ");
   const [browse, setBrowse] = useState<SecurityLite[]>([]);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [picked, setPicked] = useState<SecurityLite | null>(null);
   const [mode, setMode] = useState<"watch" | "buy" | "sell">("buy");
   const [buyDate, setBuyDate] = useState(new Date().toISOString().slice(0, 10));
@@ -589,22 +544,11 @@ function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean
   const [buyPrice, setBuyPrice] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const searching = q.trim().length >= 1;
 
   useEffect(() => {
-    if (picked || !searching) { setResults([]); return; }
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => api.stockSearch(q.trim()).then((r) => setResults(r.results)).catch(() => setResults([])), 200);
-  }, [q, picked, searching]);
-
-  useEffect(() => {
-    if (picked || searching) return;
+    if (picked || !browseOpen) return;
     api.stockBrowse(group).then((r) => setBrowse(r.results)).catch(() => setBrowse([]));
-  }, [group, picked, searching]);
-
-  useEffect(() => { api.myStocks(false).then((r) => setMine(r.items.map((i) => i.security))).catch(() => {}); }, []);
+  }, [group, picked, browseOpen]);
 
   async function submit() {
     if (!picked) return;
@@ -622,27 +566,19 @@ function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean
     }
   }
 
-  const list = searching ? results : browse;
-
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => !busy && onClose()}>
       <div className="w-full max-w-md rounded-card bg-card p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-ink">종목 추가</h3>
 
         {!picked ? (
-          <>
-            {!searching && mine.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs font-semibold text-ink-muted">내 종목에서 <span className="font-normal">(책갈피 우선)</span></p>
-                <div className="mt-1.5 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
-                  {mine.map((s) => (
-                    <button key={s.id} onClick={() => setPicked(s)} className="rounded-full border border-line bg-bg-deep/30 px-3 py-1 text-sm font-medium text-ink hover:border-primary hover:text-primary">{s.name}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="그 외 종목 검색 (예: 삼성전자)" className="mt-3 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
-            {!searching && (
+          <div className="mt-3">
+            <StockPicker onPick={setPicked} autoFocus placeholder="종목 검색 (내 종목 우선)" />
+            {/* 가나다·영문으로 훑어보기 */}
+            <button onClick={() => setBrowseOpen((v) => !v)} className="mt-2 text-xs font-medium text-ink-muted hover:text-ink">
+              {browseOpen ? "▴ 가나다·영문 접기" : "▾ 가나다·영문으로 찾기"}
+            </button>
+            {browseOpen && (
               <>
                 <div className="mt-2 flex gap-1">
                   <button onClick={() => { setHangul(true); setGroup("ㄱ"); }} className={`rounded-md px-3 py-1 text-xs font-semibold ${hangul ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>한글</button>
@@ -653,18 +589,18 @@ function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean
                     <button key={g + i} onClick={() => setGroup(g)} className={`shrink-0 rounded-md px-2 py-1 text-xs ${group === g ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>{g}</button>
                   ))}
                 </div>
+                <div className="mt-2 max-h-60 overflow-y-auto rounded-lg border border-line">
+                  {browse.map((r) => (
+                    <button key={r.id} onClick={() => setPicked(r)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
+                      <span className="font-medium text-ink">{r.name}</span>
+                      <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
+                    </button>
+                  ))}
+                  {browse.length === 0 && <p className="px-3 py-4 text-center text-sm text-ink-muted">이 그룹에 종목이 없어요.</p>}
+                </div>
               </>
             )}
-            <div className="mt-2 max-h-72 overflow-y-auto">
-              {list.map((r) => (
-                <button key={r.id} onClick={() => setPicked(r)} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-bg-deep">
-                  <span className="font-medium text-ink">{r.name}</span>
-                  <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
-                </button>
-              ))}
-              {list.length === 0 && <p className="px-3 py-4 text-center text-sm text-ink-muted">{searching ? "검색 결과가 없어요." : "이 그룹에 종목이 없어요."}</p>}
-            </div>
-          </>
+          </div>
         ) : (
           <>
             <div className="mt-3 flex items-center justify-between rounded-lg bg-bg-deep/40 px-3 py-2">
