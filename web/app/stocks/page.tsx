@@ -122,9 +122,9 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleBookmark(it.security.id, !it.bookmarked); }}
               title={it.bookmarked ? "책갈피 해제" : "책갈피"}
-              className="absolute left-2 top-2"
+              className="absolute left-3 top-0"
             >
-              <BookmarkIcon filled={it.bookmarked} className={`h-4 w-4 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
+              <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -219,44 +219,113 @@ function DiaryTab() {
             <div className="absolute bottom-0 left-[3px] top-4 w-px bg-line" />
             <p className="text-xs font-semibold text-ink-muted">{date}</p>
             <div className="mt-2 space-y-2">
-              {evs.map((e) => {
-                const cat = catOf(e.category);
-                return (
-                  <Link key={e.kind + e.id} href={e.securityId ? `/stocks/${e.securityId}` : "#"} className="flex overflow-hidden rounded-card bg-card shadow-card hover:bg-bg-deep/40">
-                    {/* 맨 앞 세로 띠: 거래는 실/모, 메모는 회색 */}
-                    <div className={`flex w-6 shrink-0 items-center justify-center ${
-                      e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"
-                    }`}>
-                      <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>
-                        {e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}
-                      </span>
-                    </div>
-                    <div className="flex-1 p-3">
-                      <div className="flex items-center gap-2">
-                        {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
-                        {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
-                        {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
-                        {e.kind === "note" && !cat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>}
-                        <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
-                        {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
-                      </div>
-                      {e.kind !== "note" ? (
-                        <>
-                          <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
-                          {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
-                        </>
-                      ) : (
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
+              {evs.map((e) => <DiaryEntry key={e.kind + e.id} e={e} onChanged={load} />)}
             </div>
           </div>
         ))}
       </div>
     </>
+  );
+}
+
+// 다이어리 한 항목: 보기 + 인라인 수정(거래 사유·주수·단가 / 메모 카테고리·본문).
+function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
+  const [edit, setEdit] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const isTrade = e.kind !== "note";
+  const [date, setDate] = useState(e.date);
+  const [shares, setShares] = useState(e.shares != null ? String(e.shares) : "");
+  const [price, setPrice] = useState(e.buyPrice != null ? String(e.buyPrice) : "");
+  const [reason, setReason] = useState(e.reason ?? "");
+  const [body, setBody] = useState(e.body ?? "");
+  const [ncat, setNcat] = useState<NoteCategory>((e.category as NoteCategory) ?? "memo");
+  const cat = catOf(e.category);
+
+  async function save() {
+    setBusy(true);
+    try {
+      if (isTrade) {
+        const sh = Number(shares);
+        if (!sh || sh <= 0) { setBusy(false); return; }
+        await api.updatePosition(e.id, { buyDate: date, shares: sh, buyPrice: price ? Number(price) : null, reason: reason.trim() || null });
+      } else {
+        if (!body.trim()) { setBusy(false); return; }
+        await api.updateStockNote(e.id, { noteDate: date, body: body.trim(), category: ncat });
+      }
+      setEdit(false); onChanged();
+    } catch { /* noop */ }
+    setBusy(false);
+  }
+  async function del() {
+    setBusy(true);
+    if (isTrade) await api.deletePosition(e.id).catch(() => {});
+    else await api.deleteStockNote(e.id).catch(() => {});
+    onChanged();
+  }
+
+  if (edit) {
+    return (
+      <div className="rounded-card border border-primary/40 bg-card p-3 shadow-card">
+        <div className="text-xs font-semibold text-ink-muted">{e.name} · {isTrade ? (e.kind === "buy" ? "매수" : "매도") : "메모"} 수정</div>
+        {isTrade ? (
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <input type="date" value={date} onChange={(ev) => setDate(ev.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs" />
+              <input type="number" min="0" value={shares} onChange={(ev) => setShares(ev.target.value)} placeholder="주수" className="w-20 rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs" />
+              <input type="number" min="0" value={price} onChange={(ev) => setPrice(ev.target.value)} placeholder="단가" className="w-28 rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs" />
+            </div>
+            <textarea value={reason} onChange={(ev) => setReason(ev.target.value)} rows={2} placeholder="사유" className="w-full resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+          </div>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <input type="date" value={date} onChange={(ev) => setDate(ev.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs" />
+              {NOTE_CATS.map((c) => (
+                <button key={c.key} onClick={() => setNcat(c.key as NoteCategory)} className={`rounded-full px-2.5 py-1 text-xs font-medium ${ncat === c.key ? c.chip : "text-ink-muted hover:bg-bg-deep"}`}>{c.label}</button>
+              ))}
+            </div>
+            <textarea value={body} onChange={(ev) => setBody(ev.target.value)} rows={2} className="w-full resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
+          </div>
+        )}
+        <div className="mt-2 flex gap-2">
+          <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">저장</button>
+          <button onClick={() => setEdit(false)} className="rounded-lg border border-line px-3 py-1 text-xs text-ink-sub">취소</button>
+          <button onClick={del} disabled={busy} className="ml-auto rounded-lg px-3 py-1 text-xs text-ink-muted hover:text-red-600">삭제</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex overflow-hidden rounded-card bg-card shadow-card hover:bg-bg-deep/40">
+      <div className={`flex w-6 shrink-0 items-center justify-center ${
+        e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"
+      }`}>
+        <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>{e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}</span>
+      </div>
+      <div className="flex-1 p-3">
+        <div className="flex items-center gap-2">
+          {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
+          {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
+          {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
+          {e.securityId ? (
+            <Link href={`/stocks/${e.securityId}`} className="font-semibold text-ink hover:text-primary">{e.name ?? "종목"}</Link>
+          ) : (
+            <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
+          )}
+          {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
+          <button onClick={() => setEdit(true)} className="ml-auto text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 hover:text-primary">수정</button>
+        </div>
+        {isTrade ? (
+          <>
+            <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
+            {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
+          </>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
+        )}
+      </div>
+    </div>
   );
 }
 

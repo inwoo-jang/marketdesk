@@ -294,6 +294,29 @@ stocksRoute.delete("/positions/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// PUT /notes/:id : 투자일지 메모 수정(날짜·카테고리·본문).
+stocksRoute.put("/notes/:id", async (c) => {
+  const user = c.get("user");
+  const parsed = z
+    .object({
+      noteDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      body: z.string().min(1).max(2000).optional(),
+      category: z.enum(["up", "down", "hold", "memo"]).nullable().optional(),
+    })
+    .safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "입력을 확인해 주세요." }, 400);
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (parsed.data.noteDate !== undefined) set.noteDate = parsed.data.noteDate;
+  if (parsed.data.body !== undefined) set.body = parsed.data.body;
+  if (parsed.data.category !== undefined) set.category = parsed.data.category;
+  const [note] = await db
+    .update(paperNotes)
+    .set(set)
+    .where(and(eq(paperNotes.id, c.req.param("id")), eq(paperNotes.userId, user.id)))
+    .returning();
+  return c.json({ ok: true, note });
+});
+
 // DELETE /notes/:id : 투자일지 메모 삭제.
 stocksRoute.delete("/notes/:id", async (c) => {
   const user = c.get("user");

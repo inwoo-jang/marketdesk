@@ -220,6 +220,8 @@ export const api = {
   stockNotes: (securityId: string) => get<{ notes: PaperNote[] }>(`/api/stocks/${securityId}/notes`),
   addStockNote: (securityId: string, input: { noteDate: string; body: string; category?: NoteCategory }) =>
     post<{ ok: true; note: PaperNote }>(`/api/stocks/${securityId}/notes`, input),
+  updateStockNote: (id: string, input: { noteDate?: string; body?: string; category?: NoteCategory | null }) =>
+    put<{ ok: true; note: PaperNote }>(`/api/stocks/notes/${id}`, input),
   deleteStockNote: (id: string) => del<{ ok: true }>(`/api/stocks/notes/${id}`),
   stockArticles: (securityId: string) => get<{ articles: RelatedArticle[] }>(`/api/stocks/${securityId}/articles`),
   analyzeStock: (securityId: string, web = false) =>
