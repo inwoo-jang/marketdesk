@@ -465,13 +465,15 @@ stocksRoute.post("/:securityId/analyze", async (c) => {
     `규칙:\n- 확정 단정 금지, "가능성/추정" 표현. 투자 권유·매수매도 의견 금지.\n- 3개 이내 불릿, 각 60자 이내.\n- 데이터로 알 수 없으면 솔직히 "자료만으로는 단정 어려움" 명시.\n`;
 
   if (useWeb) {
-    // 웹 검색 기반: 최신 뉴스로 등락 요인 추정
+    // 웹 검색 강제: 최신 뉴스를 실제로 검색하도록 검색 지시를 앞에 둠
     const prompt =
-      `역할: 초보 투자자를 돕는 분석 보조. 웹에서 "${sec.name}"의 최근 주가 관련 뉴스를 찾아 아래 흐름의 등락 요인을 정리하라.\n` +
-      rules + `- 근거 뉴스가 있으면 짧게 인용.\n` + base;
+      `"${sec.name}"(${sec.market}) 종목의 최근 주가 등락 이유를 웹에서 최신 뉴스를 검색해 알려줘.\n` +
+      `반드시 웹 검색 결과를 근거로 삼아라. 확정 단정 금지("가능성/추정"), 투자 권유 금지.\n` +
+      `형식: 3개 이내 불릿, 각 60자 이내, 핵심 뉴스는 짧게 인용.\n` +
+      `참고: 이 종목은 최근 6개월 ${pct}% 변동했다.\n`;
     try {
-      const { text, sources } = await askLLMSearch(prompt, 700);
-      return c.json({ analysis: text || "분석을 가져오지 못했어요.", pct: Number(pct), sources });
+      const { text, sources } = await askLLMSearch(prompt);
+      if (text) return c.json({ analysis: text, pct: Number(pct), sources });
     } catch {
       // 폴백: 일반 분석
     }

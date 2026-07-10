@@ -6,6 +6,7 @@ import { api, type StockSummary, type SecurityLite, type DiaryItem, type StockDe
 import { stockMenuLabel } from "@/components/app-nav";
 import { PriceChart } from "@/components/price-chart";
 import { BookmarkIcon } from "@/components/bookmark-icon";
+import { MarketStatus } from "@/components/market-status";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -27,7 +28,10 @@ export default function StocksPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
-      <h1 className="text-2xl font-bold">{label}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-bold">{label}</h1>
+        <MarketStatus />
+      </div>
 
       <div className="mt-4 flex gap-1 border-b border-line">
         <TabBtn active={tab === "info"} onClick={() => setTab("info")}>종목 정보</TabBtn>

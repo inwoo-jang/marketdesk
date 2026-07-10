@@ -57,9 +57,10 @@ async function runGemini(prompt: string, maxOutputTokens = 300): Promise<string>
 
 // 웹 검색 기반 LLM(Gemini google_search 그라운딩). 최신 뉴스로 등락 요인 분석.
 export type GroundSource = { title: string; uri: string };
-export async function askLLMSearch(prompt: string, maxOutputTokens = 700): Promise<{ text: string; sources: GroundSource[] }> {
+export async function askLLMSearch(prompt: string): Promise<{ text: string; sources: GroundSource[] }> {
   const key = env.geminiApiKey;
   if (!key) throw new Error("no gemini key");
+  // maxOutputTokens 를 두면 사고+검색 토큰에 걸려 MAX_TOKENS 로 잘리고 그라운딩 출처가 유실됨 → 제한 없이 자연 종료.
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`,
     {
@@ -68,7 +69,6 @@ export async function askLLMSearch(prompt: string, maxOutputTokens = 700): Promi
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         tools: [{ google_search: {} }],
-        generationConfig: { maxOutputTokens },
       }),
       signal: AbortSignal.timeout(30_000),
     },
