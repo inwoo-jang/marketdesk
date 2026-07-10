@@ -207,6 +207,7 @@ export const api = {
   stockDiary: () => get<{ items: DiaryItem[] }>("/api/stocks/diary"),
   myStocks: (sim = false) => get<{ items: StockSummary[] }>(`/api/stocks${sim ? "?sim=1" : ""}`),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
+  bookmarkStock: (securityId: string, on: boolean) => post<{ ok: true; bookmarked: boolean }>(`/api/stocks/${securityId}/bookmark`, { on }),
   addPosition: (input: { securityId: string; side?: "buy" | "sell"; simulated?: boolean; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
     post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
   updatePosition: (id: string, input: { side?: "buy" | "sell"; buyDate?: string; shares?: number; buyPrice?: number | null; reason?: string | null }) =>
@@ -229,6 +230,7 @@ export type SecurityLite = { id: string; code: string; name: string; market: str
 export type StockSummary = {
   security: SecurityLite;
   changeRate: number | null; // 전일대비 등락률(%)
+  bookmarked: boolean;
   watchOnly: boolean;
   totalShares: number;
   totalCost: number;

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type StockSummary, type SecurityLite, type DiaryItem, type StockDetail, type NoteCategory, type PriceBar } from "@/lib/api";
 import { stockMenuLabel } from "@/components/app-nav";
 import { PriceChart } from "@/components/price-chart";
+import { BookmarkIcon } from "@/components/bookmark-icon";
 
 const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undefined) => {
   if (v == null) return "-";
@@ -60,6 +61,11 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
   const load = () => api.myStocks(simulated).then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, [simulated]);
 
+  function toggleBookmark(id: string, on: boolean) {
+    setItems((prev) => (prev ? prev.map((i) => (i.security.id === id ? { ...i, bookmarked: on } : i)) : prev));
+    api.bookmarkStock(id, on).then(load).catch(() => {});
+  }
+
   const sorted = useMemo(() => {
     if (!items) return [];
     const arr = [...items];
@@ -111,8 +117,15 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
           <Link
             key={it.security.id}
             href={`/stocks/${it.security.id}`}
-            className="flex items-center justify-between rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40"
+            className="relative flex items-center justify-between rounded-card bg-card p-4 pl-9 shadow-card hover:bg-bg-deep/40"
           >
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleBookmark(it.security.id, !it.bookmarked); }}
+              title={it.bookmarked ? "책갈피 해제" : "책갈피"}
+              className="absolute left-2 top-2"
+            >
+              <BookmarkIcon filled={it.bookmarked} className={`h-4 w-4 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
+            </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 {simulated ? (
@@ -209,24 +222,33 @@ function DiaryTab() {
               {evs.map((e) => {
                 const cat = catOf(e.category);
                 return (
-                  <Link key={e.kind + e.id} href={e.securityId ? `/stocks/${e.securityId}` : "#"} className="block rounded-card bg-card p-3 shadow-card hover:bg-bg-deep/40">
-                    <div className="flex items-center gap-2">
-                      {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
-                      {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
-                      {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
-                      {e.kind === "note" && !cat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>}
-                      {e.kind !== "note" && e.simulated && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">모의</span>}
-                      <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
-                      {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
+                  <Link key={e.kind + e.id} href={e.securityId ? `/stocks/${e.securityId}` : "#"} className="flex overflow-hidden rounded-card bg-card shadow-card hover:bg-bg-deep/40">
+                    {/* 맨 앞 세로 띠: 거래는 실/모, 메모는 회색 */}
+                    <div className={`flex w-6 shrink-0 items-center justify-center ${
+                      e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"
+                    }`}>
+                      <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>
+                        {e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}
+                      </span>
                     </div>
-                    {e.kind !== "note" ? (
-                      <>
-                        <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
-                        {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
-                      </>
-                    ) : (
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
-                    )}
+                    <div className="flex-1 p-3">
+                      <div className="flex items-center gap-2">
+                        {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
+                        {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
+                        {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
+                        {e.kind === "note" && !cat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">메모</span>}
+                        <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
+                        {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
+                      </div>
+                      {e.kind !== "note" ? (
+                        <>
+                          <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
+                          {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
+                        </>
+                      ) : (
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
+                      )}
+                    </div>
                   </Link>
                 );
               })}

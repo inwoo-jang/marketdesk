@@ -131,6 +131,12 @@ stocksRoute.get("/", async (c) => {
       .where(eq(userSecurities.userId, user.id))
       .orderBy(desc(userSecurities.createdAt));
   }
+  // 책갈피 집합
+  const bmRows = await db
+    .select({ securityId: userSecurities.securityId, bookmarked: userSecurities.bookmarked })
+    .from(userSecurities)
+    .where(and(eq(userSecurities.userId, user.id), eq(userSecurities.bookmarked, true)));
+  const bmSet = new Set(bmRows.map((b) => b.securityId));
   const items = [];
   for (const r of regs) {
     const last = await latestClose(r.security);
@@ -138,9 +144,12 @@ stocksRoute.get("/", async (c) => {
     items.push({
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
       changeRate: last?.changeRate ?? null,
+      bookmarked: bmSet.has(r.security.id),
       ...summary,
     });
   }
+  // 책갈피 먼저
+  items.sort((a, b) => Number(b.bookmarked) - Number(a.bookmarked));
   return c.json({ items });
 });
 
@@ -183,6 +192,18 @@ stocksRoute.get("/diary", async (c) => {
     ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
+});
+
+// POST /:securityId/bookmark : 책갈피 토글. 없으면 등록도 함께.
+stocksRoute.post("/:securityId/bookmark", async (c) => {
+  const user = c.get("user");
+  const sid = c.req.param("securityId");
+  const on = (await c.req.json().catch(() => ({})))?.on !== false;
+  await db
+    .insert(userSecurities)
+    .values({ userId: user.id, securityId: sid, bookmarked: on })
+    .onConflictDoUpdate({ target: [userSecurities.userId, userSecurities.securityId], set: { bookmarked: on } });
+  return c.json({ ok: true, bookmarked: on });
 });
 
 // POST /watch : 관심 등록(매수 없이).

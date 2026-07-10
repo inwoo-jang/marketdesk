@@ -1,0 +1,1 @@
+ALTER TABLE "user_securities" ADD COLUMN "bookmarked" boolean DEFAULT false NOT NULL;

@@ -10,6 +10,13 @@ const fmtMoney = (v: number | null, overseas: boolean) =>
   v == null ? "-" : overseas ? `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(v).toLocaleString()}원`;
 const fmtPct = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
 
+const NOTE_CATS: { key: "up" | "down" | "hold" | "memo"; label: string; chip: string }[] = [
+  { key: "up", label: "상승", chip: "bg-emerald-100 text-emerald-700" },
+  { key: "down", label: "하락", chip: "bg-red-100 text-red-700" },
+  { key: "hold", label: "유지", chip: "bg-slate-100 text-slate-600" },
+  { key: "memo", label: "메모", chip: "bg-ink/5 text-ink-muted" },
+];
+
 export default function StockDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -19,6 +26,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   const [notes, setNotes] = useState<PaperNote[]>([]);
   const [articles, setArticles] = useState<RelatedArticle[]>([]);
   const [noteBody, setNoteBody] = useState("");
+  const [noteCat, setNoteCat] = useState<"up" | "down" | "hold" | "memo">("up");
   const [noteDate, setNoteDate] = useState(new Date().toISOString().slice(0, 10));
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [sources, setSources] = useState<{ title: string; uri: string }[]>([]);
@@ -46,7 +54,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
 
   async function addNote() {
     if (!noteBody.trim()) return;
-    await api.addStockNote(id, { noteDate, body: noteBody.trim() });
+    await api.addStockNote(id, { noteDate, body: noteBody.trim(), category: noteCat });
     setNoteBody("");
     loadNotes();
   }
@@ -131,6 +139,11 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
         <h2 className="text-sm font-semibold text-ink-muted">투자일지</h2>
         <p className="mt-0.5 text-xs text-ink-muted">왜 오른/내린 것 같은지, 왜 주목했는지 기록해요.</p>
         <div className="mt-3">
+          <div className="mb-2 flex gap-1">
+            {NOTE_CATS.map((c) => (
+              <button key={c.key} onClick={() => setNoteCat(c.key)} className={`rounded-full px-2.5 py-1 text-xs font-medium ${noteCat === c.key ? c.chip : "text-ink-muted hover:bg-bg-deep"}`}>{c.label}</button>
+            ))}
+          </div>
           <textarea
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
@@ -144,15 +157,21 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
         <div className="mt-4 space-y-3">
-          {notes.map((n) => (
-            <div key={n.id} className="border-l-2 border-line pl-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-ink-muted">{n.noteDate}</span>
-                <button onClick={async () => { await api.deleteStockNote(n.id); loadNotes(); }} className="text-[11px] text-ink-muted hover:text-red-600">삭제</button>
+          {notes.map((n) => {
+            const cat = NOTE_CATS.find((c) => c.key === n.category);
+            return (
+              <div key={n.id} className="border-l-2 border-line pl-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-ink-muted">
+                    {cat && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
+                    {n.noteDate}
+                  </span>
+                  <button onClick={async () => { await api.deleteStockNote(n.id); loadNotes(); }} className="text-[11px] text-ink-muted hover:text-red-600">삭제</button>
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{n.body}</p>
               </div>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{n.body}</p>
-            </div>
-          ))}
+            );
+          })}
           {notes.length === 0 && <p className="text-sm text-ink-muted">아직 메모가 없어요.</p>}
         </div>
       </section>

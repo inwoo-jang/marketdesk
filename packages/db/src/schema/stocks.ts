@@ -72,6 +72,7 @@ export const userSecurities = pgTable(
     securityId: uuid("security_id")
       .notNull()
       .references(() => securities.id, { onDelete: "cascade" }),
+    bookmarked: boolean("bookmarked").default(false).notNull(), // 즐겨찾기(책갈피)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.securityId] })],
