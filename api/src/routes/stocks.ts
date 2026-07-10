@@ -6,6 +6,7 @@ import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
 import { getSeries, latestClose, closeOn, liveQuote } from "../lib/price-service.js";
 import { currentFx, fxOn } from "../lib/fx.js";
+import { mapPool } from "../lib/concurrency.js";
 import { askLLM, askLLMSearch } from "../define.js";
 
 export const stocksRoute = new Hono<AppEnv>();
@@ -13,18 +14,6 @@ stocksRoute.use("*", requireUser);
 
 type Security = typeof securities.$inferSelect;
 type Position = typeof paperPositions.$inferSelect;
-
-// 제한 병렬 map: 동시 실행을 limit 개로 묶어 처리. 캐시 만료 시 종목마다 KIS 호출을
-// 순차로 기다리면 종목 수만큼 느려지므로, KIS 초당 유량 제한을 안 넘길 만큼만 병렬화.
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i], i);
-  });
-  await Promise.all(workers);
-  return out;
-}
 
 // 매수/매도 거래 + 현재가 → 손익 요약(평균원가법). 금액은 원화 기준.
 // fxNow=현재 USD/KRW(국내는 1). 각 거래의 buyFx=거래 시점 환율(없으면 현재).

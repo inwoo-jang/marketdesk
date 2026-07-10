@@ -35,18 +35,22 @@ export function AppNav() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [stockLabel, setStockLabel] = useState("내 종목");
 
+  // 세션 동안 안 바뀌는 것(로그인 사용자·렌즈 라벨)은 1회만 조회.
   useEffect(() => {
     api
       .me()
       .then((r) => {
         setUser(r.user);
-        if (r.user) {
-          api.usage().then(setUsage).catch(() => {});
-          api.myLenses().then(({ enabled }) => setStockLabel(stockMenuLabel(enabled))).catch(() => {});
-        }
+        if (r.user) api.myLenses().then(({ enabled }) => setStockLabel(stockMenuLabel(enabled))).catch(() => {});
       })
       .catch(() => setUser(null));
-  }, [pathname]);
+  }, []);
+
+  // 사용량은 업로드로 소진되면 바뀌므로 화면 이동 시 갱신.
+  useEffect(() => {
+    if (!user) return;
+    api.usage().then(setUsage).catch(() => {});
+  }, [user, pathname]);
 
   if (!user || pathname === "/login" || pathname === "/onboarding") return null;
 

@@ -41,11 +41,11 @@ export default function ReportReviewPage() {
   const nextId = navIdx >= 0 && navIdx < navIds.length - 1 ? navIds[navIdx + 1] : null;
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // 리포트 본문/엔트리만 조회(처리 중 2.5초 폴링이 매번 산업 카탈로그까지 받지 않도록 분리).
   const load = useCallback(async () => {
-    const [d, { industries }] = await Promise.all([api.reportEntries(id), api.industries()]);
+    const d = await api.reportEntries(id);
     setReport(d.report);
     setEntry(d.entries[0] ?? null);
-    setCatalog(industries);
     setDupInfo(d.dupInfo ?? null);
     setHlKey((k) => k + 1);
     setLoaded(true);
@@ -54,6 +54,11 @@ export default function ReportReviewPage() {
   useEffect(() => {
     load().catch(() => setLoaded(true));
   }, [load]);
+
+  // 산업 카탈로그는 자주 안 바뀌므로 1회만.
+  useEffect(() => {
+    api.industries().then(({ industries }) => setCatalog(industries)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (report && (report.parseStatus === "pending" || report.parseStatus === "parsing")) {

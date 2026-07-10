@@ -3,6 +3,7 @@ import { securities, userSecurities, paperPositions, notifications, userLlmSetti
 import { db } from "../db.js";
 import { liveQuote } from "./price-service.js";
 import { kisEnabled } from "./kis.js";
+import { mapPool } from "./concurrency.js";
 
 // 관심/보유 종목 가격 조기경보. 사실 기반(예측 아님): 전일대비 급락 + 매수가 대비 손절 라인.
 // API 프로세스에서 장중 주기 실행(sweepPriceAlerts). 하루 1회/조건 중복 방지. 임계값은 유저별 설정.
@@ -42,12 +43,12 @@ export async function sweepPriceAlerts(): Promise<void> {
   const openSecs = secs.filter(isMarketOpen);
   if (openSecs.length === 0) return;
 
-  // 종목 시세 1회씩(유저 공유)
+  // 종목 시세 1회씩(유저 공유). 제한 병렬로 조회해 스윕이 API 프로세스를 오래 점유하지 않게.
   const quote = new Map<string, { price: number; changeRate: number | null }>();
-  for (const s of openSecs) {
+  await mapPool(openSecs, 5, async (s) => {
     const q = await liveQuote(s).catch(() => null);
     if (q?.price) quote.set(s.id, { price: q.price, changeRate: q.changeRate });
-  }
+  });
 
   // 실제 보유 평단/순주수 + 모의 전용 판별 (경보는 실제만: 모의 종목 제외)
   const positions = await db.select().from(paperPositions);

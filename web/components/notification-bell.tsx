@@ -21,12 +21,12 @@ export function NotificationBell() {
     }
   }, []);
 
-  // 최초 + 화면 이동 시 갱신, 분석이 비동기라 30초 폴링으로 완료분 반영.
+  // 최초 1회 + 30초 폴링으로 완료분 반영(화면 이동마다 재조회·인터벌 재설정하지 않음).
   useEffect(() => {
     load();
     const t = setInterval(load, 30_000);
     return () => clearInterval(t);
-  }, [load, pathname]);
+  }, [load]);
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
