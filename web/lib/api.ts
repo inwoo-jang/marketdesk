@@ -207,7 +207,7 @@ export const api = {
   stockDiary: () => get<{ items: DiaryItem[] }>("/api/stocks/diary"),
   myStocks: () => get<{ items: StockSummary[] }>("/api/stocks"),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
-  addPosition: (input: { securityId: string; buyDate: string; shares: number; buyPrice?: number }) =>
+  addPosition: (input: { securityId: string; side?: "buy" | "sell"; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
     post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
   deletePosition: (id: string) => del<{ ok: true }>(`/api/stocks/positions/${id}`),
   removeStock: (securityId: string) => del<{ ok: true }>(`/api/stocks/${securityId}`),
@@ -215,7 +215,7 @@ export const api = {
   stockSeries: (securityId: string, period: "M" | "D") =>
     get<{ period: string; bars: PriceBar[] }>(`/api/stocks/${securityId}/series?period=${period}`),
   stockNotes: (securityId: string) => get<{ notes: PaperNote[] }>(`/api/stocks/${securityId}/notes`),
-  addStockNote: (securityId: string, input: { noteDate: string; body: string }) =>
+  addStockNote: (securityId: string, input: { noteDate: string; body: string; category?: NoteCategory }) =>
     post<{ ok: true; note: PaperNote }>(`/api/stocks/${securityId}/notes`, input),
   deleteStockNote: (id: string) => del<{ ok: true }>(`/api/stocks/notes/${id}`),
   stockArticles: (securityId: string) => get<{ articles: RelatedArticle[] }>(`/api/stocks/${securityId}/articles`),
@@ -231,6 +231,8 @@ export type StockSummary = {
   avgBuy: number | null;
   close: number | null;
   marketValue: number | null;
+  realizedPnl?: number;
+  unrealizedPnl?: number | null;
   pnl: number | null;
   pnlPct: number | null;
 };
@@ -238,12 +240,15 @@ export type PaperPosition = {
   id: string;
   securityId: string | null;
   name: string;
+  side: "buy" | "sell";
   buyDate: string;
   shares: number;
   buyPrice: number | null;
+  reason: string | null;
   createdAt: string;
 };
-export type PaperNote = { id: string; securityId: string; positionId: string | null; noteDate: string; body: string; createdAt: string };
+export type NoteCategory = "up" | "down" | "hold" | "etc";
+export type PaperNote = { id: string; securityId: string; positionId: string | null; noteDate: string; category: NoteCategory | null; body: string; createdAt: string };
 export type StockQuote = { price: number; changeRate: number | null; currency: string };
 export type StockDetail = {
   security: SecurityLite;
@@ -253,7 +258,7 @@ export type StockDetail = {
 };
 export type PriceBar = { date: string; close: number };
 export type DiaryItem = {
-  kind: "buy" | "note";
+  kind: "buy" | "sell" | "note";
   id: string;
   date: string;
   securityId: string | null;
@@ -262,6 +267,8 @@ export type DiaryItem = {
   isOverseas: boolean | null;
   shares?: number;
   buyPrice?: number | null;
+  reason?: string | null;
+  category?: NoteCategory | null;
   body?: string;
 };
 export type RelatedArticle = {

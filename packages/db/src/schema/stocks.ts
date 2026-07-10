@@ -77,7 +77,7 @@ export const userSecurities = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.securityId] })],
 );
 
-// paper_positions: 모의 매수 기록(한 행 = 한 매수). 같은 종목 여러 번 매수 가능.
+// paper_positions: 모의 거래 기록(한 행 = 한 매수/매도). side 로 구분.
 export const paperPositions = pgTable("paper_positions", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")
@@ -85,9 +85,11 @@ export const paperPositions = pgTable("paper_positions", {
     .references(() => users.id, { onDelete: "cascade" }),
   securityId: uuid("security_id").references(() => securities.id, { onDelete: "set null" }), // 미해결 시 null
   name: text("name").notNull(), // 표시명(미해결이어도 유지)
-  buyDate: date("buy_date").notNull(),
+  side: text("side").default("buy").notNull(), // buy | sell
+  buyDate: date("buy_date").notNull(), // 거래일(매수/매도 공통)
   shares: doublePrecision("shares").notNull(),
-  buyPrice: doublePrecision("buy_price"), // null 이면 매수일 종가로 자동 채움
+  buyPrice: doublePrecision("buy_price"), // 체결가. null 이면 거래일 종가로 자동
+  reason: text("reason"), // 매수 이유 / 매도 이유
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -105,6 +107,8 @@ export const paperNotes = pgTable(
       .references(() => securities.id, { onDelete: "cascade" }),
     positionId: uuid("position_id").references(() => paperPositions.id, { onDelete: "set null" }),
     noteDate: date("note_date").notNull(),
+    // 기록 유형: buy(매수 이유)·sell(매도 이유)·up(상승)·down(하락)·hold(유지)·etc(기타)
+    category: text("category"),
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
