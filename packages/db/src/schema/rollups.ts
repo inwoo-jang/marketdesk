@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, unique, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, unique, primaryKey } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { industries } from "./industries";
 import { lenses } from "./users";
@@ -23,6 +23,9 @@ export const rollups = pgTable(
     periodKey: text("period_key").notNull(), // '2026-06'
     oneLiner: text("one_liner"),
     status: jobStatus("status").default("pending").notNull(), // pending|done|failed (워커 생성)
+    // 재생성 디바운스: 업로드마다 재생성하지 않고 dirty 표시만(내용 유지), 6시간 배치로 재생성(원가 절감).
+    dirty: boolean("dirty").default(false).notNull(),
+    dirtyAt: timestamp("dirty_at", { withTimezone: true }), // 처음 dirty 된 시각(배치 대상 판정)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },

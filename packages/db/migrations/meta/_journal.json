@@ -176,6 +176,13 @@
       "when": 1783620842409,
       "tag": "0024_tense_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783658434665,
+      "tag": "0025_boring_revanche",
+      "breakpoints": true
     }
   ]
 }

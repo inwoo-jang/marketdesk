@@ -1,4 +1,4 @@
-import { eq, and, isNull, ne, isNotNull, inArray, desc } from "drizzle-orm";
+import { eq, and, isNull, ne, isNotNull, inArray, desc, sql } from "drizzle-orm";
 import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
@@ -275,10 +275,18 @@ async function enqueueFlowRollups(report: Report, entryDate: string, docType: st
       ];
       if (scope === "industry" && opts.industryId) match.push(eq(rollups.industryId, opts.industryId));
       else if (scope === "company" && opts.companyName) match.push(eq(rollups.companyName, opts.companyName));
-      const [existing] = await db.select({ id: rollups.id }).from(rollups).where(and(...match)).limit(1);
+      const [existing] = await db.select({ id: rollups.id, status: rollups.status }).from(rollups).where(and(...match)).limit(1);
       if (existing) {
-        // 기존 요약·팩트는 그대로 두고 상태만 pending 으로 재큐잉 → 재생성 완료 시점에 교체(그 전까진 옛 내용 유지)
-        await db.update(rollups).set({ status: "pending", llmProvider: report.llmProvider }).where(eq(rollups.id, existing.id));
+        if (existing.status === "done") {
+          // 이미 내용 있음 → 즉시 재생성하지 않고 dirty 표시(옛 내용 유지). 6시간 배치가 재생성 → 업로드마다 재생성 방지(원가 절감).
+          await db
+            .update(rollups)
+            .set({ dirty: true, dirtyAt: sql`coalesce(${rollups.dirtyAt}, now())`, llmProvider: report.llmProvider })
+            .where(eq(rollups.id, existing.id));
+        } else {
+          // 아직 내용 없음(pending/failed) → 첫 생성은 즉시 큐잉(업로드하고 흐름이 빈 채로 오래 두지 않게).
+          await db.update(rollups).set({ status: "pending", llmProvider: report.llmProvider }).where(eq(rollups.id, existing.id));
+        }
       } else {
         await db.insert(rollups).values({
           userId: report.userId,

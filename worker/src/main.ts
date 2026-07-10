@@ -1,9 +1,22 @@
-import { eq } from "drizzle-orm";
+import { eq, and, lte } from "drizzle-orm";
 import { reports, rollups } from "@reportlens/db";
 import { db } from "./db.js";
 import { env } from "./env.js";
 import { processReport } from "./process.js";
 import { processRollup } from "./rollup.js";
+
+// 흐름 재생성 배치: dirty 로 표시된(업로드로 바뀐) 롤업을 6시간마다 한 번만 재생성 → 업로드마다 재생성 방지(원가 절감).
+const ROLLUP_STALE_MS = 6 * 60 * 60 * 1000;
+let lastSweep = 0;
+async function sweepStaleRollups(): Promise<void> {
+  const cutoff = new Date(Date.now() - ROLLUP_STALE_MS);
+  const res = await db
+    .update(rollups)
+    .set({ status: "pending", dirty: false, dirtyAt: null })
+    .where(and(eq(rollups.dirty, true), eq(rollups.status, "done"), lte(rollups.dirtyAt, cutoff)))
+    .returning({ id: rollups.id });
+  if (res.length) console.log(`흐름 재생성 배치: ${res.length}건 큐잉(6시간 경과)`);
+}
 
 // 큐→워커(로컬): SQS 대신 DB 폴링. pending 리포트/롤업을 집어 처리.
 // 운영(SQS)에서는 메시지 수신이 트리거가 되고 process* 를 그대로 재사용.
@@ -50,6 +63,11 @@ async function main() {
   }
   for (;;) {
     try {
+      // 10분마다 dirty 롤업 배치 스윕(dirtyAt 기준이라 재시작에도 안전).
+      if (Date.now() - lastSweep > 10 * 60 * 1000) {
+        lastSweep = Date.now();
+        await sweepStaleRollups().catch((e) => console.error("롤업 스윕 오류:", e));
+      }
       const did = await tick();
       if (!did) await sleep(env.pollInterval * 1000);
     } catch (e) {
