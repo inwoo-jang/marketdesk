@@ -108,17 +108,21 @@ function InfoTab({ showInvest }: { showInvest: boolean }) {
           <Link key={it.security.id} href={`/stocks/${it.security.id}`} className="flex items-center justify-between rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
+                {it.watchOnly && <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" title="관심 종목" />}
                 <span className="truncate font-semibold text-ink">{it.security.name}</span>
                 <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
-                {it.watchOnly && <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">관심</span>}
               </div>
-              <div className="mt-1 text-xs text-ink-muted">
-                현재가 {fmtMoney(it.close, it.security.isOverseas)}
-                {!it.watchOnly && it.avgBuy != null && <> · 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)} · {it.totalShares}주</>}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+                <span>{fmtMoney(it.close, it.security.isOverseas)}</span>
+                {it.changeRate != null && (
+                  <span className={`font-medium ${it.changeRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>전일 {fmtPct(it.changeRate)}</span>
+                )}
+                {!it.watchOnly && it.avgBuy != null && <span>· 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)} · {it.totalShares}주</span>}
               </div>
             </div>
             {!it.watchOnly && showInvest && it.pnlPct != null && (
               <div className="shrink-0 text-right">
+                <div className="text-[10px] text-ink-muted">모의 수익률</div>
                 <div className={`text-sm font-bold ${it.pnlPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(it.pnlPct)}</div>
                 <div className={`text-xs ${(it.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                   {(it.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(it.pnl ?? 0).toLocaleString()}원
@@ -374,17 +378,14 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ─── 종목 추가 모달: 검색 + 가나다/영문 브라우즈 ───
-// key=백엔드 그룹, label=표시. "A"는 영문 전체(A-Z), "#"은 숫자·기타.
-const GROUPS: { key: string; label: string }[] = [
-  ..."ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".split("").map((g) => ({ key: g, label: g })),
-  { key: "A", label: "A-Z" },
-  { key: "#", label: "#" },
-];
+// ─── 종목 추가 모달: 검색 + 한/영 브라우즈 ───
+const KO_TABS = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".split("");
+const EN_TABS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: () => void; onDone: () => void }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SecurityLite[]>([]);
+  const [hangul, setHangul] = useState(true); // 한/영 토글
   const [group, setGroup] = useState("ㄱ");
   const [browse, setBrowse] = useState<SecurityLite[]>([]);
   const [picked, setPicked] = useState<SecurityLite | null>(null);
@@ -436,11 +437,17 @@ function AddStockModal({ invest, onClose, onDone }: { invest: boolean; onClose: 
           <>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="종목명 검색 (예: 삼성전자)" className="mt-3 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
             {!searching && (
-              <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
-                {GROUPS.map((g) => (
-                  <button key={g.key} onClick={() => setGroup(g.key)} className={`shrink-0 rounded-md px-2 py-1 text-xs ${group === g.key ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>{g.label}</button>
-                ))}
-              </div>
+              <>
+                <div className="mt-2 flex gap-1">
+                  <button onClick={() => { setHangul(true); setGroup("ㄱ"); }} className={`rounded-md px-3 py-1 text-xs font-semibold ${hangul ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>한글</button>
+                  <button onClick={() => { setHangul(false); setGroup("A"); }} className={`rounded-md px-3 py-1 text-xs font-semibold ${!hangul ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>영문</button>
+                </div>
+                <div className="mt-1.5 flex gap-1 overflow-x-auto pb-1">
+                  {["#", ...(hangul ? KO_TABS : EN_TABS), "#"].map((g, i) => (
+                    <button key={g + i} onClick={() => setGroup(g)} className={`shrink-0 rounded-md px-2 py-1 text-xs ${group === g ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>{g}</button>
+                  ))}
+                </div>
+              </>
             )}
             <div className="mt-2 max-h-72 overflow-y-auto">
               {list.map((r) => (

@@ -73,7 +73,9 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-xl font-semibold text-ink">{fmtMoney(quote?.price ?? summary.close, overseas)}</span>
             {quote?.changeRate != null && (
-              <span className={`text-sm font-medium ${quote.changeRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(quote.changeRate)}</span>
+              <span className={`text-sm font-medium ${quote.changeRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                전일 {fmtPct(quote.changeRate)}
+              </span>
             )}
           </div>
         </div>

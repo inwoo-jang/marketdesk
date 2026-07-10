@@ -127,6 +127,7 @@ stocksRoute.get("/", async (c) => {
     const summary = summarize(bySec.get(r.security.id) ?? [], last?.close ?? null);
     items.push({
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
+      changeRate: last?.changeRate ?? null,
       ...summary,
     });
   }

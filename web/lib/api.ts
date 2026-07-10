@@ -225,6 +225,7 @@ export const api = {
 export type SecurityLite = { id: string; code: string; name: string; market: string; isOverseas: boolean };
 export type StockSummary = {
   security: SecurityLite;
+  changeRate: number | null; // 전일대비 등락률(%)
   watchOnly: boolean;
   totalShares: number;
   totalCost: number;

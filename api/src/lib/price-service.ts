@@ -80,11 +80,14 @@ export async function getSeries(sec: Security, period: "D" | "M"): Promise<{ dat
   return rows;
 }
 
-// 최근 종가(평가·수익률용). 일봉 캐시 최신값. 없으면 null.
-export async function latestClose(sec: Security): Promise<{ close: number; date: string } | null> {
+// 최근 종가 + 전일대비(등락률). 일봉 캐시 최신 2개로 계산. 없으면 null.
+export async function latestClose(sec: Security): Promise<{ close: number; date: string; changeRate: number | null } | null> {
   const series = await getSeries(sec, "D");
   const last = series[series.length - 1];
-  return last ? { close: last.close, date: last.date } : null;
+  if (!last) return null;
+  const prev = series[series.length - 2];
+  const changeRate = prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : null;
+  return { close: last.close, date: last.date, changeRate };
 }
 
 // 매수일 종가(단가 자동): 그 날짜의 일봉 종가. 없으면 그 이전 최근 거래일.
