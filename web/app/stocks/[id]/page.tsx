@@ -111,6 +111,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           {quoteAt && (
             <p className="mt-0.5 text-[11px] text-ink-muted">
               {quoteAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 · 새로고침하면 갱신
+              {overseas && " · 해외 시세 약 15분 지연"}
             </p>
           )}
         </div>
