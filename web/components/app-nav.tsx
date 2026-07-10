@@ -63,7 +63,7 @@ export function AppNav() {
         <div className="flex items-center gap-3">
           {usage && (
             <span className="hidden text-xs text-ink-muted sm:inline">
-              {usage.limit === null ? "Pro" : `무료 ${usage.remaining ?? 0}/${usage.limit}`}
+              {usage.limit === null ? "Pro" : `무료 ${Math.round(((usage.remaining ?? 0) / usage.limit) * 100)}%`}
             </span>
           )}
           <span className="hidden text-sm text-ink-sub md:inline">{user.displayName ?? user.email}</span>

@@ -248,7 +248,14 @@ export type Rollup = {
   facts: RollupFact[];
 };
 
-export type Usage = { plan: "free" | "pro"; used: number; limit: number | null; remaining: number | null };
+export type Usage = {
+  plan: "free" | "pro";
+  used: number; // 이번 달 토큰(입력+출력)
+  limit: number | null; // 무료 월 토큰 한도(pro=null)
+  remaining: number | null;
+  inputTokens: number;
+  outputTokens: number;
+};
 
 export type PublicContent = {
   id: string;

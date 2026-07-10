@@ -45,6 +45,8 @@ export default function SettingsPage() {
 
   const lensLabel = (k: string) => lenses.find((l) => l.key === k)?.label ?? k;
   const jobRoleLabel = jobRoles.find((r) => r.key === myJobRole)?.label;
+  const fmtTok = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+  const pctUsed = usage?.limit ? Math.round((usage.used / usage.limit) * 100) : 0;
 
   async function logout() {
     await api.logout();
@@ -83,7 +85,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* 플랜·사용량 */}
+      {/* 플랜·사용량(토큰) */}
       <section className="mt-4 rounded-card bg-card p-6 shadow-card">
         <h2 className="text-sm font-semibold text-ink-muted">플랜 · 사용량</h2>
         <div className="mt-3 flex items-center gap-2">
@@ -95,30 +97,43 @@ export default function SettingsPage() {
             {usage?.plan === "pro" ? "Pro" : "무료"}
           </span>
           <span className="text-sm text-ink-sub">
-            {usage?.limit === null
-              ? "무제한 분석"
-              : `오늘 분석 ${usage?.used ?? 0}/${usage?.limit ?? 3}회 (남은 ${usage?.remaining ?? 0}회)`}
+            {usage?.limit == null
+              ? "무제한"
+              : `이번 달 ${fmtTok(usage?.used ?? 0)} / ${fmtTok(usage.limit)} 토큰`}
           </span>
         </div>
+        {usage?.limit != null && (
+          <div className="mt-3">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-ink/10">
+              <div
+                className={`h-full rounded-full ${pctUsed >= 100 ? "bg-red-500" : pctUsed >= 80 ? "bg-amber-500" : "bg-primary"}`}
+                style={{ width: `${Math.min(100, pctUsed)}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-ink-muted">
+              입력 {fmtTok(usage?.inputTokens ?? 0)} · 출력 {fmtTok(usage?.outputTokens ?? 0)} · 남은 {fmtTok(usage?.remaining ?? 0)} 토큰
+            </p>
+          </div>
+        )}
+
+        {/* 요금제 안내 */}
+        <div className="mt-5 rounded-lg border border-line bg-bg-deep/40 p-4">
+          <p className="text-xs font-semibold text-ink">요금제</p>
+          <ul className="mt-2 space-y-1.5 text-xs text-ink-sub">
+            <li>• <b>무료</b> — 월 30만 토큰(Gemini). 이걸로 리포트 15개 안팎.</li>
+            <li>• <b>Pro ₩3,000/월</b>(1개월 무료) — 상향 한도 + BYO 키·로컬 에이전트 잠금 해제.</li>
+            <li>• <b>무제한/헤비 유저</b> — 본인 API 키(BYO) 또는 로컬 에이전트로 자기 LLM 사용.</li>
+          </ul>
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            disabled
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50"
-            title="출시 단계에 제공"
-          >
+          <button disabled className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50" title="출시 단계에 제공">
             Pro 업그레이드 (준비중)
           </button>
-          <button
-            disabled
-            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink-sub opacity-50"
-            title="출시 단계에 제공"
-          >
+          <button disabled className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink-sub opacity-50" title="출시 단계에 제공">
             본인 API 키 등록 (준비중)
           </button>
         </div>
-        <p className="mt-3 text-xs text-ink-muted">
-          무료는 하루 3회 분석. 초과 시 Pro(무제한) 또는 본인 API 키로 계속할 수 있어요. (결제는 출시 단계)
-        </p>
       </section>
 
       {/* 분석 엔진 — 개발자 계정만 노출 */}

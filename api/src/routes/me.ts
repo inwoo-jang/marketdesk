@@ -33,9 +33,11 @@ import { env } from "../env.js";
 import { defineTerm } from "../define.js";
 import { requireUser, type AppEnv, type AppUser } from "../auth.js";
 
-// 무료 한도: 하루 3회 분석. pro 는 무제한. (BYO Claude 키도 Pro 기능)
-const FREE_DAILY_LIMIT = 3;
+// 무료 한도: 월간 토큰. pro 는 무제한. (BYO 키·로컬 에이전트도 Pro 기능)
+// 토큰은 처리 후 워커가 집계하므로 업로드 시점엔 '이번 달 누적'으로 게이팅(초과 시 차단).
+const FREE_MONTHLY_TOKENS = 300_000; // ≈ 리포트 15개 안팎. 원가·요금 정책에 맞춰 튜닝.
 const seoulDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+const seoulMonthStart = () => seoulDay().slice(0, 7) + "-01"; // 이번 달 1일(KST)
 
 async function bumpUsage(userId: string, day: string) {
   await db
@@ -44,27 +46,34 @@ async function bumpUsage(userId: string, day: string) {
     .onConflictDoUpdate({ target: [usageDaily.userId, usageDaily.day], set: { count: sql`${usageDaily.count} + 1` } });
 }
 
-// 분석 1건 소비(게이팅). ok=false 면 한도 초과.
-async function consumeAnalysis(user: AppUser): Promise<{ ok: boolean; used: number; limit: number | null }> {
-  // 개발자 모드: 무제한(게이팅·집계 우회)
-  if (env.devUnlimited) return { ok: true, used: 0, limit: null };
-  const day = seoulDay();
-  if (user.plan === "pro") {
-    await bumpUsage(user.id, day);
-    return { ok: true, used: 0, limit: null };
-  }
+// 이번 달 누적 토큰(입력+출력).
+async function monthlyTokens(userId: string): Promise<{ input: number; output: number; total: number }> {
   const [row] = await db
-    .select({ count: usageDaily.count })
+    .select({
+      input: sql<number>`coalesce(sum(${usageDaily.inputTokens}),0)::bigint`,
+      output: sql<number>`coalesce(sum(${usageDaily.outputTokens}),0)::bigint`,
+    })
     .from(usageDaily)
-    .where(and(eq(usageDaily.userId, user.id), eq(usageDaily.day, day)))
-    .limit(1);
-  const used = row?.count ?? 0;
-  if (used >= FREE_DAILY_LIMIT) return { ok: false, used, limit: FREE_DAILY_LIMIT };
-  await bumpUsage(user.id, day);
-  return { ok: true, used: used + 1, limit: FREE_DAILY_LIMIT };
+    .where(and(eq(usageDaily.userId, userId), gte(usageDaily.day, seoulMonthStart())));
+  const input = Number(row?.input ?? 0);
+  const output = Number(row?.output ?? 0);
+  return { input, output, total: input + output };
 }
 
-const QUOTA_MSG = "무료 한도(하루 3회 분석)를 다 썼어요. Pro 로 업그레이드하거나 본인 API 키를 등록하면 계속할 수 있어요.";
+// 분석 1건 소비(게이팅). ok=false 면 한도 초과. used/limit 은 토큰 단위.
+async function consumeAnalysis(user: AppUser): Promise<{ ok: boolean; used: number; limit: number | null }> {
+  if (env.devUnlimited) return { ok: true, used: 0, limit: null };
+  if (user.plan === "pro") {
+    await bumpUsage(user.id, seoulDay());
+    return { ok: true, used: 0, limit: null };
+  }
+  const { total } = await monthlyTokens(user.id);
+  if (total >= FREE_MONTHLY_TOKENS) return { ok: false, used: total, limit: FREE_MONTHLY_TOKENS };
+  await bumpUsage(user.id, seoulDay()); // 횟수도 기록(레거시)
+  return { ok: true, used: total, limit: FREE_MONTHLY_TOKENS };
+}
+
+const QUOTA_MSG = "이번 달 무료 한도(토큰)를 다 썼어요. Pro 로 업그레이드하거나 본인 API 키를 등록하면 계속할 수 있어요.";
 
 // /api/me/* : 로그인 사용자 스코핑(requireUser). 모든 쿼리에 user.id 강제.
 export const meRoute = new Hono<AppEnv>();
@@ -1689,20 +1698,21 @@ meRoute.post("/reports/:id/extract", async (c) => {
   return c.json({ ok: true, parseStatus: "pending", requestedLenses: requested, jobRole });
 });
 
-// GET /api/me/usage - 오늘 분석 사용량/한도(UI 표시용)
+// GET /api/me/usage - 이번 달 토큰 사용량/한도(UI 표시용). used/limit 은 토큰 단위.
 meRoute.get("/usage", async (c) => {
   const user = c.get("user");
-  const day = seoulDay();
-  const [row] = await db
-    .select({ count: usageDaily.count })
-    .from(usageDaily)
-    .where(and(eq(usageDaily.userId, user.id), eq(usageDaily.day, day)))
-    .limit(1);
-  const used = row?.count ?? 0;
-  // 개발자 모드면 무제한(plan=pro 와 동일 표시)
-  const limit = env.devUnlimited || user.plan === "pro" ? null : FREE_DAILY_LIMIT;
+  const tok = await monthlyTokens(user.id);
+  const unlimited = env.devUnlimited || user.plan === "pro";
+  const limit = unlimited ? null : FREE_MONTHLY_TOKENS;
   const plan = env.devUnlimited ? "pro" : user.plan;
-  return c.json({ plan, used, limit, remaining: limit === null ? null : Math.max(0, limit - used) });
+  return c.json({
+    plan,
+    used: tok.total,
+    limit,
+    remaining: limit === null ? null : Math.max(0, limit - tok.total),
+    inputTokens: tok.input,
+    outputTokens: tok.output,
+  });
 });
 
 // GET /api/me/reports/:id/entries - 리포트의 렌즈별 엔트리 + 핵심숫자(검토 화면용)
