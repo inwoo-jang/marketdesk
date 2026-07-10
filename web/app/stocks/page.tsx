@@ -232,7 +232,17 @@ function DiaryTab() {
 function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
   const [edit, setEdit] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ai, setAi] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const isTrade = e.kind !== "note";
+
+  async function runAi() {
+    if (!e.securityId) return;
+    setAiBusy(true);
+    const r = await api.analyzeStock(e.securityId).catch(() => ({ analysis: "분석을 가져오지 못했어요." }));
+    setAi(r.analysis);
+    setAiBusy(false);
+  }
   const [date, setDate] = useState(e.date);
   const [shares, setShares] = useState(e.shares != null ? String(e.shares) : "");
   const [price, setPrice] = useState(e.buyPrice != null ? String(e.buyPrice) : "");
@@ -287,11 +297,17 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
             <textarea value={body} onChange={(ev) => setBody(ev.target.value)} rows={2} className="w-full resize-none rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary" />
           </div>
         )}
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex items-center gap-2">
           <button onClick={save} disabled={busy} className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">저장</button>
           <button onClick={() => setEdit(false)} className="rounded-lg border border-line px-3 py-1 text-xs text-ink-sub">취소</button>
+          {e.securityId && (
+            <button onClick={runAi} disabled={aiBusy} className="rounded-lg px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+              {aiBusy ? "AI 분석 중..." : "AI 도움받기"}
+            </button>
+          )}
           <button onClick={del} disabled={busy} className="ml-auto rounded-lg px-3 py-1 text-xs text-ink-muted hover:text-red-600">삭제</button>
         </div>
+        {ai && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-bg-deep/40 p-2 text-xs text-ink-sub">{ai}</p>}
       </div>
     );
   }
@@ -476,7 +492,7 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
                   <button key={p} onClick={() => setPeriod(p)} className={`rounded px-1.5 py-0.5 ${period === p ? "bg-primary/10 font-semibold text-primary" : "text-ink-muted"}`}>{p === "Y" ? "연" : p === "M" ? "월" : "일"}</button>
                 ))}
               </div>
-              <PriceChart bars={bars} markers={markers} height={110} overseas={overseas} />
+              <PriceChart bars={bars} markers={markers} height={110} overseas={overseas} current={holding?.quote?.price} />
             </div>
           )}
 

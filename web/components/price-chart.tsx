@@ -16,17 +16,22 @@ export function PriceChart({
   height = 160,
   positive,
   overseas = false,
+  current,
 }: {
   bars: PriceBar[];
   markers?: Marker[];
   height?: number;
   positive?: boolean;
   overseas?: boolean;
+  current?: number | null; // 실시간 현재가(있으면 마지막 지점을 이 값으로 통일)
 }) {
   const uid = useId().replace(/:/g, "");
   if (bars.length < 2) {
     return <div className="flex h-32 items-center justify-center text-sm text-ink-muted">표시할 시세가 아직 없어요.</div>;
   }
+  // 마지막 봉의 종가를 실시간 현재가로 통일(주기별 캐시 시점 차이 제거)
+  const series = current != null ? bars.map((b, i) => (i === bars.length - 1 ? { ...b, close: current } : b)) : bars;
+  bars = series;
   const W = 640;
   const H = height;
   const pad = { t: 6, r: 8, b: 6, l: 8 };
