@@ -110,8 +110,9 @@ export const paperNotes = pgTable(
       .references(() => securities.id, { onDelete: "cascade" }),
     positionId: uuid("position_id").references(() => paperPositions.id, { onDelete: "set null" }),
     noteDate: date("note_date").notNull(),
-    // 기록 유형: buy(매수 이유)·sell(매도 이유)·up(상승)·down(하락)·hold(유지)·etc(기타)
+    // 기록 유형: up(상승)·down(하락)·hold(유지)·memo(메모)
     category: text("category"),
+    simulated: boolean("simulated").default(false).notNull(), // false=실제(투자일지), true=모의(다이어리)
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

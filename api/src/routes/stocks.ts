@@ -192,6 +192,7 @@ stocksRoute.get("/diary", async (c) => {
       market: securities.market,
       isOverseas: securities.isOverseas,
       category: paperNotes.category,
+      simulated: paperNotes.simulated,
       body: paperNotes.body,
     })
     .from(paperNotes)
@@ -208,7 +209,7 @@ stocksRoute.get("/diary", async (c) => {
   const fxNow = anyOverseas ? (await currentFx()) ?? 1 : 1;
   const items = [
     ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, buyFx: b.buyFx as number | null | undefined, fxNow: b.isOverseas ? fxNow : (undefined as number | undefined), reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
-    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, buyFx: undefined as number | null | undefined, fxNow: undefined as number | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: n.simulated, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, buyFx: undefined as number | null | undefined, fxNow: undefined as number | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });
@@ -409,6 +410,7 @@ stocksRoute.post("/:securityId/notes", async (c) => {
       noteDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       body: z.string().min(1).max(2000),
       category: z.enum(["up", "down", "hold", "memo"]).optional(),
+      simulated: z.boolean().optional(), // 투자일지=false(실제), 다이어리=true(모의)
     })
     .safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "메모를 확인해 주세요." }, 400);
@@ -418,7 +420,7 @@ stocksRoute.post("/:securityId/notes", async (c) => {
   await db.insert(userSecurities).values({ userId: user.id, securityId: sid }).onConflictDoNothing();
   const [note] = await db
     .insert(paperNotes)
-    .values({ userId: user.id, securityId: sid, noteDate: parsed.data.noteDate, body: parsed.data.body, category: parsed.data.category ?? null })
+    .values({ userId: user.id, securityId: sid, noteDate: parsed.data.noteDate, body: parsed.data.body, category: parsed.data.category ?? null, simulated: parsed.data.simulated ?? false })
     .returning();
   return c.json({ ok: true, note });
 });

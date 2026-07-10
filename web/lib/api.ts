@@ -221,7 +221,7 @@ export const api = {
   stockSeries: (securityId: string, period: "Y" | "M" | "D") =>
     get<{ period: string; bars: PriceBar[] }>(`/api/stocks/${securityId}/series?period=${period}`),
   stockNotes: (securityId: string) => get<{ notes: PaperNote[] }>(`/api/stocks/${securityId}/notes`),
-  addStockNote: (securityId: string, input: { noteDate: string; body: string; category?: NoteCategory }) =>
+  addStockNote: (securityId: string, input: { noteDate: string; body: string; category?: NoteCategory; simulated?: boolean }) =>
     post<{ ok: true; note: PaperNote }>(`/api/stocks/${securityId}/notes`, input),
   updateStockNote: (id: string, input: { noteDate?: string; body?: string; category?: NoteCategory | null }) =>
     put<{ ok: true; note: PaperNote }>(`/api/stocks/notes/${id}`, input),

@@ -61,7 +61,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
 
   async function addNote() {
     if (!noteBody.trim()) return;
-    await api.addStockNote(id, { noteDate, body: noteBody.trim(), category: noteCat });
+    await api.addStockNote(id, { noteDate, body: noteBody.trim(), category: noteCat, simulated: false });
     setNoteBody("");
     loadNotes();
   }

@@ -1,0 +1,1 @@
+ALTER TABLE "paper_notes" ADD COLUMN "simulated" boolean DEFAULT false NOT NULL;

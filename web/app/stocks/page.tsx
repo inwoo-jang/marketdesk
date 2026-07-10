@@ -164,10 +164,12 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
             >
               <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
             </button>
-            {/* 맨 앞 점(자리는 항상 유지해 정렬 통일): 실제 보유=파랑, 그 외=투명 */}
+            {/* 맨 앞 점: 실제 보유=파랑 · 청산(전량 매도)=회색 · 관심/모의=투명 */}
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${!simulated && !it.watchOnly ? "bg-blue-600" : "bg-transparent"}`}
-              title={!simulated && !it.watchOnly ? "실제 보유" : undefined}
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                simulated || it.watchOnly ? "bg-transparent" : it.totalShares > 0 ? "bg-blue-600" : "bg-ink/25"
+              }`}
+              title={simulated || it.watchOnly ? undefined : it.totalShares > 0 ? "실제 보유" : "청산"}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -231,11 +233,11 @@ function DiaryTab() {
   const load = () => api.stockDiary().then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, []);
 
-  // 필터: 거래는 실제/모의로 가르고, 메모는 모든 필터에 표시(종목 기록).
+  // 필터: 거래·메모 모두 실제/모의로 구분(투자일지 메모=실제, 다이어리 메모=모의).
   const filtered = useMemo(() => {
     const arr = items ?? [];
     if (filter === "all") return arr;
-    return arr.filter((it) => it.kind === "note" || (filter === "sim" ? it.simulated : !it.simulated));
+    return arr.filter((it) => (filter === "sim" ? it.simulated : !it.simulated));
   }, [items, filter]);
 
   const groups = useMemo(() => {
@@ -474,7 +476,8 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
         await api.addPosition({ securityId: picked.id, side: cat as "buy" | "sell", simulated: !real, buyDate: date, shares: sh, buyPrice: price ? Number(price) : undefined, reason: text.trim() || undefined });
       } else {
         if (!text.trim()) { setBusy(false); return; }
-        await api.addStockNote(picked.id, { noteDate: date, body: text.trim(), category: cat as NoteCategory });
+        // 다이어리 메모는 모의로 분류(투자일지=실제와 구분)
+        await api.addStockNote(picked.id, { noteDate: date, body: text.trim(), category: cat as NoteCategory, simulated: true });
       }
       reset();
       onDone();
