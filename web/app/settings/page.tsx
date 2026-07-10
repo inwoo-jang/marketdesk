@@ -15,6 +15,27 @@ export default function SettingsPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [llm, setLlm] = useState<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // 모델 변경: 진행 중 작업이 있으면 "마저 끝내기 vs 중단·재시작" 선택 모달
+  const [pending, setPending] = useState<{ key: "claude" | "codex" | "gemini"; label: string; inflight: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function applyProvider(key: "claude" | "codex" | "gemini", restartInflight: boolean) {
+    setBusy(true);
+    const r = await api.setLlmProvider(key, restartInflight).catch(() => null);
+    setBusy(false);
+    if (r) setLlm(r);
+    setPending(null);
+  }
+
+  async function onPickProvider(key: "claude" | "codex" | "gemini", label: string) {
+    if (llm?.provider === key) return;
+    const { count } = await api.llmInflight().catch(() => ({ count: 0 }));
+    if (count > 0) {
+      setPending({ key, label, inflight: count });
+    } else {
+      await applyProvider(key, false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -154,10 +175,7 @@ export default function SettingsPage() {
               return (
                 <button
                   key={opt.key}
-                  onClick={async () => {
-                    const r = await api.setLlmProvider(opt.key).catch(() => null);
-                    if (r) setLlm(r);
-                  }}
+                  onClick={() => onPickProvider(opt.key, opt.label)}
                   className={`rounded-xl border px-4 py-3 text-left ${
                     on ? "border-primary bg-primary/10" : "border-line hover:bg-bg-deep"
                   }`}
@@ -172,6 +190,43 @@ export default function SettingsPage() {
             })}
           </div>
         </section>
+      )}
+
+      {/* 모델 변경 선택 모달 */}
+      {pending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !busy && setPending(null)}>
+          <div className="w-full max-w-md rounded-card bg-card p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-ink">{pending.label}(으)로 변경</h3>
+            <p className="mt-2 text-sm text-ink-sub">
+              이전 엔진으로 처리 중인 작업이 <b className="text-ink">{pending.inflight}건</b> 있어요. 어떻게 할까요?
+            </p>
+            <div className="mt-5 space-y-2">
+              <button
+                disabled={busy}
+                onClick={() => applyProvider(pending.key, false)}
+                className="w-full rounded-xl border border-line px-4 py-3 text-left hover:bg-bg-deep disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-ink">진행 중인 건 그대로 끝내기</div>
+                <div className="mt-0.5 text-xs text-ink-muted">지금 것들은 이전 엔진으로 마무리하고, 새 작업부터 {pending.label} 적용</div>
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => applyProvider(pending.key, true)}
+                className="w-full rounded-xl border border-primary bg-primary/5 px-4 py-3 text-left hover:bg-primary/10 disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-primary">중단하고 {pending.label}(으)로 다시 시작</div>
+                <div className="mt-0.5 text-xs text-ink-muted">진행 중인 {pending.inflight}건을 새 엔진으로 재분석·재생성</div>
+              </button>
+            </div>
+            <button
+              disabled={busy}
+              onClick={() => setPending(null)}
+              className="mt-3 w-full rounded-lg px-4 py-2 text-sm text-ink-sub hover:bg-bg-deep disabled:opacity-50"
+            >
+              취소
+            </button>
+          </div>
+        </div>
       )}
 
       <section className="mt-8 border-t border-line pt-6">

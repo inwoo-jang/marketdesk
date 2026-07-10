@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray, desc, sql, isNull, gte, lt, getTableColumns } from "drizzle-orm";
+import { eq, and, or, inArray, desc, sql, isNull, gte, lt, getTableColumns } from "drizzle-orm";
 import {
   lenses,
   userLenses,
@@ -212,16 +212,41 @@ meRoute.get("/llm", async (c) => {
 meRoute.put("/llm", async (c) => {
   const user = c.get("user");
   if (!isDeveloper(user)) return c.json({ error: "개발자 계정만 변경할 수 있어요." }, 403);
-  const parsed = z.object({ provider: z.enum(["claude", "codex", "gemini"]) }).safeParse(await c.req.json().catch(() => ({})));
+  const parsed = z
+    .object({ provider: z.enum(["claude", "codex", "gemini"]), restartInflight: z.boolean().optional() })
+    .safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "invalid body" }, 400);
+  const p = parsed.data.provider;
   await db
     .insert(userLlmSettings)
-    .values({ userId: user.id, analysisProvider: parsed.data.provider })
-    .onConflictDoUpdate({
-      target: userLlmSettings.userId,
-      set: { analysisProvider: parsed.data.provider, updatedAt: new Date() },
-    });
-  return c.json({ isDeveloper: true, provider: parsed.data.provider });
+    .values({ userId: user.id, analysisProvider: p })
+    .onConflictDoUpdate({ target: userLlmSettings.userId, set: { analysisProvider: p, updatedAt: new Date() } });
+  // 중단 후 재시작: 이전 모델로 처리 중이던 것을 새 모델로 재큐잉. (기본은 그대로 두고 새 작업만 새 모델)
+  if (parsed.data.restartInflight) {
+    await db
+      .update(reports)
+      .set({ llmProvider: p, parseStatus: "pending" })
+      .where(and(eq(reports.userId, user.id), inArray(reports.parseStatus, ["pending", "parsing"])));
+    await db
+      .update(rollups)
+      .set({ llmProvider: p, status: "pending", dirty: false, dirtyAt: null })
+      .where(and(eq(rollups.userId, user.id), or(eq(rollups.status, "pending"), eq(rollups.dirty, true))));
+  }
+  return c.json({ isDeveloper: true, provider: p });
+});
+
+// GET /api/me/llm/inflight - 이전 모델로 처리 중인 작업 수(모델 변경 시 선택 모달용)
+meRoute.get("/llm/inflight", async (c) => {
+  const user = c.get("user");
+  const [rep] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(reports)
+    .where(and(eq(reports.userId, user.id), inArray(reports.parseStatus, ["pending", "parsing"])));
+  const [ru] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(rollups)
+    .where(and(eq(rollups.userId, user.id), or(eq(rollups.status, "pending"), eq(rollups.dirty, true))));
+  return c.json({ count: (rep?.n ?? 0) + (ru?.n ?? 0) });
 });
 
 // POST /api/me/public/ingest - 공공 콘텐츠 온디맨드 수집(개발자만). worker 의 ingest 스크립트를 백그라운드 실행.

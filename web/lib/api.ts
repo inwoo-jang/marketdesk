@@ -127,8 +127,9 @@ export const api = {
   clearNotifications: () => del<{ ok: true }>("/api/me/notifications"),
   usage: () => get<Usage>("/api/me/usage"),
   llmSetting: () => get<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm"),
-  setLlmProvider: (provider: "claude" | "codex" | "gemini") =>
-    put<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm", { provider }),
+  setLlmProvider: (provider: "claude" | "codex" | "gemini", restartInflight?: boolean) =>
+    put<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm", { provider, restartInflight }),
+  llmInflight: () => get<{ count: number }>("/api/me/llm/inflight"),
   publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);
