@@ -58,6 +58,7 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
   const [items, setItems] = useState<StockSummary[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [sort, setSort] = useState<"recent" | "pnl">("recent");
+  const [q, setQ] = useState("");
   const load = () => api.myStocks(simulated).then((r) => setItems(r.items)).catch(() => setItems([]));
   useEffect(() => { load(); }, [simulated]);
 
@@ -68,10 +69,12 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
 
   const sorted = useMemo(() => {
     if (!items) return [];
-    const arr = [...items];
+    let arr = [...items];
+    const nq = q.trim().toLowerCase();
+    if (nq) arr = arr.filter((i) => i.security.name.toLowerCase().includes(nq) || i.security.code.includes(nq));
     if (sort === "pnl") arr.sort((a, b) => (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity));
     return arr;
-  }, [items, sort]);
+  }, [items, sort, q]);
 
   const totals = useMemo(() => {
     const withPos = (items ?? []).filter((i) => !i.watchOnly && i.marketValue != null);
@@ -91,6 +94,15 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
         </div>
         <button onClick={() => setAdding(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ 종목 추가</button>
       </div>
+
+      {(items?.length ?? 0) > 8 && (
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={`내 종목 검색 (${items?.length ?? 0}개)`}
+          className="mt-3 w-full rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary"
+        />
+      )}
 
       {showInvest && totals.count > 0 && (
         <section className="mt-4 rounded-card bg-card p-5 shadow-card">
@@ -443,14 +455,15 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
           {/* 내 종목 우선 선택 */}
           {mine.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-ink-muted">내 종목에서</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <p className="text-xs font-semibold text-ink-muted">내 종목에서 <span className="font-normal">(책갈피 우선)</span></p>
+              <div className="mt-2 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
                 {mine.map((m) => (
                   <button
                     key={m.security.id}
                     onClick={() => pick(m.security)}
-                    className="rounded-full border border-line bg-bg-deep/30 px-3 py-1 text-sm font-medium text-ink hover:border-primary hover:text-primary"
+                    className={`flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium hover:border-primary hover:text-primary ${m.bookmarked ? "border-primary/40 bg-primary/5 text-primary" : "border-line bg-bg-deep/30 text-ink"}`}
                   >
+                    {m.bookmarked && <span className="text-primary">★</span>}
                     {m.security.name}
                   </button>
                 ))}
@@ -610,8 +623,8 @@ function AddStockModal({ invest, simulated, onClose, onDone }: { invest: boolean
           <>
             {!searching && mine.length > 0 && (
               <div className="mt-3">
-                <p className="text-xs font-semibold text-ink-muted">내 종목에서</p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <p className="text-xs font-semibold text-ink-muted">내 종목에서 <span className="font-normal">(책갈피 우선)</span></p>
+                <div className="mt-1.5 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
                   {mine.map((s) => (
                     <button key={s.id} onClick={() => setPicked(s)} className="rounded-full border border-line bg-bg-deep/30 px-3 py-1 text-sm font-medium text-ink hover:border-primary hover:text-primary">{s.name}</button>
                   ))}
