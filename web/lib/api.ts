@@ -277,6 +277,7 @@ export type DiaryItem = {
   isOverseas: boolean | null;
   shares?: number;
   buyPrice?: number | null;
+  close?: number | null;
   simulated?: boolean;
   reason?: string | null;
   category?: NoteCategory | null;

@@ -126,13 +126,11 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
             >
               <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
             </button>
-            {/* 종목 정보(실제) 탭에서만 점: 실제 보유=파랑 · 관심=빈 자리. 모의 탭은 전부 모의라 점 없음 */}
-            {!simulated && (
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${it.watchOnly ? "bg-transparent" : "bg-blue-600"}`}
-                title={it.watchOnly ? "관심" : "실제 보유"}
-              />
-            )}
+            {/* 맨 앞 점(자리는 항상 유지해 정렬 통일): 실제 보유=파랑, 그 외=투명 */}
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${!simulated && !it.watchOnly ? "bg-blue-600" : "bg-transparent"}`}
+              title={!simulated && !it.watchOnly ? "실제 보유" : undefined}
+            />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate font-semibold text-ink">{it.security.name}</span>
@@ -305,27 +303,49 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
       }`}>
         <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>{e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}</span>
       </div>
-      <div className="flex-1 p-3">
-        <div className="flex items-center gap-2">
-          {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
-          {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
-          {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
-          {e.securityId ? (
-            <Link href={`/stocks/${e.securityId}`} className="font-semibold text-ink hover:text-primary">{e.name ?? "종목"}</Link>
+      <div className="flex flex-1 items-start justify-between gap-2 p-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {e.kind === "buy" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">매수</span>}
+            {e.kind === "sell" && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">매도</span>}
+            {e.kind === "note" && cat && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cat.chip}`}>{cat.label}</span>}
+            {e.securityId ? (
+              <Link href={`/stocks/${e.securityId}`} className="font-semibold text-ink hover:text-primary">{e.name ?? "종목"}</Link>
+            ) : (
+              <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
+            )}
+            {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
+            <button onClick={() => setEdit(true)} className="text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 hover:text-primary">수정</button>
+          </div>
+          {isTrade ? (
+            <>
+              <p className="mt-1 text-xs text-ink-muted">{e.shares}주</p>
+              {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
+            </>
           ) : (
-            <span className="font-semibold text-ink">{e.name ?? "종목"}</span>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
           )}
-          {e.market && <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink-muted">{e.market}</span>}
-          <button onClick={() => setEdit(true)} className="ml-auto text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 hover:text-primary">수정</button>
         </div>
-        {isTrade ? (
-          <>
-            <p className="mt-1 text-sm text-ink-sub">{e.shares}주 · {fmtMoney(e.buyPrice, e.isOverseas)}</p>
-            {e.reason && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{e.reason}</p>}
-          </>
-        ) : (
-          <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
-        )}
+        {/* 오른쪽: 구매가/현재/수익률 */}
+        {isTrade && (() => {
+          const bp = e.buyPrice ?? null;
+          const cl = e.close ?? null;
+          const sh = e.shares ?? 0;
+          const pct = bp != null && cl != null && bp > 0 ? ((cl - bp) / bp) * 100 : null;
+          const amt = bp != null && cl != null ? (cl - bp) * sh : null;
+          const gain = (pct ?? 0) >= 0;
+          return (
+            <div className="shrink-0 text-right text-xs">
+              <div className="text-ink-muted">{e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, e.isOverseas)}</span></div>
+              <div className="text-ink-muted">현재 <span className="text-ink">{fmtMoney(cl, e.isOverseas)}</span></div>
+              {pct != null && (
+                <div className={`font-bold ${gain ? "text-emerald-600" : "text-red-600"}`}>
+                  {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}{e.isOverseas ? "" : "원"}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

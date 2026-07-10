@@ -187,9 +187,16 @@ stocksRoute.get("/diary", async (c) => {
     .from(paperNotes)
     .leftJoin(securities, eq(securities.id, paperNotes.securityId))
     .where(eq(paperNotes.userId, user.id));
+  // 거래 종목의 현재가(캐시 종가) 맵 - 항목별 손익 계산용
+  const secIds = [...new Set(buys.map((b) => b.securityId).filter((x): x is string => !!x))];
+  const closeMap = new Map<string, number | null>();
+  if (secIds.length) {
+    const secs = await db.select().from(securities).where(inArray(securities.id, secIds));
+    for (const s of secs) closeMap.set(s.id, (await latestClose(s))?.close ?? null);
+  }
   const items = [
-    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
-    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
+    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: false, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });
