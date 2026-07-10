@@ -15,8 +15,10 @@ const fmtMoney = (v: number | null | undefined, overseas: boolean | null | undef
 };
 const fmtPct = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
 
+type StockTab = "info" | "sim" | "diary";
+
 export default function StocksPage() {
-  const [tab, setTab] = useState<"info" | "sim" | "diary">("info");
+  const [tab, setTab] = useState<StockTab>("info");
   const [label, setLabel] = useState("내 종목");
   const [showInvest, setShowInvest] = useState(true);
 
@@ -27,6 +29,16 @@ export default function StocksPage() {
     }).catch(() => {});
   }, []);
 
+  // 탭을 URL 에 동기화(뒤로가기 시 탭·스크롤 유지). 마운트 시 복원, 변경 시 replaceState.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "sim" || t === "diary") setTab(t);
+  }, []);
+  function changeTab(t: StockTab) {
+    setTab(t);
+    window.history.replaceState(null, "", t === "info" ? "/stocks" : `/stocks?tab=${t}`);
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
       <div className="flex items-start justify-between gap-3">
@@ -35,9 +47,9 @@ export default function StocksPage() {
       </div>
 
       <div className="mt-4 flex gap-1 border-b border-line">
-        <TabBtn active={tab === "info"} onClick={() => setTab("info")}>종목 정보</TabBtn>
-        <TabBtn active={tab === "sim"} onClick={() => setTab("sim")}>모의 종목</TabBtn>
-        <TabBtn active={tab === "diary"} onClick={() => setTab("diary")}>다이어리</TabBtn>
+        <TabBtn active={tab === "info"} onClick={() => changeTab("info")}>종목 정보</TabBtn>
+        <TabBtn active={tab === "sim"} onClick={() => changeTab("sim")}>모의 종목</TabBtn>
+        <TabBtn active={tab === "diary"} onClick={() => changeTab("diary")}>다이어리</TabBtn>
       </div>
 
       {tab === "info" && <InfoTab key="info" showInvest={showInvest} simulated={false} />}

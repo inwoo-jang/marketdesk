@@ -73,14 +73,19 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
     setSources(r.sources ?? []);
     setAnalyzing(false);
   }
+  // 목록으로: 브라우저 back 이면 이전 탭·스크롤 그대로 복원, 직접 진입이면 목록으로 이동
+  function goList() {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/stocks");
+  }
   async function remove() {
     await api.removeStock(id);
-    router.push("/stocks");
+    router.push("/stocks"); // 삭제 후엔 목록 새로 로드
   }
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-8">
-      <button onClick={() => router.push("/stocks")} className="text-sm text-ink-muted hover:text-ink">← 목록으로</button>
+      <button onClick={goList} className="text-sm text-ink-muted hover:text-ink">← 목록으로</button>
 
       {/* 헤더 */}
       <div className="mt-3 flex items-start justify-between">
