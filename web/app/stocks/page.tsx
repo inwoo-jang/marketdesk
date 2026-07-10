@@ -212,7 +212,7 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
           <button
             onClick={() => setConfirmReset(true)}
             title="모의 보유 종료(기록은 다이어리에 남음)"
-            className="inline-flex items-center gap-1 rounded-full border border-sky-300 px-2.5 py-1 text-[11px] font-medium text-sky-600 transition-colors hover:bg-sky-50 active:bg-sky-100"
+            className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-[11px] font-medium text-ink-sub shadow-sm transition-colors hover:border-ink/20 hover:bg-bg-deep hover:text-ink active:bg-bg-deep/70"
           >
             <span aria-hidden className="text-[12px] leading-none">↺</span>
             모의 리셋하기
