@@ -133,6 +133,9 @@ export const api = {
   byoKey: () => get<{ provider: string | null; hasKey: boolean }>("/api/me/byo-key"),
   setByoKey: (provider: "gemini" | "anthropic" | "openai", key: string) => put<{ ok: true; provider: string; hasKey: boolean }>("/api/me/byo-key", { provider, key }),
   deleteByoKey: () => del<{ ok: true }>("/api/me/byo-key"),
+  alertSettings: () => get<{ dropPct: number; stopPct: number; enabled: boolean }>("/api/me/alert-settings"),
+  setAlertSettings: (input: { dropPct: number; stopPct: number; enabled: boolean }) =>
+    put<{ ok: true; dropPct: number; stopPct: number; enabled: boolean }>("/api/me/alert-settings", input),
   localAgent: () => get<{ enabled: boolean; engine: string | null; email: string | null }>("/api/me/local-agent"),
   setLocalAgent: (enabled: boolean, engine?: "claude" | "codex") =>
     put<{ ok: true; enabled: boolean; engine: string | null }>("/api/me/local-agent", { enabled, engine }),

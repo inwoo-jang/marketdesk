@@ -311,6 +311,23 @@ meRoute.delete("/byo-key", async (c) => {
   return c.json({ ok: true });
 });
 
+// ── 가격 경보 설정: 급락%·손절% 임계값, 켜기/끄기 ──
+meRoute.get("/alert-settings", async (c) => {
+  const user = c.get("user");
+  const [s] = await db.select({ drop: userLlmSettings.alertDropPct, stop: userLlmSettings.alertStopPct, off: userLlmSettings.alertsOff }).from(userLlmSettings).where(eq(userLlmSettings.userId, user.id)).limit(1);
+  return c.json({ dropPct: s?.drop ?? 5, stopPct: s?.stop ?? 10, enabled: !s?.off });
+});
+meRoute.put("/alert-settings", async (c) => {
+  const user = c.get("user");
+  const parsed = z.object({ dropPct: z.number().int().min(1).max(50), stopPct: z.number().int().min(1).max(90), enabled: z.boolean() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "값을 확인해 주세요." }, 400);
+  await db
+    .insert(userLlmSettings)
+    .values({ userId: user.id, alertDropPct: parsed.data.dropPct, alertStopPct: parsed.data.stopPct, alertsOff: !parsed.data.enabled })
+    .onConflictDoUpdate({ target: userLlmSettings.userId, set: { alertDropPct: parsed.data.dropPct, alertStopPct: parsed.data.stopPct, alertsOff: !parsed.data.enabled, updatedAt: new Date() } });
+  return c.json({ ok: true, ...parsed.data });
+});
+
 // ── 로컬 에이전트: 본인 PC에서 로컬 CLI(claude/codex)로 분석. analysisProvider 로 라우팅. ──
 // GET /api/me/local-agent
 meRoute.get("/local-agent", async (c) => {

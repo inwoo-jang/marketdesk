@@ -24,6 +24,18 @@ export default function SettingsPage() {
   const [byoProviderSel, setByoProviderSel] = useState<"gemini" | "anthropic" | "openai">("gemini");
   const [byoBusy, setByoBusy] = useState(false);
   const [byoMsg, setByoMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 가격 경보
+  const [alert, setAlert] = useState<{ dropPct: number; stopPct: number; enabled: boolean } | null>(null);
+  const [alertBusy, setAlertBusy] = useState(false);
+  const [alertSaved, setAlertSaved] = useState(false);
+
+  async function saveAlert(next: { dropPct: number; stopPct: number; enabled: boolean }) {
+    setAlert(next); setAlertBusy(true); setAlertSaved(false);
+    const r = await api.setAlertSettings(next).catch(() => null);
+    setAlertBusy(false);
+    if (r) { setAlertSaved(true); setTimeout(() => setAlertSaved(false), 2000); }
+  }
+
   // 로컬 에이전트
   const [agent, setAgent] = useState<{ enabled: boolean; engine: string | null; email: string | null } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -85,6 +97,7 @@ export default function SettingsPage() {
         api.byoKey().catch(() => ({ provider: null, hasKey: false })),
       ]);
       api.localAgent().then(setAgent).catch(() => {});
+      api.alertSettings().then(setAlert).catch(() => {});
       setLenses(lenses);
       setMyLensKeys(enabled);
       setMyJobRole(jobRole);
@@ -247,6 +260,50 @@ export default function SettingsPage() {
           토큰을 많이 쓰는 헤비 유저는 아래에서 본인 키·로컬 에이전트를 연결해 자기 LLM 비용으로 무제한 사용할 수 있어요.
         </p>
       </section>
+
+      {/* 가격 경보 */}
+      {alert && (
+        <section className="mt-4 rounded-card bg-card p-6 shadow-card">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-ink-muted">가격 경보</h2>
+            <button
+              onClick={() => saveAlert({ ...alert, enabled: !alert.enabled })}
+              disabled={alertBusy}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${alert.enabled ? "bg-success-bg text-success-text" : "bg-ink/5 text-ink-muted"}`}
+            >
+              {alert.enabled ? "켜짐" : "꺼짐"}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">관심·보유(실제) 종목이 급락하거나 손절선에 닿으면 장중에 알려드려요. 모의 종목은 제외돼요.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <label className="text-sm text-ink-sub">
+              전일대비 급락
+              <span className="ml-2 inline-flex items-center gap-1">
+                <span className="text-ink-muted">-</span>
+                <input
+                  type="number" min={1} max={50} value={alert.dropPct} disabled={!alert.enabled}
+                  onChange={(e) => saveAlert({ ...alert, dropPct: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })}
+                  className="w-16 rounded-lg border border-line bg-bg-deep/30 px-2 py-1 text-sm outline-none focus:border-primary disabled:opacity-50"
+                />
+                <span className="text-ink-muted">%</span>
+              </span>
+            </label>
+            <label className="text-sm text-ink-sub">
+              매수가 대비 손절
+              <span className="ml-2 inline-flex items-center gap-1">
+                <span className="text-ink-muted">-</span>
+                <input
+                  type="number" min={1} max={90} value={alert.stopPct} disabled={!alert.enabled}
+                  onChange={(e) => saveAlert({ ...alert, stopPct: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })}
+                  className="w-16 rounded-lg border border-line bg-bg-deep/30 px-2 py-1 text-sm outline-none focus:border-primary disabled:opacity-50"
+                />
+                <span className="text-ink-muted">%</span>
+              </span>
+            </label>
+            {alertSaved && <span className="text-xs text-success-text">저장됨</span>}
+          </div>
+        </section>
+      )}
 
       {/* AI 연결: 본인 API 키(BYO) — 전체 유저 미리보기 */}
       <section className="mt-4 rounded-card bg-card p-6 shadow-card">

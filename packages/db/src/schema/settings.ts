@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, customType } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, customType } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { llmTier, exportScope, jobStatus } from "./enums";
 
@@ -21,6 +21,10 @@ export const userLlmSettings = pgTable("user_llm_settings", {
   // BYO(본인 API 키): 'gemini' | 'anthropic', 키는 AES-GCM base64 암호화.
   byoProvider: text("byo_provider"),
   byoKeyEnc: text("byo_key_enc"),
+  // 가격 경보 설정. null=기본(급락 5% · 손절 10%). alertsOff=true 면 경보 끔.
+  alertDropPct: integer("alert_drop_pct"),
+  alertStopPct: integer("alert_stop_pct"),
+  alertsOff: boolean("alerts_off").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });

@@ -267,6 +267,13 @@
       "when": 1783704727723,
       "tag": "0037_spooky_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783704931006,
+      "tag": "0038_thankful_galactus",
+      "breakpoints": true
     }
   ]
 }
