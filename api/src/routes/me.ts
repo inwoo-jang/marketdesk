@@ -25,6 +25,7 @@ import {
   normCompany,
   memos,
   JOB_ROLES,
+  encryptSecret,
   type EntryFrame,
 } from "@reportlens/db";
 import { db } from "../db.js";
@@ -61,8 +62,15 @@ async function monthlyTokens(userId: string): Promise<{ input: number; output: n
 }
 
 // 분석 1건 소비(게이팅). ok=false 면 한도 초과. used/limit 은 토큰 단위.
+async function hasByoKey(userId: string): Promise<boolean> {
+  const [row] = await db.select({ k: userLlmSettings.byoKeyEnc }).from(userLlmSettings).where(eq(userLlmSettings.userId, userId)).limit(1);
+  return !!row?.k;
+}
+
 async function consumeAnalysis(user: AppUser): Promise<{ ok: boolean; used: number; limit: number | null }> {
   if (env.devUnlimited) return { ok: true, used: 0, limit: null };
+  // BYO(본인 키) 사용자는 자기 비용이라 무료 한도 미적용
+  if (await hasByoKey(user.id)) return { ok: true, used: 0, limit: null };
   if (user.plan === "pro") {
     await bumpUsage(user.id, seoulDay());
     return { ok: true, used: 0, limit: null };
@@ -247,6 +255,45 @@ meRoute.get("/llm/inflight", async (c) => {
     .from(rollups)
     .where(and(eq(rollups.userId, user.id), or(eq(rollups.status, "pending"), eq(rollups.dirty, true))));
   return c.json({ count: (rep?.n ?? 0) + (ru?.n ?? 0) });
+});
+
+// ── BYO(본인 API 키): 전체 유저. 지금은 Gemini 키만. 서버에 AES 암호화 저장. ──
+async function verifyGeminiKey(key: string): Promise<boolean> {
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(8000) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+// GET /api/me/byo-key - 등록 여부(키 자체는 반환하지 않음)
+meRoute.get("/byo-key", async (c) => {
+  const user = c.get("user");
+  const [row] = await db.select({ p: userLlmSettings.byoProvider, k: userLlmSettings.byoKeyEnc }).from(userLlmSettings).where(eq(userLlmSettings.userId, user.id)).limit(1);
+  return c.json({ provider: row?.p ?? null, hasKey: !!row?.k });
+});
+
+// PUT /api/me/byo-key - 키 등록/교체. { provider:'gemini', key }
+meRoute.put("/byo-key", async (c) => {
+  const user = c.get("user");
+  if (!env.appEncKey) return c.json({ error: "서버 암호화 키(APP_ENC_KEY) 미설정." }, 500);
+  const parsed = z.object({ provider: z.enum(["gemini"]), key: z.string().min(10).max(400) }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "키를 확인해 주세요." }, 400);
+  if (!(await verifyGeminiKey(parsed.data.key))) return c.json({ error: "키가 유효하지 않아요. 다시 확인해 주세요." }, 400);
+  const enc = encryptSecret(env.appEncKey, parsed.data.key);
+  await db
+    .insert(userLlmSettings)
+    .values({ userId: user.id, byoProvider: parsed.data.provider, byoKeyEnc: enc })
+    .onConflictDoUpdate({ target: userLlmSettings.userId, set: { byoProvider: parsed.data.provider, byoKeyEnc: enc, updatedAt: new Date() } });
+  return c.json({ ok: true, provider: parsed.data.provider, hasKey: true });
+});
+
+// DELETE /api/me/byo-key - 키 제거
+meRoute.delete("/byo-key", async (c) => {
+  const user = c.get("user");
+  await db.update(userLlmSettings).set({ byoProvider: null, byoKeyEnc: null, updatedAt: new Date() }).where(eq(userLlmSettings.userId, user.id));
+  return c.json({ ok: true });
 });
 
 // POST /api/me/public/ingest - 공공 콘텐츠 온디맨드 수집(개발자만). worker 의 ingest 스크립트를 백그라운드 실행.

@@ -3,7 +3,7 @@ import { reports, reportPages, entries, industries, reportIndustries, userLenses
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, stripControlChars, type ParsedPage } from "./parsing.js";
-import { getProvider } from "./providers/index.js";
+import { providerFor } from "./providers/index.js";
 import type { Provider } from "./providers/types.js";
 import { recordTokenUsage } from "./usage.js";
 import { simhash, hamming, tokenCount } from "./simhash.js";
@@ -48,7 +48,7 @@ export async function processReport(report: Report): Promise<void> {
     await db.update(reports).set({ pageCount }).where(eq(reports.id, report.id));
 
     const document = buildDocument(pages);
-    const provider = getProvider(report.llmProvider); // 리포트에 박힌 엔진(개발자=로컬 CLI 가능)
+    const provider = await providerFor(report.llmProvider, report.userId); // gemini 면 유저 BYO 키 우선
 
     const sim = simhash(document);
 

@@ -28,4 +28,6 @@ export const env = {
   kisBaseUrl: process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443",
   kisAppKey: process.env.KIS_APP_KEY ?? "",
   kisAppSecret: process.env.KIS_APP_SECRET ?? "",
+  // BYO(본인 API 키) 복호화용 앱 시크릿. api 와 동일해야 함.
+  appEncKey: process.env.APP_ENC_KEY ?? "",
 };

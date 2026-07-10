@@ -18,6 +18,26 @@ export default function SettingsPage() {
   // 모델 변경: 진행 중 작업이 있으면 "마저 끝내기 vs 중단·재시작" 선택 모달
   const [pending, setPending] = useState<{ key: "claude" | "codex" | "gemini"; label: string; inflight: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  // BYO(본인 API 키)
+  const [byo, setByo] = useState<{ provider: string | null; hasKey: boolean } | null>(null);
+  const [byoKeyInput, setByoKeyInput] = useState("");
+  const [byoBusy, setByoBusy] = useState(false);
+  const [byoMsg, setByoMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function saveByo() {
+    if (!byoKeyInput.trim()) return;
+    setByoBusy(true); setByoMsg(null);
+    const r = await api.setByoKey("gemini", byoKeyInput.trim()).catch(() => null);
+    setByoBusy(false);
+    if (r) { setByo({ provider: "gemini", hasKey: true }); setByoKeyInput(""); setByoMsg({ ok: true, text: "연결됐어요. 이제 분석에 본인 키를 사용해요." }); }
+    else setByoMsg({ ok: false, text: "키가 유효하지 않거나 저장에 실패했어요." });
+  }
+  async function removeByo() {
+    setByoBusy(true);
+    await api.deleteByoKey().catch(() => {});
+    setByoBusy(false);
+    setByo({ provider: null, hasKey: false }); setByoMsg(null);
+  }
 
   async function applyProvider(key: "claude" | "codex" | "gemini", restartInflight: boolean) {
     setBusy(true);
@@ -45,12 +65,13 @@ export default function SettingsPage() {
         return;
       }
       setUser(me.user);
-      const [{ lenses }, { enabled, jobRole }, { jobRoles }, usage, llm] = await Promise.all([
+      const [{ lenses }, { enabled, jobRole }, { jobRoles }, usage, llm, byo] = await Promise.all([
         api.lenses(),
         api.myLenses(),
         api.jobRoles(),
         api.usage(),
         api.llmSetting().catch(() => null),
+        api.byoKey().catch(() => ({ provider: null, hasKey: false })),
       ]);
       setLenses(lenses);
       setMyLensKeys(enabled);
@@ -58,6 +79,7 @@ export default function SettingsPage() {
       setJobRoles(jobRoles);
       setUsage(usage);
       setLlm(llm);
+      setByo(byo);
       setLoaded(true);
     })();
   }, []);
@@ -210,7 +232,53 @@ export default function SettingsPage() {
           </div>
         </div>
         <p className="mt-3 text-center text-xs text-ink-muted">
-          토큰을 많이 쓰는 헤비 유저는 Pro에서 본인 키·로컬 에이전트를 연결해 자기 LLM 비용으로 무제한 사용할 수 있어요.
+          토큰을 많이 쓰는 헤비 유저는 아래에서 본인 키·로컬 에이전트를 연결해 자기 LLM 비용으로 무제한 사용할 수 있어요.
+        </p>
+      </section>
+
+      {/* AI 연결: 본인 API 키(BYO) — 전체 유저 미리보기 */}
+      <section className="mt-4 rounded-card bg-card p-6 shadow-card">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-muted">AI 연결 · 본인 API 키(BYO)</h2>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">미리보기</span>
+        </div>
+        <p className="mt-1 text-xs text-ink-muted">
+          본인 Google Gemini API 키를 등록하면 분석에 그 키를 사용해요. <b className="text-ink">무료 한도 없이</b> 본인 비용으로 씁니다. 키는 서버에 암호화 저장되고 화면엔 다시 표시되지 않아요.
+        </p>
+
+        {byo?.hasKey ? (
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-success-text/30 bg-success-bg/40 px-3 py-2">
+            <span className="text-sm font-medium text-success-text">Gemini 키 연결됨</span>
+            <button onClick={removeByo} disabled={byoBusy} className="text-xs font-medium text-ink-sub hover:text-red-600 disabled:opacity-50">제거</button>
+          </div>
+        ) : (
+          <div className="mt-3">
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={byoKeyInput}
+                onChange={(e) => setByoKeyInput(e.target.value)}
+                placeholder="Gemini API 키 붙여넣기 (AIza...)"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-bg-deep/30 px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              <button onClick={saveByo} disabled={byoBusy || !byoKeyInput.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                {byoBusy ? "확인 중..." : "연결"}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-ink-muted">키는 aistudio.google.com/apikey 에서 무료로 발급받을 수 있어요.</p>
+          </div>
+        )}
+        {byoMsg && <p className={`mt-2 text-xs ${byoMsg.ok ? "text-success-text" : "text-red-600"}`}>{byoMsg.text}</p>}
+      </section>
+
+      {/* 로컬 에이전트 — Phase 2 안내 */}
+      <section className="mt-4 rounded-card border border-dashed border-line bg-card/40 p-6">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-muted">로컬 에이전트</h2>
+          <span className="rounded-full bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink-muted">준비 중</span>
+        </div>
+        <p className="mt-1 text-xs text-ink-muted">
+          본인 PC에서 로컬 에이전트를 돌려 자기 LLM(Claude·Codex CLI 등)으로 분석하는 방식이에요. 헤비 유저용으로 곧 제공해요.
         </p>
       </section>
 

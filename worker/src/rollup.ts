@@ -1,7 +1,7 @@
 import { and, eq, gte, lt } from "drizzle-orm";
 import { rollups, rollupFacts, rollupSources, entries, reports, industries, reportIndustries, publicContents } from "@reportlens/db";
 import { db } from "./db.js";
-import { getProvider } from "./providers/index.js";
+import { providerFor } from "./providers/index.js";
 import { recordTokenUsage } from "./usage.js";
 
 type Rollup = typeof rollups.$inferSelect;
@@ -110,7 +110,7 @@ export async function processRollup(r: Rollup): Promise<void> {
     const pubDigest = pubRows.map((p) => `- [공공/정책] ${p.title}: ${p.summary ?? ""}`.trim()).join("\n");
     const digest = [reportDigest, pubDigest].filter(Boolean).join("\n");
 
-    const provider = getProvider(r.llmProvider); // 생성 시 고정된 엔진(개발자=로컬 CLI 가능)
+    const provider = await providerFor(r.llmProvider, r.userId); // gemini 면 유저 BYO 키 우선
     const result = await provider.rollup(industryName, r.periodKey, digest);
     const oneLiner = stripPeriodLead(result.oneLiner, r.periodKey);
 

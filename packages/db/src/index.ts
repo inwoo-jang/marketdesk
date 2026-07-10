@@ -5,6 +5,7 @@ import * as schema from "./schema/index";
 
 export * from "./schema/index";
 export * from "./presets";
+export * from "./crypto";
 
 // 연결 팩토리. DATABASE_URL 은 호출측(Secrets Manager/env)에서 주입.
 export function createDb(connectionString: string) {

@@ -130,6 +130,9 @@ export const api = {
   setLlmProvider: (provider: "claude" | "codex" | "gemini", restartInflight?: boolean) =>
     put<{ isDeveloper: boolean; provider: "claude" | "codex" | "gemini" }>("/api/me/llm", { provider, restartInflight }),
   llmInflight: () => get<{ count: number }>("/api/me/llm/inflight"),
+  byoKey: () => get<{ provider: string | null; hasKey: boolean }>("/api/me/byo-key"),
+  setByoKey: (provider: "gemini", key: string) => put<{ ok: true; provider: string; hasKey: boolean }>("/api/me/byo-key", { provider, key }),
+  deleteByoKey: () => del<{ ok: true }>("/api/me/byo-key"),
   publicContents: (params?: { industryId?: string; docType?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.industryId) q.set("industryId", params.industryId);

@@ -18,6 +18,9 @@ export const userLlmSettings = pgTable("user_llm_settings", {
   // 개발자 계정 분석 엔진 선호(claude/codex=로컬 CLI | gemini). null=기본(gemini). 일반 사용자는 무시.
   analysisProvider: text("analysis_provider"),
   claudeKeyEnc: bytea("claude_key_enc"),
+  // BYO(본인 API 키): 'gemini' | 'anthropic', 키는 AES-GCM base64 암호화.
+  byoProvider: text("byo_provider"),
+  byoKeyEnc: text("byo_key_enc"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
