@@ -18,10 +18,7 @@ export default function NotificationsPage() {
         return;
       }
       const r = await api.notifications().catch(() => null);
-      if (r) {
-        setItems(r.notifications);
-        if (r.unread > 0) await api.markNotificationsRead().catch(() => {});
-      }
+      if (r) setItems(r.notifications); // 방문만으로 읽음 처리하지 않음(구분 유지). 클릭·모두읽음 시 처리.
       setLoaded(true);
     })();
   }, []);
@@ -38,6 +35,17 @@ export default function NotificationsPage() {
         : n.reportId
           ? `/reports/${n.reportId}`
           : "/board";
+
+  const unread = items.filter((n) => !n.read).length;
+  async function markOne(n: AppNotification) {
+    if (n.read) return;
+    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    await api.markNotificationsRead([n.id]).catch(() => {});
+  }
+  async function markAll() {
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    await api.markNotificationsRead().catch(() => {});
+  }
 
   async function runConfirm() {
     if (!confirm) return;
@@ -63,11 +71,21 @@ export default function NotificationsPage() {
         ← 뒤로
       </button>
       <div className="mt-3 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">알림</h1>
+        <h1 className="text-2xl font-bold">
+          알림
+          {unread > 0 && <span className="ml-2 align-middle text-sm font-semibold text-primary">안읽음 {unread}</span>}
+        </h1>
         {items.length > 0 && (
-          <button onClick={() => setConfirm({ kind: "all" })} className="text-sm font-medium text-ink-sub hover:text-red-500">
-            모두 삭제
-          </button>
+          <div className="flex items-center gap-3">
+            {unread > 0 && (
+              <button onClick={markAll} className="text-sm font-medium text-primary hover:underline">
+                모두 읽음
+              </button>
+            )}
+            <button onClick={() => setConfirm({ kind: "all" })} className="text-sm font-medium text-ink-sub hover:text-red-500">
+              모두 삭제
+            </button>
+          </div>
         )}
       </div>
 
@@ -76,13 +94,14 @@ export default function NotificationsPage() {
       ) : (
         <ul className="mt-6 space-y-2">
           {items.map((n) => (
-            <li key={n.id} className="relative rounded-card border border-line bg-card shadow-card">
-              <a href={linkOf(n)} className="block px-4 py-3 pr-9 hover:bg-bg-deep">
+            <li key={n.id} className={`relative rounded-card border shadow-card ${n.read ? "border-line bg-card" : "border-primary/30 bg-primary/5"}`}>
+              <a href={linkOf(n)} onClick={() => markOne(n)} className="block px-4 py-3 pr-9 hover:bg-bg-deep">
                 <div className="flex items-start gap-2">
-                  <span className="mt-0.5 text-rose-500">⚠️</span>
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-primary"}`} aria-hidden />
+                  <span className={`mt-0.5 ${n.read ? "opacity-50" : "text-rose-500"}`}>⚠️</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-ink">{n.title ?? "알림"}</span>
+                      <span className={`truncate text-sm ${n.read ? "font-medium text-ink-sub" : "font-semibold text-ink"}`}>{n.title ?? "알림"}</span>
                       <span className="shrink-0 text-xs text-ink-muted">{fmt(n.pubDate ?? n.createdAt)}</span>
                     </div>
                     {n.body && <p className="mt-0.5 text-sm text-ink-sub">{n.body}</p>}

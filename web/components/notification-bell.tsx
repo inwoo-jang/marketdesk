@@ -43,14 +43,23 @@ export function NotificationBell() {
     };
   }, [open]);
 
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && unread > 0) {
-      setUnread(0);
-      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-      await api.markNotificationsRead().catch(() => {});
-    }
+  function toggle() {
+    setOpen((v) => !v);
+  }
+
+  // 클릭한 알림만 읽음 처리(구분 유지). 이미 읽음이면 무시.
+  async function markOne(n: AppNotification) {
+    if (n.read) return;
+    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    setUnread((u) => Math.max(0, u - 1));
+    await api.markNotificationsRead([n.id]).catch(() => {});
+  }
+
+  // 모두 읽음(뱃지 정리용). 삭제와 별개.
+  async function markAll() {
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnread(0);
+    await api.markNotificationsRead().catch(() => {});
   }
 
   const fmt = (iso: string) => {
@@ -81,7 +90,14 @@ export function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-card border border-line bg-card shadow-card">
-          <div className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink">알림</div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink">알림</span>
+            {unread > 0 && (
+              <button onClick={markAll} className="text-xs font-medium text-primary hover:underline">
+                모두 읽음
+              </button>
+            )}
+          </div>
           {items.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-ink-muted">아직 알림이 없어요.</p>
           ) : (
@@ -98,14 +114,18 @@ export function NotificationBell() {
                             ? `/reports/${n.reportId}`
                             : "/board"
                     }
-                    onClick={() => setOpen(false)}
-                    className="block px-4 py-2.5 hover:bg-bg-deep"
+                    onClick={() => {
+                      markOne(n);
+                      setOpen(false);
+                    }}
+                    className={`block px-4 py-2.5 hover:bg-bg-deep ${n.read ? "" : "bg-primary/5"}`}
                   >
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 text-rose-500">⚠️</span>
+                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-primary"}`} aria-hidden />
+                      <span className={`mt-0.5 ${n.read ? "opacity-50" : "text-rose-500"}`}>⚠️</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-xs font-semibold text-ink">{n.title ?? "알림"}</span>
+                          <span className={`truncate text-xs ${n.read ? "font-medium text-ink-sub" : "font-semibold text-ink"}`}>{n.title ?? "알림"}</span>
                           <span className="shrink-0 text-[10px] text-ink-muted">{fmt(n.pubDate ?? n.createdAt)}</span>
                         </div>
                         {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-ink-sub">{n.body}</p>}
