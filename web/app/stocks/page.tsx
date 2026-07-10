@@ -82,11 +82,21 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
   }, [items, sort, q]);
 
   const totals = useMemo(() => {
-    const withPos = (items ?? []).filter((i) => !i.watchOnly && i.marketValue != null);
-    const cost = withPos.reduce((s, i) => s + i.totalCost, 0);
-    const value = withPos.reduce((s, i) => s + (i.marketValue ?? 0), 0);
-    const pnl = value - cost;
-    return { cost, value, pnl, pct: cost > 0 ? (pnl / cost) * 100 : null, count: withPos.length };
+    const all = (items ?? []).filter((i) => !i.watchOnly);
+    const held = all.filter((i) => i.totalShares > 0 && i.marketValue != null);
+    const heldCost = held.reduce((s, i) => s + i.totalCost, 0);
+    const heldValue = held.reduce((s, i) => s + (i.marketValue ?? 0), 0);
+    const unrealized = held.reduce((s, i) => s + (i.unrealizedPnl ?? ((i.marketValue ?? 0) - i.totalCost)), 0);
+    const totalPnl = all.reduce((s, i) => s + (i.pnl ?? 0), 0); // 실현 포함
+    return {
+      heldCost,
+      heldValue,
+      unrealized,
+      unrealizedPct: heldCost > 0 ? (unrealized / heldCost) * 100 : null,
+      totalPnl,
+      heldCount: held.length,
+      hasAny: all.length > 0,
+    };
   }, [items]);
 
   return (
@@ -109,16 +119,27 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
         />
       )}
 
-      {showInvest && totals.count > 0 && (
+      {showInvest && totals.hasAny && (
         <section className="mt-4 rounded-card bg-card p-5 shadow-card">
           <p className="text-xs font-semibold text-ink-muted">{simulated ? "모의 포트폴리오" : "내 포트폴리오"}</p>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <span className={`text-xl font-extrabold ${totals.pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-              {totals.pnl >= 0 ? "+" : ""}{Math.round(totals.pnl).toLocaleString()}원
+          {/* 총손익(실현 포함) */}
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span className="text-xs text-ink-muted">총손익 (실현 포함)</span>
+            <span className={`text-xl font-extrabold ${totals.totalPnl >= 0 ? "text-red-600" : "text-blue-600"}`}>
+              {totals.totalPnl >= 0 ? "+" : ""}{Math.round(totals.totalPnl).toLocaleString()}원
             </span>
-            <span className={`text-sm font-semibold ${(totals.pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(totals.pct)}</span>
-            <span className="text-xs text-ink-muted">평가액 {Math.round(totals.value).toLocaleString()}원 · 원금 {Math.round(totals.cost).toLocaleString()}원</span>
           </div>
+          {/* 보유 평가손익 */}
+          {totals.heldCount > 0 && (
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <span className="text-xs text-ink-muted">보유 평가손익</span>
+              <span className={`text-sm font-bold ${totals.unrealized >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                {totals.unrealized >= 0 ? "+" : ""}{Math.round(totals.unrealized).toLocaleString()}원
+              </span>
+              <span className={`text-xs font-semibold ${(totals.unrealizedPct ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(totals.unrealizedPct)}</span>
+              <span className="text-[11px] text-ink-muted">평가액 {Math.round(totals.heldValue).toLocaleString()}원 · 원금 {Math.round(totals.heldCost).toLocaleString()}원</span>
+            </div>
+          )}
           <p className="mt-2 text-[11px] text-ink-muted">{simulated ? "참고용 모의 기록이에요. 실제 투자 권유가 아닙니다." : "직접 입력한 실제 보유 기록이에요."}</p>
         </section>
       )}
@@ -156,20 +177,22 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
                 <span>{fmtMoney(it.close, it.security.isOverseas)}</span>
                 {it.changeRate != null && (
-                  <span className={`font-medium ${it.changeRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>전일 {fmtPct(it.changeRate)}</span>
+                  <span className={`font-medium ${it.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>전일 {fmtPct(it.changeRate)}</span>
                 )}
                 {!it.watchOnly && it.avgBuy != null && <span>· 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)} · {it.totalShares}주</span>}
               </div>
             </div>
-            {!it.watchOnly && showInvest && it.pnlPct != null && (
+            {!it.watchOnly && showInvest && it.totalShares > 0 && it.pnlPct != null ? (
               <div className="shrink-0 text-right">
                 <div className="text-[10px] text-ink-muted">{simulated ? "모의 수익률" : "수익률"}</div>
-                <div className={`text-sm font-bold ${it.pnlPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(it.pnlPct)}</div>
-                <div className={`text-xs ${(it.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`text-sm font-bold ${it.pnlPct >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(it.pnlPct)}</div>
+                <div className={`text-xs ${(it.pnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>
                   {(it.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(it.pnl ?? 0).toLocaleString()}원
                 </div>
               </div>
-            )}
+            ) : (!it.watchOnly && it.totalShares <= 0 ? (
+              <span className="shrink-0 rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink-muted">청산</span>
+            ) : null)}
           </Link>
         ))}
       </div>
@@ -377,7 +400,7 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
               <div className="text-ink-muted">{e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, ov)}</span></div>
               <div className="text-ink-muted">현재 <span className="text-ink">{fmtMoney(cl, ov)}</span></div>
               {pct != null && (
-                <div className={`font-bold ${gain ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`font-bold ${gain ? "text-red-600" : "text-blue-600"}`}>
                   {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}원
                 </div>
               )}

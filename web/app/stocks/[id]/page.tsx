@@ -92,7 +92,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-xl font-semibold text-ink">{fmtMoney(quote?.price ?? summary.close, overseas)}</span>
             {quote?.changeRate != null && (
-              <span className={`text-sm font-medium ${quote.changeRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              <span className={`text-sm font-medium ${quote.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>
                 전일 {fmtPct(quote.changeRate)}
               </span>
             )}
@@ -281,16 +281,20 @@ function PnlSection({
       ) : (
         <>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            <span className={`text-xl font-extrabold ${(summary.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-              {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
-            </span>
-            <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{fmtPct(summary.pnlPct)}</span>
-            <span className="text-xs text-ink-muted">평단 {fmtMoney(summary.avgBuy, overseas)} · {summary.totalShares}주</span>
-            {summary.realizedPnl != null && summary.realizedPnl !== 0 && (
-              <span className="text-xs text-ink-muted">실현 {Math.round(summary.realizedPnl).toLocaleString()}원</span>
+            {summary.totalShares > 0 ? (
+              <>
+                <span className={`text-xl font-extrabold ${(summary.pnl ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                  {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
+                </span>
+                <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(summary.pnlPct)}</span>
+                <span className="text-xs text-ink-muted">평단 {fmtMoney(summary.avgBuy, overseas)} · {summary.totalShares}주</span>
+              </>
+            ) : (
+              // 전량 매도(청산) → 손익 표시 없이 상태만
+              <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">전량 매도 (청산)</span>
             )}
           </div>
-          {overseas && summary.avgBuyKRW != null && (
+          {overseas && summary.totalShares > 0 && summary.avgBuyKRW != null && (
             <p className="mt-1 text-[11px] text-ink-muted">
               원화 평단 {Math.round(summary.avgBuyKRW).toLocaleString()}원 · 평가액 {Math.round(summary.marketValue ?? 0).toLocaleString()}원
               {summary.fxNow ? ` · 현재환율 ${Math.round(summary.fxNow)}` : ""} · 손익은 환율 반영 원화 기준

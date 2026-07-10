@@ -50,7 +50,7 @@ export function PriceChart({
   const first = bars[0].close;
   const last = bars[bars.length - 1].close;
   const up = positive ?? last >= first;
-  const stroke = up ? "#16a34a" : "#dc2626";
+  const stroke = up ? "#dc2626" : "#2563eb"; // 한국식: 상승 빨강 / 하락 파랑
   const pct = first > 0 ? ((last - first) / first) * 100 : 0;
 
   const maxIdx = closes.indexOf(max);
@@ -71,7 +71,7 @@ export function PriceChart({
   return (
     <div className="w-full">
       <div className="mb-1 text-center text-[11px]">
-        <span className={up ? "text-emerald-600" : "text-red-600"}>
+        <span className={up ? "text-red-600" : "text-blue-600"}>
           현재 <b>{money(last, overseas)}</b> ({pct >= 0 ? "+" : ""}{pct.toFixed(1)}%)
         </span>
       </div>
