@@ -91,7 +91,8 @@ export const paperPositions = pgTable("paper_positions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// paper_notes: 투자일지. 그 매수 건에 대해 날짜별로 "왜 오른/내린 것 같은지" 누적.
+// paper_notes: 투자일지. 종목 단위로 날짜별 "왜 오른/내린 것 같은지" 누적.
+// 관심만 등록한 종목(매수 없음)에도 메모 가능하도록 종목에 직접 연결(positionId 선택).
 export const paperNotes = pgTable(
   "paper_notes",
   {
@@ -99,13 +100,14 @@ export const paperNotes = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    positionId: uuid("position_id")
+    securityId: uuid("security_id")
       .notNull()
-      .references(() => paperPositions.id, { onDelete: "cascade" }),
+      .references(() => securities.id, { onDelete: "cascade" }),
+    positionId: uuid("position_id").references(() => paperPositions.id, { onDelete: "set null" }),
     noteDate: date("note_date").notNull(),
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("paper_notes_position_idx").on(t.positionId)],
+  (t) => [index("paper_notes_security_idx").on(t.securityId)],
 );

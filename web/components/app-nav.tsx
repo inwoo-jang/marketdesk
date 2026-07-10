@@ -9,32 +9,48 @@ import { BookmarkIcon } from "@/components/bookmark-icon";
 import { HelpButton } from "@/components/help-button";
 import { NotificationBell } from "@/components/notification-bell";
 
-const NAV = [
-  { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
-  { href: "/board", label: "흐름 보드", match: (p: string) => p === "/board" },
-  { href: "/docs/industry", label: "산업리포트", match: (p: string) => p === "/docs/industry" },
-  { href: "/docs/company", label: "기업리포트", match: (p: string) => p === "/docs/company" },
-  { href: "/docs/news", label: "뉴스", match: (p: string) => p === "/docs/news" },
-  { href: "/favorites", label: "저장", icon: true, match: (p: string) => p === "/favorites" },
-];
+// 흐름 보드는 대시보드 카드로 진입(네비에서 제외). '내 종목'은 렌즈에 따라 라벨이 바뀜.
+function buildNav(stockLabel: string) {
+  return [
+    { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
+    { href: "/stocks", label: stockLabel, match: (p: string) => p.startsWith("/stocks") },
+    { href: "/docs/industry", label: "산업리포트", match: (p: string) => p === "/docs/industry" },
+    { href: "/docs/company", label: "기업리포트", match: (p: string) => p === "/docs/company" },
+    { href: "/docs/news", label: "뉴스", match: (p: string) => p === "/docs/news" },
+    { href: "/favorites", label: "저장", icon: true, match: (p: string) => p === "/favorites" },
+  ];
+}
+
+// 투자 렌즈 있으면 '내 종목'(상위집합), 취업만이면 '관심 기업', 기본 '내 종목'.
+export function stockMenuLabel(lensKeys: string[]): string {
+  if (lensKeys.includes("invest")) return "내 종목";
+  if (lensKeys.includes("job")) return "관심 기업";
+  return "내 종목";
+}
 
 // 전역 상단 네비. 로그인 상태에서만 노출. /login·/onboarding 에서는 숨김.
 export function AppNav() {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [stockLabel, setStockLabel] = useState("내 종목");
 
   useEffect(() => {
     api
       .me()
       .then((r) => {
         setUser(r.user);
-        if (r.user) api.usage().then(setUsage).catch(() => {});
+        if (r.user) {
+          api.usage().then(setUsage).catch(() => {});
+          api.myLenses().then(({ enabled }) => setStockLabel(stockMenuLabel(enabled))).catch(() => {});
+        }
       })
       .catch(() => setUser(null));
   }, [pathname]);
 
   if (!user || pathname === "/login" || pathname === "/onboarding") return null;
+
+  const NAV = buildNav(stockLabel);
 
   return (
     <>

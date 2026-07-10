@@ -57,6 +57,42 @@ stocksRoute.get("/search", async (c) => {
   return c.json({ results: rows });
 });
 
+// 초성 그룹 → 한글 음절 경계. ㄱ은 가~까 포함(< 나). ㅎ은 하~힣.
+const KO_GROUPS: { g: string; start: string; end: string }[] = [
+  { g: "ㄱ", start: "가", end: "나" }, { g: "ㄴ", start: "나", end: "다" }, { g: "ㄷ", start: "다", end: "라" },
+  { g: "ㄹ", start: "라", end: "마" }, { g: "ㅁ", start: "마", end: "바" }, { g: "ㅂ", start: "바", end: "사" },
+  { g: "ㅅ", start: "사", end: "아" }, { g: "ㅇ", start: "아", end: "자" }, { g: "ㅈ", start: "자", end: "차" },
+  { g: "ㅊ", start: "차", end: "카" }, { g: "ㅋ", start: "카", end: "타" }, { g: "ㅌ", start: "타", end: "파" },
+  { g: "ㅍ", start: "파", end: "하" }, { g: "ㅎ", start: "하", end: "힣" },
+];
+
+// GET /browse?group=ㄱ|A|# : 이름순 종목 리스트(가나다 → 영문 → 기타). 페이지네이션.
+stocksRoute.get("/browse", async (c) => {
+  const group = c.req.query("group") ?? "ㄱ";
+  const offset = Math.max(0, Number(c.req.query("offset") ?? 0));
+  const LIMIT = 60;
+  let cond;
+  const ko = KO_GROUPS.find((k) => k.g === group);
+  if (ko) {
+    cond = ko.g === "ㅎ"
+      ? and(sql`${securities.name} >= ${ko.start}`, sql`${securities.name} <= ${ko.end}`)
+      : and(sql`${securities.name} >= ${ko.start}`, sql`${securities.name} < ${ko.end}`);
+  } else if (group === "A") {
+    cond = sql`${securities.name} ~ '^[A-Za-z]'`;
+  } else {
+    cond = sql`${securities.name} !~ '^[가-힣A-Za-z]'`;
+  }
+  const rows = await db
+    .select({ id: securities.id, code: securities.code, name: securities.name, market: securities.market, isOverseas: securities.isOverseas })
+    .from(securities)
+    .where(cond)
+    .orderBy(securities.name)
+    .limit(LIMIT + 1)
+    .offset(offset);
+  const hasMore = rows.length > LIMIT;
+  return c.json({ group, results: rows.slice(0, LIMIT), hasMore });
+});
+
 // GET / : 내 종목 목록(관심 + 모의매수). 각 종목 손익 요약 포함.
 stocksRoute.get("/", async (c) => {
   const user = c.get("user");
@@ -84,6 +120,43 @@ stocksRoute.get("/", async (c) => {
       ...summary,
     });
   }
+  return c.json({ items });
+});
+
+// GET /diary : 모의매수 다이어리(전 종목 매수+일지 시간순). 주식공부 일기 느낌.
+stocksRoute.get("/diary", async (c) => {
+  const user = c.get("user");
+  const buys = await db
+    .select({
+      id: paperPositions.id,
+      date: paperPositions.buyDate,
+      securityId: paperPositions.securityId,
+      name: securities.name,
+      market: securities.market,
+      isOverseas: securities.isOverseas,
+      shares: paperPositions.shares,
+      buyPrice: paperPositions.buyPrice,
+    })
+    .from(paperPositions)
+    .leftJoin(securities, eq(securities.id, paperPositions.securityId))
+    .where(eq(paperPositions.userId, user.id));
+  const notes = await db
+    .select({
+      id: paperNotes.id,
+      date: paperNotes.noteDate,
+      securityId: paperNotes.securityId,
+      name: securities.name,
+      market: securities.market,
+      isOverseas: securities.isOverseas,
+      body: paperNotes.body,
+    })
+    .from(paperNotes)
+    .leftJoin(securities, eq(securities.id, paperNotes.securityId))
+    .where(eq(paperNotes.userId, user.id));
+  const items = [
+    ...buys.map((b) => ({ kind: "buy" as const, id: b.id, date: b.date, securityId: b.securityId, name: b.name ?? b.name, market: b.market, isOverseas: b.isOverseas, shares: b.shares, buyPrice: b.buyPrice })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, body: n.body })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });
 
@@ -177,42 +250,33 @@ stocksRoute.get("/:securityId/series", async (c) => {
   return c.json({ period, bars });
 });
 
-// GET /:securityId/notes : 투자일지(최신순).
+// GET /:securityId/notes : 투자일지(최신순). 종목 단위.
 stocksRoute.get("/:securityId/notes", async (c) => {
   const user = c.get("user");
   const sid = c.req.param("securityId");
   const notes = await db
     .select()
     .from(paperNotes)
-    .innerJoin(paperPositions, eq(paperNotes.positionId, paperPositions.id))
-    .where(and(eq(paperNotes.userId, user.id), eq(paperPositions.securityId, sid)))
+    .where(and(eq(paperNotes.userId, user.id), eq(paperNotes.securityId, sid)))
     .orderBy(desc(paperNotes.noteDate), desc(paperNotes.createdAt));
-  return c.json({ notes: notes.map((n) => n.paper_notes) });
+  return c.json({ notes });
 });
 
-// POST /:securityId/notes : 일지 추가. positionId 없으면 그 종목의 대표 lot 에 연결.
+// POST /:securityId/notes : 일지 추가(관심만 종목에도 가능).
 stocksRoute.post("/:securityId/notes", async (c) => {
   const user = c.get("user");
   const sid = c.req.param("securityId");
   const parsed = z
-    .object({ noteDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), body: z.string().min(1).max(2000), positionId: z.string().uuid().optional() })
+    .object({ noteDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), body: z.string().min(1).max(2000) })
     .safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "메모를 확인해 주세요." }, 400);
-  // 연결할 lot: 지정 or 그 종목의 가장 오래된 매수. 매수가 없으면 일지 불가 → 안내.
-  let positionId = parsed.data.positionId;
-  if (!positionId) {
-    const [p] = await db
-      .select({ id: paperPositions.id })
-      .from(paperPositions)
-      .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.securityId, sid)))
-      .orderBy(paperPositions.buyDate)
-      .limit(1);
-    positionId = p?.id;
-  }
-  if (!positionId) return c.json({ error: "먼저 모의매수를 기록하면 일지를 쓸 수 있어요." }, 400);
+  const sec = await findSecurity(sid);
+  if (!sec) return c.json({ error: "종목을 찾을 수 없어요." }, 404);
+  // 관심 등록도 보장(일지 쓰면 내 종목에 포함)
+  await db.insert(userSecurities).values({ userId: user.id, securityId: sid }).onConflictDoNothing();
   const [note] = await db
     .insert(paperNotes)
-    .values({ userId: user.id, positionId, noteDate: parsed.data.noteDate, body: parsed.data.body })
+    .values({ userId: user.id, securityId: sid, noteDate: parsed.data.noteDate, body: parsed.data.body })
     .returning();
   return c.json({ ok: true, note });
 });

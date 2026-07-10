@@ -199,6 +199,78 @@ export const api = {
   rollups: (industryId: string) => get<{ rollups: Rollup[] }>(`/api/me/industries/${industryId}/rollups`),
   createRollup: (industryId: string, period: string) =>
     post<{ rollup: Rollup }>(`/api/me/industries/${industryId}/rollups`, { period }),
+
+  // 내 종목(관심 + 모의투자)
+  stockSearch: (q: string) => get<{ results: SecurityLite[] }>(`/api/stocks/search?q=${encodeURIComponent(q)}`),
+  stockBrowse: (group: string, offset = 0) =>
+    get<{ group: string; results: SecurityLite[]; hasMore: boolean }>(`/api/stocks/browse?group=${encodeURIComponent(group)}&offset=${offset}`),
+  stockDiary: () => get<{ items: DiaryItem[] }>("/api/stocks/diary"),
+  myStocks: () => get<{ items: StockSummary[] }>("/api/stocks"),
+  watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
+  addPosition: (input: { securityId: string; buyDate: string; shares: number; buyPrice?: number }) =>
+    post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
+  deletePosition: (id: string) => del<{ ok: true }>(`/api/stocks/positions/${id}`),
+  removeStock: (securityId: string) => del<{ ok: true }>(`/api/stocks/${securityId}`),
+  stockDetail: (securityId: string) => get<StockDetail>(`/api/stocks/${securityId}`),
+  stockSeries: (securityId: string, period: "M" | "D") =>
+    get<{ period: string; bars: PriceBar[] }>(`/api/stocks/${securityId}/series?period=${period}`),
+  stockNotes: (securityId: string) => get<{ notes: PaperNote[] }>(`/api/stocks/${securityId}/notes`),
+  addStockNote: (securityId: string, input: { noteDate: string; body: string }) =>
+    post<{ ok: true; note: PaperNote }>(`/api/stocks/${securityId}/notes`, input),
+  deleteStockNote: (id: string) => del<{ ok: true }>(`/api/stocks/notes/${id}`),
+  stockArticles: (securityId: string) => get<{ articles: RelatedArticle[] }>(`/api/stocks/${securityId}/articles`),
+  analyzeStock: (securityId: string) => post<{ analysis: string; pct?: number }>(`/api/stocks/${securityId}/analyze`),
+};
+
+export type SecurityLite = { id: string; code: string; name: string; market: string; isOverseas: boolean };
+export type StockSummary = {
+  security: SecurityLite;
+  watchOnly: boolean;
+  totalShares: number;
+  totalCost: number;
+  avgBuy: number | null;
+  close: number | null;
+  marketValue: number | null;
+  pnl: number | null;
+  pnlPct: number | null;
+};
+export type PaperPosition = {
+  id: string;
+  securityId: string | null;
+  name: string;
+  buyDate: string;
+  shares: number;
+  buyPrice: number | null;
+  createdAt: string;
+};
+export type PaperNote = { id: string; securityId: string; positionId: string | null; noteDate: string; body: string; createdAt: string };
+export type StockQuote = { price: number; changeRate: number | null; currency: string };
+export type StockDetail = {
+  security: SecurityLite;
+  quote: StockQuote | null;
+  positions: PaperPosition[];
+  summary: Omit<StockSummary, "security">;
+};
+export type PriceBar = { date: string; close: number };
+export type DiaryItem = {
+  kind: "buy" | "note";
+  id: string;
+  date: string;
+  securityId: string | null;
+  name: string | null;
+  market: string | null;
+  isOverseas: boolean | null;
+  shares?: number;
+  buyPrice?: number | null;
+  body?: string;
+};
+export type RelatedArticle = {
+  id: string;
+  title: string | null;
+  company: string | null;
+  pubDate: string | null;
+  docType: string | null;
+  createdAt: string;
 };
 
 export type BoardDim = "industry" | "company" | "news";
