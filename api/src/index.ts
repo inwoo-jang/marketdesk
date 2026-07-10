@@ -9,6 +9,7 @@ import { industriesRoute } from "./routes/industries.js";
 import { jobRolesRoute } from "./routes/jobRoles.js";
 import { meRoute } from "./routes/me.js";
 import { stocksRoute } from "./routes/stocks.js";
+import { sweepPriceAlerts } from "./lib/price-alerts.js";
 
 const app = new Hono();
 
@@ -43,3 +44,9 @@ app.route("/api/stocks", stocksRoute);
 serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.log(`api listening on http://localhost:${info.port}`);
 });
+
+// 가격 조기경보: 장중 15분마다 관심/보유 종목 급락·손절선 확인 → 알림 생성. (단일 인스턴스 가정)
+setInterval(() => {
+  sweepPriceAlerts().catch((e) => console.error("가격 경보 스윕 실패:", e));
+}, 15 * 60 * 1000);
+setTimeout(() => sweepPriceAlerts().catch(() => {}), 10_000); // 기동 후 1회
