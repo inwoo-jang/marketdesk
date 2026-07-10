@@ -1,0 +1,1 @@
+CREATE INDEX "reports_user_doctype_idx" ON "reports" USING btree ("user_id","doc_type","hidden");

@@ -41,6 +41,8 @@ export const reports = pgTable(
   (t) => [
     index("reports_user_industry_date_idx").on(t.userId, t.industryId, t.pubDate),
     index("reports_user_hash_idx").on(t.userId, t.contentHash),
+    // 목록/피드(문서타입 필터, 숨김 제외) + 처리 중 2.5초 폴링 반복 경로.
+    index("reports_user_doctype_idx").on(t.userId, t.docType, t.hidden),
   ],
 );
 

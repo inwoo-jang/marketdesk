@@ -32,6 +32,7 @@ import { db } from "../db.js";
 import { storage } from "../storage.js";
 import { env } from "../env.js";
 import { defineTerm } from "../define.js";
+import { mapPool } from "../lib/concurrency.js";
 import { requireUser, type AppEnv, type AppUser } from "../auth.js";
 
 // 무료 한도: 월간 토큰. pro 는 무제한. (BYO 키·로컬 에이전트도 Pro 기능)
@@ -665,8 +666,14 @@ meRoute.get("/board/rows", async (c) => {
   const yq = Number(c.req.query("year"));
   const year = Number.isInteger(yq) && yq >= 2000 ? yq : undefined;
   const keys = await boardKeys(user.id, dim);
-  const rows = [];
-  for (const k of keys) rows.push({ dim, key: k.key, label: k.label, star: k.star ?? false, cells: await buildCells(user.id, dim, k.key, period, year) });
+  // 키(관심 산업/기업)마다 buildCells 를 순차로 기다리면 키 수만큼 느려지므로 제한 병렬로.
+  const rows = await mapPool(keys, 8, async (k) => ({
+    dim,
+    key: k.key,
+    label: k.label,
+    star: k.star ?? false,
+    cells: await buildCells(user.id, dim, k.key, period, year),
+  }));
   return c.json({ dim, period, rows });
 });
 
