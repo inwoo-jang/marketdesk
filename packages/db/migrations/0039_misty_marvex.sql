@@ -1,0 +1,1 @@
+ALTER TABLE "user_securities" ADD COLUMN "stop_pct" integer;

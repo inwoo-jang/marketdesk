@@ -225,6 +225,19 @@ stocksRoute.get("/diary", async (c) => {
   return c.json({ items });
 });
 
+// PUT /:securityId/stop-loss : 종목별 손절 라인(%). null=전역 설정 사용.
+stocksRoute.put("/:securityId/stop-loss", async (c) => {
+  const user = c.get("user");
+  const sid = c.req.param("securityId");
+  const parsed = z.object({ stopPct: z.number().int().min(1).max(90).nullable() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: "값을 확인해 주세요." }, 400);
+  await db
+    .insert(userSecurities)
+    .values({ userId: user.id, securityId: sid, stopPct: parsed.data.stopPct })
+    .onConflictDoUpdate({ target: [userSecurities.userId, userSecurities.securityId], set: { stopPct: parsed.data.stopPct } });
+  return c.json({ ok: true, stopPct: parsed.data.stopPct });
+});
+
 // POST /:securityId/bookmark : 책갈피 토글. 없으면 등록도 함께.
 stocksRoute.post("/:securityId/bookmark", async (c) => {
   const user = c.get("user");
@@ -380,10 +393,12 @@ stocksRoute.get("/:securityId", async (c) => {
   const fxNow = sec.isOverseas ? (await currentFx()) ?? 1 : 1;
   const summary = summarize(positions.filter((p) => !p.simulated), close, fxNow); // 실제 보유
   const simSummary = summarize(positions.filter((p) => p.simulated), close, fxNow); // 모의
+  const [reg] = await db.select({ stopPct: userSecurities.stopPct }).from(userSecurities).where(and(eq(userSecurities.userId, user.id), eq(userSecurities.securityId, sec.id))).limit(1);
   return c.json({
     security: { id: sec.id, code: sec.code, name: sec.name, market: sec.market, isOverseas: sec.isOverseas },
     quote,
     fxNow: sec.isOverseas ? fxNow : null,
+    stopLossPct: reg?.stopPct ?? null,
     positions,
     summary,
     simSummary,

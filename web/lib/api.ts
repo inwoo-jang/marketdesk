@@ -217,6 +217,7 @@ export const api = {
   myStocks: (sim = false) => get<{ items: StockSummary[] }>(`/api/stocks${sim ? "?sim=1" : ""}`),
   watchStock: (securityId: string) => post<{ ok: true }>("/api/stocks/watch", { securityId }),
   bookmarkStock: (securityId: string, on: boolean) => post<{ ok: true; bookmarked: boolean }>(`/api/stocks/${securityId}/bookmark`, { on }),
+  setStopLoss: (securityId: string, stopPct: number | null) => put<{ ok: true; stopPct: number | null }>(`/api/stocks/${securityId}/stop-loss`, { stopPct }),
   addPosition: (input: { securityId: string; side?: "buy" | "sell"; simulated?: boolean; buyDate: string; shares: number; buyPrice?: number; reason?: string }) =>
     post<{ ok: true; position: PaperPosition }>("/api/stocks/positions", input),
   updatePosition: (id: string, input: { side?: "buy" | "sell"; buyDate?: string; shares?: number; buyPrice?: number | null; reason?: string | null }) =>
@@ -277,6 +278,7 @@ export type StockDetail = {
   security: SecurityLite;
   quote: StockQuote | null;
   fxNow: number | null; // 현재 USD/KRW(해외만)
+  stopLossPct: number | null; // 종목별 손절 라인(%), null=전역
   positions: PaperPosition[];
   summary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 실제 보유
   simSummary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 모의

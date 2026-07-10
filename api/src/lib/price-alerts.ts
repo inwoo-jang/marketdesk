@@ -102,16 +102,17 @@ export async function sweepPriceAlerts(): Promise<void> {
         sent.add(`${reg.userId}:${title}`);
       }
     }
-    // 2) 매수가 대비 손절 라인 (실제 보유)
+    // 2) 매수가 대비 손절 라인 (실제 보유). 종목별 설정(reg.stopPct) 우선, 없으면 전역.
     const h = held.get(`${reg.userId}:${sec.id}`);
+    const effStop = reg.stopPct ?? stopPct;
     if (h && h.net > 0 && h.buyShares > 0) {
       const avg = h.buyCost / h.buyShares;
       const downPct = ((q.price - avg) / avg) * 100;
-      if (downPct <= -stopPct) {
+      if (downPct <= -effStop) {
         const title = `${sec.name} 손절 라인 도달`;
         if (!sent.has(`${reg.userId}:${title}`)) {
           const fmtAvg = sec.isOverseas ? `$${avg.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(avg).toLocaleString()}원`;
-          rows.push({ userId: reg.userId, kind: "price", securityId: sec.id, title, body: `매수가 대비 ${downPct.toFixed(1)}% · 평단 ${fmtAvg} → ${fmtP}`, matched: `보유 종목이 평단 대비 ${stopPct}% 이상 하락(손절선)` });
+          rows.push({ userId: reg.userId, kind: "price", securityId: sec.id, title, body: `매수가 대비 ${downPct.toFixed(1)}% · 평단 ${fmtAvg} → ${fmtP}`, matched: `보유 종목이 평단 대비 ${effStop}% 이상 하락(손절선)` });
           sent.add(`${reg.userId}:${title}`);
         }
       }

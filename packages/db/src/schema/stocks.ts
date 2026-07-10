@@ -7,6 +7,7 @@ import {
   date,
   doublePrecision,
   bigint,
+  integer,
   unique,
   index,
   primaryKey,
@@ -73,6 +74,7 @@ export const userSecurities = pgTable(
       .notNull()
       .references(() => securities.id, { onDelete: "cascade" }),
     bookmarked: boolean("bookmarked").default(false).notNull(), // 즐겨찾기(책갈피)
+    stopPct: integer("stop_pct"), // 종목별 손절 라인(%). null=전역 설정 사용
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.securityId] })],

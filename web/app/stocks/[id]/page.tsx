@@ -152,6 +152,11 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
         onChanged={loadDetail}
       />
 
+      {/* 종목별 손절 경보(실제 보유 시) */}
+      {!summary.watchOnly && summary.totalShares > 0 && (
+        <StopLossControl securityId={id} current={detail.stopLossPct} onChanged={loadDetail} />
+      )}
+
       {/* 모의 손익 - 모의 거래가 있을 때만 */}
       {!simSummary.watchOnly && (
         <PnlSection
@@ -334,6 +339,45 @@ function PnlSection({
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+// 종목별 손절 경보 라인. 비우면 전역 설정 사용.
+function StopLossControl({ securityId, current, onChanged }: { securityId: string; current: number | null; onChanged: () => void }) {
+  const [val, setVal] = useState(current != null ? String(current) : "");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  async function save(stopPct: number | null) {
+    setBusy(true); setSaved(false);
+    await api.setStopLoss(securityId, stopPct).catch(() => {});
+    setBusy(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    onChanged();
+  }
+  return (
+    <section className="mt-4 rounded-card bg-card p-4 shadow-card">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold text-ink-muted">손절 경보</h2>
+        <span className="text-[11px] text-ink-muted">이 종목만 별도 손절선. 비우면 전역 설정 사용.</span>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-sm text-ink-muted">평단 대비 -</span>
+        <input
+          type="number" min={1} max={90} value={val} onChange={(e) => setVal(e.target.value)}
+          placeholder="전역"
+          className="w-20 rounded-lg border border-line bg-bg-deep/30 px-2 py-1 text-sm outline-none focus:border-primary"
+        />
+        <span className="text-sm text-ink-muted">%</span>
+        <button
+          onClick={() => { const n = Number(val); save(n >= 1 && n <= 90 ? Math.round(n) : null); }}
+          disabled={busy}
+          className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+        >저장</button>
+        {current != null && (
+          <button onClick={() => { setVal(""); save(null); }} disabled={busy} className="text-xs text-ink-muted hover:text-ink">전역으로</button>
+        )}
+        {saved && <span className="text-xs text-success-text">저장됨</span>}
+      </div>
     </section>
   );
 }
