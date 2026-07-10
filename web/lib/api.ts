@@ -221,7 +221,8 @@ export const api = {
     post<{ ok: true; note: PaperNote }>(`/api/stocks/${securityId}/notes`, input),
   deleteStockNote: (id: string) => del<{ ok: true }>(`/api/stocks/notes/${id}`),
   stockArticles: (securityId: string) => get<{ articles: RelatedArticle[] }>(`/api/stocks/${securityId}/articles`),
-  analyzeStock: (securityId: string) => post<{ analysis: string; pct?: number }>(`/api/stocks/${securityId}/analyze`),
+  analyzeStock: (securityId: string, web = false) =>
+    post<{ analysis: string; pct?: number; sources?: { title: string; uri: string }[] }>(`/api/stocks/${securityId}/analyze${web ? "?web=1" : ""}`),
 };
 
 export type SecurityLite = { id: string; code: string; name: string; market: string; isOverseas: boolean };

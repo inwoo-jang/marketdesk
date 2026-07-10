@@ -5,7 +5,7 @@ import { securities, userSecurities, paperPositions, paperNotes, reports } from 
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
 import { getSeries, latestClose, closeOn, liveQuote } from "../lib/price-service.js";
-import { askLLM } from "../define.js";
+import { askLLM, askLLMSearch } from "../define.js";
 
 export const stocksRoute = new Hono<AppEnv>();
 stocksRoute.use("*", requireUser);
@@ -392,10 +392,27 @@ stocksRoute.post("/:securityId/analyze", async (c) => {
     .orderBy(desc(sql`coalesce(${reports.pubDate}, ${reports.createdAt}::date)`))
     .limit(8);
   const artLines = arts.map((a) => `- ${a.pubDate ?? ""} ${a.title ?? ""}`.trim()).join("\n") || "(관련 자료 없음)";
+  const useWeb = c.req.query("web") === "1" || (await c.req.json().catch(() => ({})))?.web === true;
+  const base =
+    `종목: ${sec.name} (${sec.market})\n최근 6개월 종가: ${moves}\n6개월 변동: ${pct}%\n관련 내 자료:\n${artLines}\n`;
+  const rules =
+    `규칙:\n- 확정 단정 금지, "가능성/추정" 표현. 투자 권유·매수매도 의견 금지.\n- 3개 이내 불릿, 각 60자 이내.\n- 데이터로 알 수 없으면 솔직히 "자료만으로는 단정 어려움" 명시.\n`;
+
+  if (useWeb) {
+    // 웹 검색 기반: 최신 뉴스로 등락 요인 추정
+    const prompt =
+      `역할: 초보 투자자를 돕는 분석 보조. 웹에서 "${sec.name}"의 최근 주가 관련 뉴스를 찾아 아래 흐름의 등락 요인을 정리하라.\n` +
+      rules + `- 근거 뉴스가 있으면 짧게 인용.\n` + base;
+    try {
+      const { text, sources } = await askLLMSearch(prompt, 700);
+      return c.json({ analysis: text || "분석을 가져오지 못했어요.", pct: Number(pct), sources });
+    } catch {
+      // 폴백: 일반 분석
+    }
+  }
   const prompt =
     `역할: 초보 투자자를 돕는 분석 보조. 아래 한 종목의 최근 주가 흐름과 내 자료 제목을 근거로 "왜 이렇게 움직였을 가능성이 있는지" 가설을 정리하라.\n` +
-    `규칙:\n- 확정 단정 금지, "가능성/추정" 표현. 투자 권유·매수매도 의견 금지.\n- 3개 이내 불릿, 각 60자 이내. 근거가 자료 제목이면 짧게 인용.\n- 데이터로 알 수 없으면 솔직히 "자료만으로는 단정 어려움" 명시.\n` +
-    `종목: ${sec.name} (${sec.market})\n최근 6개월 종가: ${moves}\n6개월 변동: ${pct}%\n관련 내 자료:\n${artLines}\n`;
+    rules + base;
   const analysis = await askLLM(prompt, 500);
-  return c.json({ analysis: analysis || "분석을 가져오지 못했어요. 잠시 후 다시 시도해 주세요.", pct: Number(pct) });
+  return c.json({ analysis: analysis || "분석을 가져오지 못했어요. 잠시 후 다시 시도해 주세요.", pct: Number(pct), sources: [] });
 });

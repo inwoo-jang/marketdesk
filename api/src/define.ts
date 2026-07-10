@@ -55,6 +55,35 @@ async function runGemini(prompt: string, maxOutputTokens = 300): Promise<string>
   return text;
 }
 
+// 웹 검색 기반 LLM(Gemini google_search 그라운딩). 최신 뉴스로 등락 요인 분석.
+export type GroundSource = { title: string; uri: string };
+export async function askLLMSearch(prompt: string, maxOutputTokens = 700): Promise<{ text: string; sources: GroundSource[] }> {
+  const key = env.geminiApiKey;
+  if (!key) throw new Error("no gemini key");
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { maxOutputTokens },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!res.ok) throw new Error(`gemini search ${res.status}`);
+  const j = (await res.json()) as any;
+  const cand = j.candidates?.[0];
+  const text = (cand?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
+  const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
+  const sources: GroundSource[] = chunks
+    .map((ch: any) => ({ title: ch.web?.title ?? "", uri: ch.web?.uri ?? "" }))
+    .filter((s: GroundSource) => s.uri);
+  return { text, sources };
+}
+
 // 범용 LLM 호출(Gemini 우선, claude CLI 폴백). 종목 등락 요인 분석 등에 재사용.
 export async function askLLM(prompt: string, maxTokens = 600): Promise<string> {
   if (env.defineProvider === "mock") return "(mock) 분석 자리.";

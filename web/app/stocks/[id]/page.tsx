@@ -21,6 +21,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
   const [noteBody, setNoteBody] = useState("");
   const [noteDate, setNoteDate] = useState(new Date().toISOString().slice(0, 10));
   const [analysis, setAnalysis] = useState<string | null>(null);
+  const [sources, setSources] = useState<{ title: string; uri: string }[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -49,10 +50,12 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
     setNoteBody("");
     loadNotes();
   }
-  async function runAnalyze() {
+  async function runAnalyze(web: boolean) {
     setAnalyzing(true);
-    const r = await api.analyzeStock(id).catch(() => ({ analysis: "분석을 가져오지 못했어요." }));
+    setSources([]);
+    const r = await api.analyzeStock(id, web).catch(() => ({ analysis: "분석을 가져오지 못했어요.", sources: [] as { title: string; uri: string }[] }));
     setAnalysis(r.analysis);
+    setSources(r.sources ?? []);
     setAnalyzing(false);
   }
   async function remove() {
@@ -156,14 +159,28 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* AI 분석 */}
       <section className="mt-4 rounded-card bg-card p-5 shadow-card">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink-muted">AI 등락 요인 분석</h2>
-          <button onClick={runAnalyze} disabled={analyzing} className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
-            {analyzing ? "분석 중..." : analysis ? "다시 분석" : "분석하기"}
-          </button>
+          <div className="flex gap-1.5">
+            <button onClick={() => runAnalyze(false)} disabled={analyzing} className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-sub hover:bg-bg-deep disabled:opacity-50">
+              내 자료로
+            </button>
+            <button onClick={() => runAnalyze(true)} disabled={analyzing} className="rounded-lg border border-primary bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+              웹 검색
+            </button>
+          </div>
         </div>
-        {analysis && <p className="mt-3 whitespace-pre-wrap text-sm text-ink-sub">{analysis}</p>}
-        {analysis && <p className="mt-2 text-[11px] text-ink-muted">가설이에요. 투자 판단·권유가 아닙니다.</p>}
+        {analyzing && <p className="mt-3 text-sm text-ink-muted">분석 중...</p>}
+        {analysis && !analyzing && <p className="mt-3 whitespace-pre-wrap text-sm text-ink-sub">{analysis}</p>}
+        {sources.length > 0 && !analyzing && (
+          <div className="mt-2 space-y-0.5">
+            <p className="text-[11px] font-semibold text-ink-muted">출처</p>
+            {sources.slice(0, 5).map((s, i) => (
+              <a key={i} href={s.uri} target="_blank" rel="noreferrer" className="block truncate text-[11px] text-primary hover:underline">· {s.title || s.uri}</a>
+            ))}
+          </div>
+        )}
+        {analysis && !analyzing && <p className="mt-2 text-[11px] text-ink-muted">가설이에요. 투자 판단·권유가 아닙니다.</p>}
       </section>
 
       {/* 관련 기사 */}
