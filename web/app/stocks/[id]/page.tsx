@@ -91,6 +91,9 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-xl font-semibold text-ink">{fmtMoney(quote?.price ?? summary.close, overseas)}</span>
+            {overseas && (quote?.price ?? summary.close) != null && detail.fxNow && (
+              <span className="text-sm text-ink-muted">₩{Math.round((quote?.price ?? summary.close ?? 0) * detail.fxNow).toLocaleString()}</span>
+            )}
             {quote?.changeRate != null && (
               <span className={`text-sm font-medium ${quote.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>
                 전일 {fmtPct(quote.changeRate)}
@@ -288,7 +291,11 @@ function PnlSection({
                   {(summary.pnl ?? 0) >= 0 ? "+" : ""}{Math.round(summary.pnl ?? 0).toLocaleString()}원
                 </span>
                 <span className={`text-sm font-semibold ${(summary.pnlPct ?? 0) >= 0 ? "text-red-600" : "text-blue-600"}`}>{fmtPct(summary.pnlPct)}</span>
-                <span className="text-xs text-ink-muted">평단 {fmtMoney(summary.avgBuy, overseas)} · {summary.totalShares}주</span>
+                <span className="text-xs text-ink-muted">
+                  평단 {fmtMoney(summary.avgBuy, overseas)}
+                  {overseas && summary.avgBuyKRW != null ? ` (₩${Math.round(summary.avgBuyKRW).toLocaleString()})` : ""}
+                  {" "}· {summary.totalShares}주 · 매수 {Math.round(summary.totalCost).toLocaleString()}원
+                </span>
               </>
             ) : (
               // 전량 매도(청산) → 손익 표시 없이 상태만
@@ -384,6 +391,9 @@ function PositionRow({ p, overseas, onChanged }: { p: PaperPosition; overseas: b
       <span className="text-ink-sub">
         <span className={`mr-1 font-semibold ${p.side === "sell" ? "text-rose-600" : "text-emerald-600"}`}>{p.side === "sell" ? "매도" : "매수"}</span>
         {p.buyDate} · {p.shares}주 · {fmtMoney(p.buyPrice, overseas)}
+        {p.buyPrice != null && (
+          <span className="text-ink-muted"> · {p.side === "sell" ? "매도" : "매수"} {Math.round(p.shares * p.buyPrice * (overseas ? (p.buyFx ?? 1) : 1)).toLocaleString()}원</span>
+        )}
         {overseas && p.buyFx != null && <span className="text-ink-muted"> · 환율 {Math.round(p.buyFx)}</span>}
         {p.reason && <span className="ml-1 text-ink-muted">— {p.reason}</span>}
       </span>

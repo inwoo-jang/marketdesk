@@ -175,11 +175,20 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
                 <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
-                <span>{fmtMoney(it.close, it.security.isOverseas)}</span>
+                <span>
+                  {fmtMoney(it.close, it.security.isOverseas)}
+                  {it.security.isOverseas && it.close != null && it.fxNow ? ` (₩${Math.round(it.close * it.fxNow).toLocaleString()})` : ""}
+                </span>
                 {it.changeRate != null && (
                   <span className={`font-medium ${it.changeRate >= 0 ? "text-red-600" : "text-blue-600"}`}>전일 {fmtPct(it.changeRate)}</span>
                 )}
-                {!it.watchOnly && it.avgBuy != null && <span>· 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)} · {it.totalShares}주</span>}
+                {!it.watchOnly && it.avgBuy != null && it.totalShares > 0 && (
+                  <span>
+                    · 평단 {fmtMoney(it.avgBuy, it.security.isOverseas)}
+                    {it.security.isOverseas && it.avgBuyKRW != null ? ` (₩${Math.round(it.avgBuyKRW).toLocaleString()})` : ""}
+                    {" "}· {it.totalShares}주 · 매수 {Math.round(it.totalCost).toLocaleString()}원
+                  </span>
+                )}
               </div>
             </div>
             {!it.watchOnly && showInvest && it.totalShares > 0 && it.pnlPct != null ? (
@@ -397,8 +406,14 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
           const gain = (pct ?? 0) >= 0;
           return (
             <div className="shrink-0 text-right text-xs">
-              <div className="text-ink-muted">{e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, ov)}</span></div>
-              <div className="text-ink-muted">현재 <span className="text-ink">{fmtMoney(cl, ov)}</span></div>
+              <div className="text-ink-muted">
+                {e.kind === "sell" ? "매도가" : "구매가"} <span className="text-ink">{fmtMoney(bp, ov)}</span>
+                {ov && costPer != null ? <span className="text-ink-muted"> (₩{Math.round(costPer).toLocaleString()})</span> : null}
+              </div>
+              <div className="text-ink-muted">
+                현재 <span className="text-ink">{fmtMoney(cl, ov)}</span>
+                {ov && curPer != null ? <span className="text-ink-muted"> (₩{Math.round(curPer).toLocaleString()})</span> : null}
+              </div>
               {pct != null && (
                 <div className={`font-bold ${gain ? "text-red-600" : "text-blue-600"}`}>
                   {gain ? "+" : ""}{pct.toFixed(1)}% · {gain ? "+" : ""}{Math.round(amt ?? 0).toLocaleString()}원
