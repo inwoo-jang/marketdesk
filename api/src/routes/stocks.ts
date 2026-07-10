@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq, or, ilike, sql, desc, inArray } from "drizzle-orm";
+import { and, eq, or, ilike, sql, desc, inArray, isNull } from "drizzle-orm";
 import { securities, userSecurities, paperPositions, paperNotes, reports, userLlmSettings } from "@reportlens/db";
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
@@ -127,10 +127,11 @@ stocksRoute.get("/", async (c) => {
   const user = c.get("user");
   const sim = c.req.query("sim") === "1";
   const live = c.req.query("live") === "1"; // 실시간 현재가 일괄 조회(느리지만 즉시 최신). 기본은 캐시 종가.
+  // 종료된 모의(archivedAt)는 현재 보유에서 제외 → 포트폴리오는 진행 중인 것만.
   const positions = await db
     .select()
     .from(paperPositions)
-    .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, sim)));
+    .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, sim), isNull(paperPositions.archivedAt)));
   const bySec = new Map<string, Position[]>();
   for (const p of positions) {
     if (!p.securityId) continue;
@@ -157,6 +158,20 @@ stocksRoute.get("/", async (c) => {
     .from(userSecurities)
     .where(and(eq(userSecurities.userId, user.id), eq(userSecurities.bookmarked, true)));
   const bmSet = new Set(bmRows.map((b) => b.securityId));
+  // 종목별 실제/모의 보유 여부(순주수>0). 점 표시용 - 실제(파랑)·모의(하늘) 동시 표시 가능. 활성(미종료)만.
+  const activePos = await db
+    .select({ securityId: paperPositions.securityId, simulated: paperPositions.simulated, side: paperPositions.side, shares: paperPositions.shares })
+    .from(paperPositions)
+    .where(and(eq(paperPositions.userId, user.id), isNull(paperPositions.archivedAt)));
+  const netMap = new Map<string, { real: number; sim: number }>();
+  for (const p of activePos) {
+    if (!p.securityId) continue;
+    const m = netMap.get(p.securityId) ?? { real: 0, sim: 0 };
+    const d = p.side === "sell" ? -p.shares : p.shares;
+    if (p.simulated) m.sim += d;
+    else m.real += d;
+    netMap.set(p.securityId, m);
+  }
   const hasOverseas = regs.some((r) => r.security.isOverseas);
   const fxRate = hasOverseas ? (await currentFx()) ?? 1 : 1;
   // 종목별 시세를 제한 병렬로 조회(순차 대기 제거 → 종목 많아도 빠름).
@@ -176,10 +191,13 @@ stocksRoute.get("/", async (c) => {
       changeRate = last?.changeRate ?? null;
     }
     const summary = summarize(bySec.get(r.security.id) ?? [], close, r.security.isOverseas ? fxRate : 1);
+    const net = netMap.get(r.security.id);
     return {
       security: { id: r.security.id, code: r.security.code, name: r.security.name, market: r.security.market, isOverseas: r.security.isOverseas },
       changeRate,
       bookmarked: bmSet.has(r.security.id),
+      heldReal: (net?.real ?? 0) > 0,
+      heldSim: (net?.sim ?? 0) > 0,
       ...summary,
     };
   });
@@ -188,11 +206,19 @@ stocksRoute.get("/", async (c) => {
   return c.json({ items });
 });
 
-// POST /sim/reset : 모의 매매 기록 전체 초기화(모의 거래 + 모의 메모). 실제 보유는 건드리지 않음.
+// POST /sim/reset : 모의 보유만 종료 처리(아카이브). 기록은 삭제하지 않고 다이어리에 "종료된 모의"로 남긴다.
+// 실제 보유는 건드리지 않음. 이미 종료된 건은 그대로.
 stocksRoute.post("/sim/reset", async (c) => {
   const user = c.get("user");
-  await db.delete(paperPositions).where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, true)));
-  await db.delete(paperNotes).where(and(eq(paperNotes.userId, user.id), eq(paperNotes.simulated, true)));
+  const now = new Date();
+  await db
+    .update(paperPositions)
+    .set({ archivedAt: now })
+    .where(and(eq(paperPositions.userId, user.id), eq(paperPositions.simulated, true), isNull(paperPositions.archivedAt)));
+  await db
+    .update(paperNotes)
+    .set({ archivedAt: now })
+    .where(and(eq(paperNotes.userId, user.id), eq(paperNotes.simulated, true), isNull(paperNotes.archivedAt)));
   return c.json({ ok: true });
 });
 
@@ -213,6 +239,7 @@ stocksRoute.get("/diary", async (c) => {
       buyPrice: paperPositions.buyPrice,
       buyFx: paperPositions.buyFx,
       reason: paperPositions.reason,
+      archivedAt: paperPositions.archivedAt,
     })
     .from(paperPositions)
     .leftJoin(securities, eq(securities.id, paperPositions.securityId))
@@ -228,6 +255,7 @@ stocksRoute.get("/diary", async (c) => {
       category: paperNotes.category,
       simulated: paperNotes.simulated,
       body: paperNotes.body,
+      archivedAt: paperNotes.archivedAt,
     })
     .from(paperNotes)
     .leftJoin(securities, eq(securities.id, paperNotes.securityId))
@@ -242,8 +270,8 @@ stocksRoute.get("/diary", async (c) => {
   const anyOverseas = buys.some((b) => b.isOverseas);
   const fxNow = anyOverseas ? (await currentFx()) ?? 1 : 1;
   const items = [
-    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, buyFx: b.buyFx as number | null | undefined, fxNow: b.isOverseas ? fxNow : (undefined as number | undefined), reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
-    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: n.simulated, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, buyFx: undefined as number | null | undefined, fxNow: undefined as number | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
+    ...buys.map((b) => ({ kind: (b.side === "sell" ? "sell" : "buy") as "buy" | "sell", id: b.id, date: b.date, securityId: b.securityId, name: b.name, market: b.market, isOverseas: b.isOverseas, simulated: b.simulated, archived: !!b.archivedAt, shares: b.shares as number | undefined, buyPrice: b.buyPrice as number | null | undefined, close: (b.securityId ? closeMap.get(b.securityId) : null) as number | null | undefined, buyFx: b.buyFx as number | null | undefined, fxNow: b.isOverseas ? fxNow : (undefined as number | undefined), reason: b.reason as string | null | undefined, category: null as string | null, body: undefined as string | undefined })),
+    ...notes.map((n) => ({ kind: "note" as const, id: n.id, date: n.date, securityId: n.securityId, name: n.name, market: n.market, isOverseas: n.isOverseas, simulated: n.simulated, archived: !!n.archivedAt, shares: undefined as number | undefined, buyPrice: undefined as number | null | undefined, close: undefined as number | null | undefined, buyFx: undefined as number | null | undefined, fxNow: undefined as number | undefined, reason: undefined as string | null | undefined, category: n.category, body: n.body })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return c.json({ items });
 });

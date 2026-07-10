@@ -95,6 +95,7 @@ export const paperPositions = pgTable("paper_positions", {
   buyPrice: doublePrecision("buy_price"), // 체결가. null 이면 거래일 종가로 자동
   buyFx: doublePrecision("buy_fx"), // 거래일 USD/KRW 환율(해외만). 원화 환산용
   reason: text("reason"), // 매수 이유 / 매도 이유
+  archivedAt: timestamp("archived_at", { withTimezone: true }), // 모의 리셋 시각(종료된 모의). null=진행 중
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -116,6 +117,7 @@ export const paperNotes = pgTable(
     category: text("category"),
     simulated: boolean("simulated").default(false).notNull(), // false=실제(투자일지), true=모의(다이어리)
     body: text("body").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }), // 모의 리셋 시각(종료된 모의). null=진행 중
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

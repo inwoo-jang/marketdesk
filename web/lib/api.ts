@@ -249,6 +249,8 @@ export type StockSummary = {
   security: SecurityLite;
   changeRate: number | null; // 전일대비 등락률(%)
   bookmarked: boolean;
+  heldReal?: boolean; // 실제 보유중(순주수>0) - 파랑 점
+  heldSim?: boolean; // 모의 보유중(순주수>0) - 하늘 점
   watchOnly: boolean;
   totalShares: number;
   totalCost: number;
@@ -305,6 +307,7 @@ export type DiaryItem = {
   buyFx?: number | null;
   fxNow?: number;
   simulated?: boolean;
+  archived?: boolean; // 종료된 모의(리셋됨). 다이어리에 회색으로 남김
   reason?: string | null;
   category?: NoteCategory | null;
   body?: string;
