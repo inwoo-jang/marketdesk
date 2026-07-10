@@ -2,6 +2,7 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import { rollups, rollupFacts, rollupSources, entries, reports, industries, reportIndustries, publicContents } from "@reportlens/db";
 import { db } from "./db.js";
 import { getProvider } from "./providers/index.js";
+import { recordTokenUsage } from "./usage.js";
 
 type Rollup = typeof rollups.$inferSelect;
 
@@ -130,6 +131,10 @@ export async function processRollup(r: Rollup): Promise<void> {
       .update(rollups)
       .set({ oneLiner, status: "done", updatedAt: new Date() })
       .where(eq(rollups.id, r.id));
+
+    // 롤업 토큰 사용량 기록(Gemini). 롤업 재생성이 원가 큰 부분 → 여기서 잡힘.
+    const tok = provider.usage();
+    await recordTokenUsage(r.userId, tok.input, tok.output).catch((e) => console.error("롤업 토큰 기록 실패:", e));
     console.log(`롤업 완료 ${r.id} (${industryName} ${r.periodKey}, 엔트리 ${rows.length})`);
   } catch (e) {
     console.error(`롤업 실패 ${r.id}:`, e);

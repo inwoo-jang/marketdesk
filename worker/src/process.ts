@@ -5,6 +5,7 @@ import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, stripControlChars, type ParsedPage } from "./parsing.js";
 import { getProvider } from "./providers/index.js";
 import type { Provider } from "./providers/types.js";
+import { recordTokenUsage } from "./usage.js";
 import { simhash, hamming, tokenCount } from "./simhash.js";
 
 const SIMHASH_DUP_THRESHOLD = 4; // Hamming 거리 이하면 유사 중복(64bit 중). 오탐 줄이려 6→4.
@@ -165,6 +166,10 @@ export async function processReport(report: Report): Promise<void> {
     } catch (e) {
       console.error(`트리거 발화 감지 실패(분석은 성공) ${report.id}:`, e instanceof Error ? e.message : e);
     }
+
+    // 실제 토큰 사용량 기록(Gemini). analyzeExtract + judgeTriggers 누적.
+    const tok = provider.usage();
+    await recordTokenUsage(report.userId, tok.input, tok.output).catch((e) => console.error("토큰 기록 실패:", e));
 
     await db.update(reports).set({ parseStatus: "parsed" }).where(eq(reports.id, report.id));
     console.log(

@@ -7,11 +7,17 @@ import { extractJson, parseMeta, parseFrame, parseNumbers, parseRollup, parseTri
 export class GeminiProvider implements Provider {
   providerKey = "gemini" as const;
   private ai: GoogleGenAI;
+  private tokIn = 0;
+  private tokOut = 0;
   constructor(
     apiKey: string,
     public model: string,
   ) {
     this.ai = new GoogleGenAI({ apiKey });
+  }
+
+  usage() {
+    return { input: this.tokIn, output: this.tokOut };
   }
 
   private async json(prompt: string, maxTokens: number): Promise<Record<string, unknown>> {
@@ -27,6 +33,9 @@ export class GeminiProvider implements Provider {
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
+    const u = res.usageMetadata;
+    this.tokIn += u?.promptTokenCount ?? 0;
+    this.tokOut += u?.candidatesTokenCount ?? 0;
     return extractJson(res.text ?? "{}");
   }
 

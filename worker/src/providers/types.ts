@@ -47,6 +47,8 @@ export interface Provider {
   rollup(industryName: string, period: string, digest: string): Promise<RollupResult>;
   // 흐름 위험 신호 발화 판단: 새 자료가 각 신호에 실제 해당하는지 + 근거(단어 겹침 오탐 방지).
   judgeTriggers(repText: string, triggers: string[]): Promise<TriggerJudgment[]>;
+  // 이 프로바이더 인스턴스가 지금까지 쓴 누적 토큰(usageMetadata). CLI 는 미측정(0).
+  usage(): { input: number; output: number };
 }
 
 export type TriggerJudgment = { index: number; basis: string };

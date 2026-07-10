@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, integer, date, jsonb, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, integer, bigint, date, jsonb, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { authProvider, userPlan } from "./enums";
 
 // users: 인증은 Cognito, DB엔 프로필 미러.
@@ -22,6 +22,9 @@ export const usageDaily = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     day: date("day").notNull(), // KST 기준 날짜 문자열
     count: integer("count").default(0).notNull(),
+    // 실제 토큰 사용량(워커가 LLM 응답 usageMetadata 로 누적). 무료 한도·요금 산정 근거.
+    inputTokens: bigint("input_tokens", { mode: "number" }).default(0).notNull(),
+    outputTokens: bigint("output_tokens", { mode: "number" }).default(0).notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day] })],
 );

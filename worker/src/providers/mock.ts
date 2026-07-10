@@ -142,6 +142,10 @@ export class MockProvider implements Provider {
   async judgeTriggers(): Promise<TriggerJudgment[]> {
     return []; // mock 은 오탐 없이 조용히(개발용)
   }
+
+  usage() {
+    return { input: 0, output: 0 };
+  }
 }
 
 function splitPages(document: string): { pageNo: number; text: string }[] {

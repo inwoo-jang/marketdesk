@@ -60,4 +60,8 @@ export class ClaudeCliProvider implements Provider {
     const text = await runClaude(buildTriggerJudgePrompt(repText, triggers), this.cliModel);
     return parseTriggerJudge(extractJson(text)).filter((h) => h.index < triggers.length);
   }
+
+  usage() {
+    return { input: 0, output: 0 }; // CLI(구독)는 토큰 미측정
+  }
 }

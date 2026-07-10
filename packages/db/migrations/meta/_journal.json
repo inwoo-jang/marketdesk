@@ -183,6 +183,13 @@
       "when": 1783658434665,
       "tag": "0025_boring_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783659068951,
+      "tag": "0026_furry_nitro",
+      "breakpoints": true
     }
   ]
 }
