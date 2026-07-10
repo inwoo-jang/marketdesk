@@ -154,7 +154,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* 종목별 손절 경보(실제 보유 시) */}
       {!summary.watchOnly && summary.totalShares > 0 && (
-        <StopLossControl securityId={id} current={detail.stopLossPct} onChanged={loadDetail} />
+        <StopLossControl securityId={id} current={detail.stopLossPct} globalPct={detail.globalStopPct} onChanged={loadDetail} />
       )}
 
       {/* 모의 손익 - 모의 거래가 있을 때만 */}
@@ -343,11 +343,12 @@ function PnlSection({
   );
 }
 
-// 종목별 손절 경보 라인. 비우면 전역 설정 사용.
-function StopLossControl({ securityId, current, onChanged }: { securityId: string; current: number | null; onChanged: () => void }) {
-  const [val, setVal] = useState(current != null ? String(current) : "");
+// 종목별 손절 경보 라인. 기본값은 전역값으로 미리 채우고, 수정하면 이 종목 전용으로 저장.
+function StopLossControl({ securityId, current, globalPct, onChanged }: { securityId: string; current: number | null; globalPct: number; onChanged: () => void }) {
+  const [val, setVal] = useState(String(current ?? globalPct)); // 미설정이면 전역 기본값 미리 채움
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const custom = current != null;
   async function save(stopPct: number | null) {
     setBusy(true); setSaved(false);
     await api.setStopLoss(securityId, stopPct).catch(() => {});
@@ -358,23 +359,22 @@ function StopLossControl({ securityId, current, onChanged }: { securityId: strin
     <section className="mt-4 rounded-card bg-card p-4 shadow-card">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-ink-muted">손절 경보</h2>
-        <span className="text-[11px] text-ink-muted">이 종목만 별도 손절선. 비우면 전역 설정 사용.</span>
+        <span className="text-[11px] text-ink-muted">평단 대비 이 %만큼 떨어지면 알림. {custom ? "이 종목 전용 설정 중" : `기본값(전역 ${globalPct}%)`}</span>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-sm text-ink-muted">평단 대비 -</span>
         <input
           type="number" min={1} max={90} value={val} onChange={(e) => setVal(e.target.value)}
-          placeholder="전역"
           className="w-20 rounded-lg border border-line bg-bg-deep/30 px-2 py-1 text-sm outline-none focus:border-primary"
         />
         <span className="text-sm text-ink-muted">%</span>
         <button
-          onClick={() => { const n = Number(val); save(n >= 1 && n <= 90 ? Math.round(n) : null); }}
+          onClick={() => { const n = Number(val); if (n >= 1 && n <= 90) save(Math.round(n)); }}
           disabled={busy}
           className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
         >저장</button>
-        {current != null && (
-          <button onClick={() => { setVal(""); save(null); }} disabled={busy} className="text-xs text-ink-muted hover:text-ink">전역으로</button>
+        {custom && (
+          <button onClick={() => { setVal(String(globalPct)); save(null); }} disabled={busy} className="text-xs text-ink-muted hover:text-ink">전역값으로</button>
         )}
         {saved && <span className="text-xs text-success-text">저장됨</span>}
       </div>

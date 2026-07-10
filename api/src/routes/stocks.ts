@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, eq, or, ilike, sql, desc, inArray } from "drizzle-orm";
-import { securities, userSecurities, paperPositions, paperNotes, reports } from "@reportlens/db";
+import { securities, userSecurities, paperPositions, paperNotes, reports, userLlmSettings } from "@reportlens/db";
 import { db } from "../db.js";
 import { requireUser, type AppEnv } from "../auth.js";
 import { getSeries, latestClose, closeOn, liveQuote } from "../lib/price-service.js";
@@ -394,11 +394,13 @@ stocksRoute.get("/:securityId", async (c) => {
   const summary = summarize(positions.filter((p) => !p.simulated), close, fxNow); // 실제 보유
   const simSummary = summarize(positions.filter((p) => p.simulated), close, fxNow); // 모의
   const [reg] = await db.select({ stopPct: userSecurities.stopPct }).from(userSecurities).where(and(eq(userSecurities.userId, user.id), eq(userSecurities.securityId, sec.id))).limit(1);
+  const [cfg] = await db.select({ stop: userLlmSettings.alertStopPct }).from(userLlmSettings).where(eq(userLlmSettings.userId, user.id)).limit(1);
   return c.json({
     security: { id: sec.id, code: sec.code, name: sec.name, market: sec.market, isOverseas: sec.isOverseas },
     quote,
     fxNow: sec.isOverseas ? fxNow : null,
     stopLossPct: reg?.stopPct ?? null,
+    globalStopPct: cfg?.stop ?? 10,
     positions,
     summary,
     simSummary,

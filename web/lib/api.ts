@@ -279,6 +279,7 @@ export type StockDetail = {
   quote: StockQuote | null;
   fxNow: number | null; // 현재 USD/KRW(해외만)
   stopLossPct: number | null; // 종목별 손절 라인(%), null=전역
+  globalStopPct: number; // 전역 손절 기본값(%)
   positions: PaperPosition[];
   summary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 실제 보유
   simSummary: Omit<StockSummary, "security" | "changeRate" | "bookmarked">; // 모의
