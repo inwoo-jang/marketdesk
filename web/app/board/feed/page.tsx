@@ -6,6 +6,7 @@ import { ReportCard } from "@/components/report-card";
 import { RichNote } from "@/components/rich-note";
 import { FlowEditor } from "@/components/flow-editor";
 import { WordLookup } from "@/components/word-lookup";
+import { StockPeek } from "@/components/stock-peek";
 import { knownCountryOf, normco, companyAliases } from "@/lib/companies";
 
 const fmt = (k: string, period: "month" | "year") => (period === "year" ? `${k}년` : `${k.slice(0, 4)}.${k.slice(5)}`);
@@ -46,6 +47,7 @@ export default function BoardFeedPage() {
   const [data, setData] = useState<BoardFeed | null | "error">(null);
   const [companies, setCompanies] = useState<string[]>([]); // 내 리포트의 회사명(종목 스캔 사전)
   const [activeFactId, setActiveFactId] = useState<string | null>(null); // 근거 필터 중인 흐름 항목
+  const [peekName, setPeekName] = useState<string | null>(null); // 인라인 주가 미니차트 대상 종목명
   const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -201,22 +203,23 @@ export default function BoardFeedPage() {
         <section className="mt-6 rounded-card border border-line bg-card/40 p-4">
           <div className="mb-2 flex items-baseline gap-2">
             <h2 className="text-sm font-semibold text-ink">이 흐름에서 언급된 종목</h2>
-            <span className="text-[11px] text-ink-muted">추천이 아니라 등장 빈도(옆 숫자=관련 원문 수)</span>
+            <span className="text-[11px] text-ink-muted">클릭하면 주가 흐름(등장 빈도=옆 숫자)</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {mentioned.map(({ name, count }) => (
-              <a
+              <button
                 key={name}
-                href={coHref(name)}
-                title={`${name}${count > 0 ? ` · 관련 원문 ${count}건` : ""} 흐름 보기`}
-                className={`inline-flex items-center rounded-full border border-primary/25 bg-primary/[0.06] text-primary/90 hover:bg-primary/10 ${chipTier(count)}`}
+                onClick={() => setPeekName(peekName === name ? null : name)}
+                title={`${name}${count > 0 ? ` · 관련 원문 ${count}건` : ""} 주가 보기`}
+                className={`inline-flex items-center rounded-full border hover:bg-primary/10 ${chipTier(count)} ${peekName === name ? "border-primary bg-primary/10 text-primary" : "border-primary/25 bg-primary/[0.06] text-primary/90"}`}
               >
                 {name}
                 {knownCountryOf(name) && <span className="ml-1 text-ink-muted">({knownCountryOf(name)})</span>}
                 {count > 0 && <span className="ml-1.5 rounded bg-primary/15 px-1 text-[10px] font-semibold tabular-nums text-primary">{count}</span>}
-              </a>
+              </button>
             ))}
           </div>
+          {peekName && <StockPeek name={peekName} onClose={() => setPeekName(null)} />}
         </section>
       )}
 
