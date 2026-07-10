@@ -104,8 +104,14 @@ export function PriceChart({
               최저 {money(min, overseas)}<span className="ml-0.5 font-normal text-ink-muted">{shortDate(bars[minIdx].date)}</span>
             </div>
           </div>
-          {/* 현재(마지막) */}
+          {/* 현재(마지막) 점 + 오른쪽 금액 라벨 */}
           <div className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white" style={{ left: `${xPct(bars.length - 1)}%`, top: `${yPct(last)}%`, backgroundColor: stroke }} />
+          <div
+            className="absolute right-0 -translate-y-1/2 rounded-md bg-card px-1.5 py-0.5 text-[11px] font-bold shadow-card"
+            style={{ top: `${yPct(last)}%`, color: stroke }}
+          >
+            {money(last, overseas)}
+          </div>
         </div>
       </div>
 
