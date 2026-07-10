@@ -117,22 +117,24 @@ function InfoTab({ showInvest, simulated }: { showInvest: boolean; simulated: bo
           <Link
             key={it.security.id}
             href={`/stocks/${it.security.id}`}
-            className="relative flex items-center justify-between rounded-card bg-card p-4 pl-9 shadow-card hover:bg-bg-deep/40"
+            className="relative flex items-center gap-3 rounded-card bg-card p-4 shadow-card hover:bg-bg-deep/40"
           >
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleBookmark(it.security.id, !it.bookmarked); }}
               title={it.bookmarked ? "책갈피 해제" : "책갈피"}
-              className="absolute left-3 top-0"
+              className="absolute left-2 top-0"
             >
               <BookmarkIcon filled={it.bookmarked} className={`h-5 w-5 ${it.bookmarked ? "text-primary" : "text-ink-muted/40"}`} />
             </button>
-            <div className="min-w-0">
+            {/* 맨 앞 점: 실제=파랑 · 모의=하늘 · 관심=빈 자리 (매수/매도 색과 구분) */}
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                it.watchOnly ? "bg-transparent" : simulated ? "bg-sky-400" : "bg-blue-500"
+              }`}
+              title={it.watchOnly ? "관심" : simulated ? "모의" : "실제 보유"}
+            />
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                {simulated ? (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" title="모의 종목" />
-                ) : !it.watchOnly ? (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" title="보유 종목" />
-                ) : null}
                 <span className="truncate font-semibold text-ink">{it.security.name}</span>
                 <span className="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">{it.security.market}</span>
               </div>
@@ -299,7 +301,7 @@ function DiaryEntry({ e, onChanged }: { e: DiaryItem; onChanged: () => void }) {
   return (
     <div className="group flex overflow-hidden rounded-card bg-card shadow-card hover:bg-bg-deep/40">
       <div className={`flex w-6 shrink-0 items-center justify-center ${
-        e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"
+        e.kind === "note" ? "bg-ink/5 text-ink-muted" : e.simulated ? "bg-sky-100 text-sky-700" : "bg-blue-100 text-blue-700"
       }`}>
         <span className="text-[11px] font-bold" style={{ writingMode: "vertical-rl" }}>{e.kind === "note" ? "기록" : e.simulated ? "모의" : "실제"}</span>
       </div>
@@ -479,7 +481,7 @@ function DiaryComposer({ onDone }: { onDone: () => void }) {
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-ink-muted">기록 대상</span>
                 <button onClick={() => setReal(true)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${real ? "bg-primary/10 text-primary" : "text-ink-muted hover:bg-bg-deep"}`}>실제 보유</button>
-                <button onClick={() => setReal(false)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${!real ? "bg-violet-100 text-violet-700" : "text-ink-muted hover:bg-bg-deep"}`}>모의</button>
+                <button onClick={() => setReal(false)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${!real ? "bg-sky-100 text-sky-700" : "text-ink-muted hover:bg-bg-deep"}`}>모의</button>
               </div>
               <div className="flex flex-wrap gap-2">
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-bg-deep/30 px-2 py-1.5 text-xs outline-none focus:border-primary" />

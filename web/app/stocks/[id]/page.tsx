@@ -248,7 +248,7 @@ function PnlSection({
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink-muted">
           {title}
-          {simulated && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">모의</span>}
+          {simulated && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">모의</span>}
         </h2>
         <button onClick={() => setAddOpen((v) => !v)} className="text-xs font-medium text-primary">+ 거래 기록</button>
       </div>
