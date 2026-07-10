@@ -36,4 +36,8 @@ export const env = {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
+  // 한국투자증권 KIS(주가 시세). 미설정이면 주가 기능만 비활성.
+  kisBaseUrl: process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443",
+  kisAppKey: process.env.KIS_APP_KEY ?? "",
+  kisAppSecret: process.env.KIS_APP_SECRET ?? "",
 };

@@ -24,4 +24,8 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.0-flash-001",
   pollInterval: Number(process.env.POLL_INTERVAL ?? 3),
+  // 한국투자증권 KIS(주가 시세). 미설정이면 주가 기능만 비활성.
+  kisBaseUrl: process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443",
+  kisAppKey: process.env.KIS_APP_KEY ?? "",
+  kisAppSecret: process.env.KIS_APP_SECRET ?? "",
 };

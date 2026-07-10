@@ -8,6 +8,7 @@ import { lensesRoute } from "./routes/lenses.js";
 import { industriesRoute } from "./routes/industries.js";
 import { jobRolesRoute } from "./routes/jobRoles.js";
 import { meRoute } from "./routes/me.js";
+import { stocksRoute } from "./routes/stocks.js";
 
 const app = new Hono();
 
@@ -37,6 +38,7 @@ app.route("/api/lenses", lensesRoute);
 app.route("/api/industries", industriesRoute);
 app.route("/api/job-roles", jobRolesRoute);
 app.route("/api/me", meRoute);
+app.route("/api/stocks", stocksRoute);
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.log(`api listening on http://localhost:${info.port}`);

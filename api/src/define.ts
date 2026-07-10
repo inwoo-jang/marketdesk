@@ -33,7 +33,7 @@ function runClaude(prompt: string, timeoutMs = 30_000): Promise<string> {
 }
 
 // Gemini REST(빠름, CLI 시작 지연 없음). thinking off.
-async function runGemini(prompt: string): Promise<string> {
+async function runGemini(prompt: string, maxOutputTokens = 300): Promise<string> {
   const key = env.geminiApiKey;
   if (!key) throw new Error("no gemini key");
   const res = await fetch(
@@ -43,9 +43,9 @@ async function runGemini(prompt: string): Promise<string> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { maxOutputTokens, thinkingConfig: { thinkingBudget: 0 } },
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(20_000),
     },
   );
   if (!res.ok) throw new Error(`gemini ${res.status}`);
@@ -53,6 +53,20 @@ async function runGemini(prompt: string): Promise<string> {
   const text = (j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
   if (!text) throw new Error("gemini empty");
   return text;
+}
+
+// 범용 LLM 호출(Gemini 우선, claude CLI 폴백). 종목 등락 요인 분석 등에 재사용.
+export async function askLLM(prompt: string, maxTokens = 600): Promise<string> {
+  if (env.defineProvider === "mock") return "(mock) 분석 자리.";
+  try {
+    return (await runGemini(prompt, maxTokens)).trim();
+  } catch {
+    try {
+      return (await runClaude(prompt)).trim();
+    } catch {
+      return "";
+    }
+  }
 }
 
 // 용어를 100자 이내로 쉽고 정확하게 설명. context(리포트 본문 일부)로 맥락 반영.

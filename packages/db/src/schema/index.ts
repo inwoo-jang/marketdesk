@@ -13,3 +13,4 @@ export * from "./memos";
 export * from "./company-favorites";
 export * from "./notepads";
 export * from "./notifications";
+export * from "./stocks";

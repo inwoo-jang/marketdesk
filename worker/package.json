@@ -11,6 +11,7 @@
     "ingest": "tsx src/ingest.ts",
     "seed:groups": "tsx src/seed-groups.ts",
     "ingest:groups": "tsx src/ingest-groups.ts",
+    "ingest:securities": "tsx src/ingest-securities.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
