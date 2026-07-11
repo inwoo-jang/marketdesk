@@ -28,12 +28,38 @@ async function isFresh(securityId: string, period: string): Promise<boolean> {
   return Date.now() - row.fetchedAt.getTime() < (TTL[period] ?? TTL.D);
 }
 
+// 월봉을 연 단위로 집계(해외 연봉용). 연도별로 종가=마지막달·시가=첫달·고저=연중 최대/최소·거래량=합.
+function aggregateYearly(bars: Bar[]): Bar[] {
+  const byYear = new Map<string, Bar[]>();
+  for (const b of bars) {
+    const y = b.date.slice(0, 4);
+    const arr = byYear.get(y) ?? [];
+    arr.push(b);
+    byYear.set(y, arr);
+  }
+  return [...byYear.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, arr]) => {
+      arr.sort((a, b) => a.date.localeCompare(b.date));
+      const last = arr[arr.length - 1];
+      return {
+        date: last.date,
+        close: last.close,
+        open: arr[0].open,
+        high: Math.max(...arr.map((x) => x.high ?? x.close)),
+        low: Math.min(...arr.map((x) => x.low ?? x.close)),
+        volume: arr.reduce((s, x) => s + (x.volume ?? 0), 0),
+      };
+    });
+}
+
 async function fetchBars(sec: Security, period: "D" | "M" | "Y"): Promise<Bar[]> {
   const to = today();
   if (sec.isOverseas) {
     if (!sec.excd) return [];
-    // 해외는 연봉 미지원 → 월봉으로 대체(프론트에서 연 단위 표시)
-    return overseasBars(sec.excd, sec.code, period === "Y" ? "M" : period, to);
+    // 해외는 KIS 연봉 API 가 없음 → 월봉을 받아 연봉은 연 단위로 집계(월봉과 구분).
+    if (period === "Y") return aggregateYearly(await overseasBars(sec.excd, sec.code, "M", to));
+    return overseasBars(sec.excd, sec.code, period === "D" ? "D" : "M", to);
   }
   // 국내: 연봉 최대(약 20년), 월봉 수 년, 일봉 최근 ~160일(KIS 1회 100건 제한)
   const from = period === "Y" ? daysAgo(20 * 365) : period === "M" ? daysAgo(6 * 365) : daysAgo(160);
