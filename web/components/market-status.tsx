@@ -44,13 +44,14 @@ function usDst(now: Date): boolean {
   return n === "EDT"; // EDT=써머타임, EST=일반
 }
 
-function Row({ label, sess, time, extra }: { label: string; sess: Sess; time: string; extra?: string }) {
+function Row({ label, sess, time, hours, extra }: { label: string; sess: Sess; time: string; hours: string; extra?: string }) {
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap">
       <span className={`h-1.5 w-1.5 rounded-full ${sess.dot}`} />
       <span className="font-semibold text-ink">{label}</span>
       <span className="text-ink-muted">{sess.label}</span>
-      <span className="tabular-nums text-ink-sub">{time}</span>
+      <span className="tabular-nums text-ink-sub">현재 {time}</span>
+      <span className="tabular-nums text-ink-muted">· 장 {hours}</span>
       {extra && <span className="text-ink-muted">· {extra}</span>}
     </div>
   );
@@ -66,8 +67,8 @@ export function MarketStatus() {
   if (!now) return null;
   return (
     <div className="rounded-lg border border-line bg-card px-3 py-2 text-[11px] shadow-card">
-      <Row label="국내" sess={krxSession(now)} time={tzParts("Asia/Seoul", now).hhmm} />
-      <Row label="미국" sess={usSession(now)} time={tzParts("America/New_York", now).hhmm} extra={usDst(now) ? "써머타임" : "일반"} />
+      <Row label="국내" sess={krxSession(now)} time={tzParts("Asia/Seoul", now).hhmm} hours="09:00~15:30" />
+      <Row label="미국" sess={usSession(now)} time={tzParts("America/New_York", now).hhmm} hours="09:30~16:00" extra={usDst(now) ? "써머타임" : "일반"} />
     </div>
   );
 }
