@@ -36,24 +36,47 @@ async function del<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// 준정적 GET 캐시: 세션 내 화면 이동마다 반복되는 me/lenses/industries 등의 왕복 제거.
+// 진행 중 요청은 공유(중복 방지)하고, TTL 안에서는 결과 재사용. 바뀌는 것은 뮤테이터에서 무효화.
+const _cache = new Map<string, { at: number; ttl: number; p: Promise<unknown> }>();
+function cachedGet<T>(key: string, loader: () => Promise<T>, ttl: number): Promise<T> {
+  const now = Date.now();
+  const hit = _cache.get(key);
+  if (hit && now - hit.at < hit.ttl) return hit.p as Promise<T>;
+  const p = loader().catch((e) => {
+    if (_cache.get(key)?.p === p) _cache.delete(key); // 실패는 캐시하지 않음
+    throw e;
+  });
+  _cache.set(key, { at: now, ttl, p });
+  return p;
+}
+function invalidate(...keys: string[]) {
+  for (const k of keys) _cache.delete(k);
+}
+function clearApiCache() {
+  _cache.clear();
+}
+const MIN = 60_000;
+
 export const api = {
-  lenses: () => get<{ lenses: Lens[] }>("/api/lenses"),
-  industries: () => get<{ industries: Industry[] }>("/api/industries"),
-  me: () => get<{ user: User | null }>("/api/auth/me"),
+  // 프리셋(거의 불변) → 길게, 유저별 준정적 → 5분, me → 15초 캐시.
+  lenses: () => cachedGet("lenses", () => get<{ lenses: Lens[] }>("/api/lenses"), 10 * MIN),
+  industries: () => cachedGet("industries", () => get<{ industries: Industry[] }>("/api/industries"), 5 * MIN),
+  me: () => cachedGet("me", () => get<{ user: User | null }>("/api/auth/me"), 15_000),
   pendingCount: () => get<{ reports: number; rollups: number }>("/api/me/pending-count"),
   devLogin: (input: { provider: "google" | "kakao"; email?: string; displayName?: string }) =>
     post<{ user: User }>("/api/auth/dev-login", input),
-  logout: () => post<{ ok: true }>("/api/auth/logout"),
-  jobRoles: () => get<{ jobRoles: JobRole[] }>("/api/job-roles"),
-  myLenses: () => get<{ enabled: string[]; jobRole?: string }>("/api/me/lenses"),
+  logout: () => post<{ ok: true }>("/api/auth/logout").then((r) => { clearApiCache(); return r; }),
+  jobRoles: () => cachedGet("jobRoles", () => get<{ jobRoles: JobRole[] }>("/api/job-roles"), 10 * MIN),
+  myLenses: () => cachedGet("myLenses", () => get<{ enabled: string[]; jobRole?: string }>("/api/me/lenses"), 5 * MIN),
   setMyLenses: (keys: string[], jobRole?: string) =>
-    put<{ enabled: string[]; jobRole?: string }>("/api/me/lenses", { keys, jobRole }),
-  myIndustries: () => get<{ industries: MyIndustry[] }>("/api/me/industries"),
-  followIndustry: (industryId: string) => post<{ ok: true }>("/api/me/industries/follow", { industryId }),
-  reorderIndustries: (ids: string[]) => put<{ ok: true }>("/api/me/industries/reorder", { ids }),
-  unfollowIndustry: (id: string) => del<{ ok: true }>(`/api/me/industries/${id}`),
+    put<{ enabled: string[]; jobRole?: string }>("/api/me/lenses", { keys, jobRole }).then((r) => { invalidate("myLenses"); return r; }),
+  myIndustries: () => cachedGet("myIndustries", () => get<{ industries: MyIndustry[] }>("/api/me/industries"), 5 * MIN),
+  followIndustry: (industryId: string) => post<{ ok: true }>("/api/me/industries/follow", { industryId }).then((r) => { invalidate("myIndustries"); return r; }),
+  reorderIndustries: (ids: string[]) => put<{ ok: true }>("/api/me/industries/reorder", { ids }).then((r) => { invalidate("myIndustries"); return r; }),
+  unfollowIndustry: (id: string) => del<{ ok: true }>(`/api/me/industries/${id}`).then((r) => { invalidate("myIndustries"); return r; }),
   createIndustry: (name: string, iconColor?: string) =>
-    post<{ industry: Industry }>("/api/me/industries", { name, iconColor }),
+    post<{ industry: Industry }>("/api/me/industries", { name, iconColor }).then((r) => { invalidate("myIndustries", "industries"); return r; }),
   recentEntries: () => get<{ entries: Entry[] }>("/api/me/entries/recent"),
   myReports: (params?: { industryId?: string; docType?: string; view?: "all" | "bookmarks" | "hidden"; page?: number; from?: string; to?: string; uploadedFrom?: string; q?: string }) => {
     const q = new URLSearchParams();
