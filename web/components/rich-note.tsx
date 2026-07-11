@@ -212,6 +212,12 @@ export function RichNote({
             contentEditable
             suppressContentEditableWarning
             onInput={scheduleSave}
+            onPaste={(e) => {
+              // 원본 서식(글씨체·색)이 딸려와 손글씨 폰트를 덮어쓰지 않도록 순수 텍스트로 붙여넣기.
+              e.preventDefault();
+              const text = e.clipboardData.getData("text/plain");
+              document.execCommand("insertText", false, text);
+            }}
             data-placeholder="여기에 자유롭게 메모하세요. 제목·굵기·형광펜·손글씨로 꾸밀 수 있어요."
             className={`rich-note min-h-[110px] px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ${fontClsOf(font)}`}
           />
