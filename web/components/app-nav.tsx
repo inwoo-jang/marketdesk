@@ -9,10 +9,9 @@ import { BookmarkIcon } from "@/components/bookmark-icon";
 import { HelpButton } from "@/components/help-button";
 import { NotificationBell } from "@/components/notification-bell";
 
-// '내 종목'은 렌즈에 따라 라벨이 바뀜. 흐름 보드는 대시보드 카드 + 상단 메뉴 둘 다로 진입.
+// 대시보드는 로고(마켓데스크) 클릭으로 진입하므로 메뉴에서 제외. '내 종목'은 렌즈에 따라 라벨이 바뀜.
 function buildNav(stockLabel: string) {
   return [
-    { href: "/", label: "대시보드", match: (p: string) => p === "/" || p.startsWith("/industry") },
     { href: "/board", label: "흐름보드", match: (p: string) => p.startsWith("/board") },
     { href: "/stocks", label: stockLabel, match: (p: string) => p.startsWith("/stocks") },
     { href: "/docs/industry", label: "산업리포트", match: (p: string) => p === "/docs/industry" },
