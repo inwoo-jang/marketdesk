@@ -15,10 +15,20 @@ export function StockPeek({ name, onClose }: { name: string; onClose: () => void
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [price, setPrice] = useState<number | null>(null);
   const [changeRate, setChangeRate] = useState<number | null>(null);
+  const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  async function addToMyStocks() {
+    if (!sec || adding || added) return;
+    setAdding(true);
+    const ok = await api.watchStock(sec.id).then(() => true).catch(() => false);
+    setAdding(false);
+    if (ok) setAdded(true);
+  }
 
   useEffect(() => {
     let alive = true;
-    setSec(undefined); setBars([]); setPrice(null); setChangeRate(null);
+    setSec(undefined); setBars([]); setPrice(null); setChangeRate(null); setAdded(false);
     api.stockSearch(name)
       .then((r) => {
         if (!alive) return;
@@ -61,8 +71,19 @@ export function StockPeek({ name, onClose }: { name: string; onClose: () => void
         </div>
       )}
       {sec && (
-        <div className="mt-2 flex gap-3 text-xs">
-          <Link href={`/stocks/${sec.id}`} className="font-semibold text-primary hover:underline">내 종목에서 보기 →</Link>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          {added ? (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 font-semibold text-primary">✓ 내 종목에 추가됨</span>
+          ) : (
+            <button
+              onClick={addToMyStocks}
+              disabled={adding}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {adding ? "추가 중..." : "+ 내 종목에 추가"}
+            </button>
+          )}
+          <Link href={`/stocks/${sec.id}`} className="font-semibold text-primary hover:underline">종목 상세 →</Link>
           <span className="text-ink-muted">참고용 시세, 투자 권유 아님</span>
         </div>
       )}
