@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, integer, boolean, date, timestamp, unique, index, primaryKey } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { industries } from "./industries";
+import { securities } from "./stocks";
 import { sourceType, parseStatus, docType, inputFormat } from "./enums";
 
 // reports: 업로드한 원본 메타.
@@ -21,6 +22,7 @@ export const reports = pgTable(
     sourceType: sourceType("source_type"), // 'broker'(수동) | 'public'(Phase2)
     docType: docType("doc_type"), // industry|company|news (AI 분류)
     company: text("company"), // AI 추출 회사명(기업 문서). 흐름 보드 기업별 묶음용
+    securityId: uuid("security_id").references(() => securities.id, { onDelete: "set null" }), // company 를 종목 마스터에 해석한 링크(흐름↔종목 조인용). null=미해석
     inputFormat: inputFormat("input_format").default("pdf").notNull(), // pdf|text|image
     fileKey: text("file_key"), // S3 객체 키(text 입력도 .txt 로 저장)
     fileSize: integer("file_size"),
@@ -43,6 +45,8 @@ export const reports = pgTable(
     index("reports_user_hash_idx").on(t.userId, t.contentHash),
     // 목록/피드(문서타입 필터, 숨김 제외) + 처리 중 2.5초 폴링 반복 경로.
     index("reports_user_doctype_idx").on(t.userId, t.docType, t.hidden),
+    // 역방향: 이 종목이 등장한 원문/흐름(종목 상세 → 흐름).
+    index("reports_user_security_idx").on(t.userId, t.securityId),
   ],
 );
 

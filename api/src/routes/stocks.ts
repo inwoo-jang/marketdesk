@@ -553,11 +553,12 @@ stocksRoute.get("/:securityId/articles", async (c) => {
   const user = c.get("user");
   const sec = await findSecurity(c.req.param("securityId"));
   if (!sec) return c.json({ error: "종목을 찾을 수 없어요." }, 404);
+  // 해석된 링크(security_id) 우선 + 미해석 레거시 대비 이름 폴백.
   const like = `%${sec.name}%`;
   const rows = await db
     .select({ id: reports.id, title: reports.title, company: reports.company, pubDate: reports.pubDate, docType: reports.docType, createdAt: reports.createdAt })
     .from(reports)
-    .where(and(eq(reports.userId, user.id), or(ilike(reports.title, like), eq(reports.company, sec.name))))
+    .where(and(eq(reports.userId, user.id), or(eq(reports.securityId, sec.id), ilike(reports.title, like), eq(reports.company, sec.name))))
     .orderBy(desc(sql`coalesce(${reports.pubDate}, ${reports.createdAt}::date)`))
     .limit(20);
   return c.json({ articles: rows });

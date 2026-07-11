@@ -302,6 +302,13 @@
       "when": 1783710298752,
       "tag": "0042_outgoing_cable",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783771238016,
+      "tag": "0043_wealthy_lockjaw",
+      "breakpoints": true
     }
   ]
 }

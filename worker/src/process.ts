@@ -1,5 +1,5 @@
 import { eq, and, isNull, ne, isNotNull, inArray, desc, sql } from "drizzle-orm";
-import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications, userSecurities, securities } from "@reportlens/db";
+import { reports, reportPages, entries, industries, reportIndustries, userLenses, rollups, rollupFacts, notifications, userSecurities, securities, resolveSecurityId } from "@reportlens/db";
 import { db } from "./db.js";
 import { readUpload } from "./storage.js";
 import { parsePdf, buildDocument, stripControlChars, type ParsedPage } from "./parsing.js";
@@ -106,6 +106,9 @@ export async function processReport(report: Report): Promise<void> {
       }
     }
 
+    // 회사명을 종목 마스터에 1회 해석해 링크 저장(흐름↔종목 조인·위험 알림·원클릭 추가용).
+    const securityId = await resolveSecurityId(db, meta.company);
+
     await db
       .update(reports)
       .set({
@@ -113,6 +116,7 @@ export async function processReport(report: Report): Promise<void> {
         summary: meta.summary,
         title: cleanTitle(meta.title) ?? report.title,
         company: meta.company,
+        securityId,
         simhash: sim,
         dupOf,
         ...(meta.pubDate ? { pubDate: meta.pubDate } : {}),
