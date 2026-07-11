@@ -41,7 +41,8 @@ export function StockPicker({ onPick, autoFocus, placeholder }: { onPick: (s: Se
       <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-line bg-card shadow-card">
         {myFiltered.length > 0 && <p className="bg-bg-deep/40 px-3 py-1 text-[10px] font-semibold text-ink-muted">내 종목</p>}
         {myFiltered.map((m) => (
-          <button key={m.security.id} onClick={() => onPick(m.security)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
+          // onMouseDown 으로 선택: 입력창 blur 로 드롭다운이 닫히기 전에 확실히 처리(클릭 씹힘 방지)
+          <button key={m.security.id} onMouseDown={(e) => { e.preventDefault(); onPick(m.security); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
             <span className="flex items-center gap-1 font-medium text-ink">
               {m.bookmarked && <span className="text-primary">★</span>}
               {m.security.name}
@@ -51,7 +52,7 @@ export function StockPicker({ onPick, autoFocus, placeholder }: { onPick: (s: Se
         ))}
         {nq && others.length > 0 && <p className="bg-bg-deep/40 px-3 py-1 text-[10px] font-semibold text-ink-muted">전체</p>}
         {nq && others.map((r) => (
-          <button key={r.id} onClick={() => onPick(r)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
+          <button key={r.id} onMouseDown={(e) => { e.preventDefault(); onPick(r); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-deep">
             <span className="font-medium text-ink">{r.name}</span>
             <span className="text-xs text-ink-muted">{r.code} · {r.market}</span>
           </button>
