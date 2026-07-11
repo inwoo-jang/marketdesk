@@ -7,7 +7,12 @@ type Marker = { date: string; label?: string };
 
 const money = (v: number, overseas: boolean) =>
   overseas ? `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${Math.round(v).toLocaleString()}원`;
-const shortDate = (d: string) => (d.length >= 10 ? d.slice(5).replace("-", ".") : d);
+// 마커 날짜 표기: 일봉=월.일, 월봉·연봉=연도.월(언제인지 연/월이 보이게).
+const fmtMarkerDate = (d: string, period: "D" | "M" | "Y") => {
+  if (d.length < 10) return d;
+  const [y, m, day] = d.split("-");
+  return period === "D" ? `${m}.${day}` : `${y}.${m}`;
+};
 
 // 자체 SVG 라인차트. 최고/최저를 그 지점(날짜)에 마커+금액으로 표시. 참고용.
 export function PriceChart({
@@ -17,6 +22,7 @@ export function PriceChart({
   positive,
   overseas = false,
   current,
+  period = "M",
 }: {
   bars: PriceBar[];
   markers?: Marker[];
@@ -24,6 +30,7 @@ export function PriceChart({
   positive?: boolean;
   overseas?: boolean;
   current?: number | null; // 실시간 현재가(있으면 마지막 지점을 이 값으로 통일)
+  period?: "D" | "M" | "Y"; // 마커 날짜 표기 단위(연봉/월봉=연.월, 일봉=월.일)
 }) {
   const uid = useId().replace(/:/g, "");
   if (bars.length < 2) {
@@ -99,14 +106,14 @@ export function PriceChart({
           <div className="absolute" style={{ left: `${xPct(maxIdx)}%`, top: `${yPct(max)}%` }}>
             <div className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-red-500" />
             <div className={`absolute bottom-1 whitespace-nowrap text-[10px] font-semibold text-red-600 ${anchor(maxIdx)}`}>
-              최고 {money(max, overseas)}<span className="ml-0.5 font-normal text-ink-muted">{shortDate(bars[maxIdx].date)}</span>
+              최고 {money(max, overseas)}<span className="ml-0.5 font-normal text-ink-muted">{fmtMarkerDate(bars[maxIdx].date, period)}</span>
             </div>
           </div>
           {/* 최저 */}
           <div className="absolute" style={{ left: `${xPct(minIdx)}%`, top: `${yPct(min)}%` }}>
             <div className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-500" />
             <div className={`absolute top-1 whitespace-nowrap text-[10px] font-semibold text-blue-600 ${anchor(minIdx)}`}>
-              최저 {money(min, overseas)}<span className="ml-0.5 font-normal text-ink-muted">{shortDate(bars[minIdx].date)}</span>
+              최저 {money(min, overseas)}<span className="ml-0.5 font-normal text-ink-muted">{fmtMarkerDate(bars[minIdx].date, period)}</span>
             </div>
           </div>
           {/* 현재(마지막) 점 + 오른쪽 금액 라벨 */}
