@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type MyIndustry, type Industry, type Report, type Rollup, type PublicContent } from "@/lib/api";
+import { usePendingPoll } from "@/lib/use-pending-poll";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
 import { FlowEditor } from "@/components/flow-editor";
@@ -61,16 +62,11 @@ export default function IndustryDashboard() {
     load().catch(() => setLoaded(true));
   }, [load]);
 
-  // 분석중 리포트 또는 생성중 롤업 있으면 폴링
-  useEffect(() => {
-    const busy =
-      reports.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing") ||
-      rollups.some((r) => r.status === "pending");
-    if (busy) {
-      const t = setInterval(() => load().catch(() => {}), 2500);
-      return () => clearInterval(t);
-    }
-  }, [reports, rollups, load]);
+  // 분석중 리포트/생성중 롤업 있으면 경량 폴링(완료 시 한 번 리로드, 백오프)
+  usePendingPoll(
+    reports.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing") || rollups.some((r) => r.status === "pending"),
+    () => load().catch(() => {}),
+  );
 
   async function togglePin() {
     if (pinned) await api.unfollowIndustry(id);

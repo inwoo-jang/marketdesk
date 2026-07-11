@@ -40,6 +40,7 @@ export const api = {
   lenses: () => get<{ lenses: Lens[] }>("/api/lenses"),
   industries: () => get<{ industries: Industry[] }>("/api/industries"),
   me: () => get<{ user: User | null }>("/api/auth/me"),
+  pendingCount: () => get<{ reports: number; rollups: number }>("/api/me/pending-count"),
   devLogin: (input: { provider: "google" | "kakao"; email?: string; displayName?: string }) =>
     post<{ user: User }>("/api/auth/dev-login", input),
   logout: () => post<{ ok: true }>("/api/auth/logout"),

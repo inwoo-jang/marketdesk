@@ -1716,6 +1716,22 @@ meRoute.put("/reports/:id/industries", async (c) => {
   return c.json({ ok: true, industryIds: ids });
 });
 
+// GET /api/me/pending-count - 처리 중 리포트/롤업 수(경량 폴링용).
+// 화면들이 처리 완료를 감지하려고 큰 목록을 2.5초마다 통째로 받던 것을, 이 작은 수치만
+// 폴링하고 값이 바뀔 때만 전체를 다시 불러오게 하기 위함.
+meRoute.get("/pending-count", async (c) => {
+  const user = c.get("user");
+  const [r] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(reports)
+    .where(and(eq(reports.userId, user.id), inArray(reports.parseStatus, ["pending", "parsing"])));
+  const [ru] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(rollups)
+    .where(and(eq(rollups.userId, user.id), eq(rollups.status, "pending")));
+  return c.json({ reports: r?.n ?? 0, rollups: ru?.n ?? 0 });
+});
+
 // GET /api/me/notifications - 최근 알림 + 안읽음 수(벨 표시용). 날짜·정렬은 기사 발간일 기준.
 meRoute.get("/notifications", async (c) => {
   const user = c.get("user");

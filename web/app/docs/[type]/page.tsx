@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Report, type MyIndustry } from "@/lib/api";
+import { usePendingPoll } from "@/lib/use-pending-poll";
 import { useScrollRestore } from "@/lib/use-scroll-restore";
 import { ReportCard } from "@/components/report-card";
 import { companyAliases, foreignCountryOf, isForeignName, KNOWN_COMPANY_CHIPS } from "@/lib/companies";
@@ -85,12 +86,7 @@ export default function DocsFeed() {
     const qs = q.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [loaded, type, companyBy, indFilter, groupFilter, company, search]);
-  useEffect(() => {
-    if (all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => load().catch(() => {}), 2500);
-      return () => clearInterval(t);
-    }
-  }, [all, load]);
+  usePendingPoll(all.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing"), () => load().catch(() => {}));
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
   if (!TYPE_LABEL[type])

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Report, type EntryFull, type EntryFrame, type Industry, type Lens, type JobRole } from "@/lib/api";
 import { loadReportNav } from "@/lib/report-nav";
+import { usePendingPoll } from "@/lib/use-pending-poll";
 import { WordLookup } from "@/components/word-lookup";
 import { Highlighter } from "@/components/highlighter";
 import { MemoLayer } from "@/components/memo";
@@ -60,12 +61,8 @@ export default function ReportReviewPage() {
     api.industries().then(({ industries }) => setCatalog(industries)).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (report && (report.parseStatus === "pending" || report.parseStatus === "parsing")) {
-      const t = setInterval(() => load().catch(() => {}), 2500);
-      return () => clearInterval(t);
-    }
-  }, [report, load]);
+  // 처리 중이면 경량 pending-count 만 폴링하다가 완료되면 한 번 다시 불러온다(백오프).
+  usePendingPoll(!!report && (report.parseStatus === "pending" || report.parseStatus === "parsing"), () => load().catch(() => {}));
 
   async function reExtract() {
     await api.reExtract(id).catch((e) => alert(e instanceof Error ? e.message : "실패"));

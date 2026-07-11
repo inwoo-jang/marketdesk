@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type User, type Lens, type Industry, type MyIndustry, type JobRole, type Report, type Usage, type PublicContent } from "@/lib/api";
 import { useScrollRestore } from "@/lib/use-scroll-restore";
+import { usePendingPoll } from "@/lib/use-pending-poll";
 import { ReportCard } from "@/components/report-card";
 import { PublicCard } from "@/components/public-card";
 import { Logo } from "@/components/logo";
@@ -335,13 +336,11 @@ export default function Home() {
     loadFeed(view, 1, docFilter, dateSel, hidePublic, sortBy, q).catch(() => {});
   }
 
-  // 분석중 리포트 있으면 폴링
-  useEffect(() => {
-    if (user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing")) {
-      const t = setInterval(() => loadFeed(view, page, docFilter, dateSel, hidePublic, sortBy, feedQuery).catch(() => {}), 2500);
-      return () => clearInterval(t);
-    }
-  }, [user, recent, loadFeed, view, page, docFilter, dateSel, hidePublic, sortBy, feedQuery]);
+  // 분석중 리포트 있으면 경량 폴링(완료 시 한 번 피드 리로드, 백오프)
+  usePendingPoll(
+    !!user && recent.some((r) => r.parseStatus === "pending" || r.parseStatus === "parsing"),
+    () => loadFeed(view, page, docFilter, dateSel, hidePublic, sortBy, feedQuery).catch(() => {}),
+  );
 
   if (!loaded) return <main className="p-12 text-ink-muted">불러오는 중...</main>;
 
